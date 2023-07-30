@@ -44,7 +44,7 @@ To get started with Narrowlink, please refer to the [documentation](https://narr
 
 ## Contributing
 
-We welcome contributions to the Narrowlink project. To contribute, please read the [Contribution Guidelines](CONTRIBUTION.md) and follow the code of conduct.
+We welcome contributions to the Narrowlink project. To contribute, please read the [Contribution Guidelines](CONTRIBUTING.md) and follow the code of conduct.
 
 ## License
 
