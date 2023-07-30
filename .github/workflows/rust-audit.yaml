@@ -14,7 +14,7 @@ jobs:
   audit:
     strategy:
       matrix:
-        package: [client, agent, gateway, types, network]
+        package: [client, agent, gateway, token-generator, types, network]
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
