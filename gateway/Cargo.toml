@@ -6,7 +6,7 @@ description = "Narrowlink Gateway"
 readme = "README.md"
 homepage = "https://narrowlink.com"
 repository = "https://github.com/narrowlink/narrowlink/"
-license = "AGPL-3.0-only"
+license = "AGPL-3.0"
 keywords = ["narrowlink"]
 authors = ['Narrowlink <opensource@narrowlink.com>']
 
