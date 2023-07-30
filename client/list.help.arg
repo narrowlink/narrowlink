@@ -1,0 +1,11 @@
+List of assets
+
+Description:
+  Prints out information about the assets
+
+Examples:
+  narrowlink list
+  narrowlink l -v
+
+Options:
+  -v, --verbose

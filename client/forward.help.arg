@@ -1,0 +1,19 @@
+Create a tunnel
+
+Usage:
+  narrowlink forward [OPTIONS]
+
+Description:
+  Creates a tunnel between agent and client
+
+Examples:
+  narrowlink forward -n <agent name> <remote_addr:remote_port>
+  narrowlink f -usn <agent name> <remote_addr:remote_port>
+
+Options:
+  -n, --name=       The name of the agent
+  -l, --local=      The local address and port to bind
+  -s, --silent      Do not check whether the target address and port reachable or not
+  -k, --key=        The secret key for end-to-end encryption
+  -u, --udp=        Use UDP instead of TCP
+

@@ -1,0 +1,60 @@
+[package]
+name = "narrowlink-client"
+version = "0.1.1"
+description = "Narrowlink Client"
+readme = "README.md"
+homepage = "https://narrowlink.com"
+repository = "https://github.com/narrowlink/narrowlink/"
+license = 'MPL-2.0'
+keywords = ["narrowlink"]
+authors = ['Narrowlink <opensource@narrowlink.com>']
+edition = "2021"
+
+include = ["Cargo.toml", "LICENSE", "sample_client.yaml", "src/**/*"]
+
+[[bin]]
+name = "narrowlink"
+path = "src/main.rs"
+
+[dependencies]
+clap_lex = { version = "*", default-features = false }
+tokio = { version = "*", features = [
+    "macros",
+    "rt",
+    "io-std",
+    "rt-multi-thread",
+], default-features = false }
+futures-util = { version = "*", default-features = false }
+futures-timer = { version = "*", default-features = false }
+tokio-tungstenite = { version = "*", default-features = false }
+tungstenite = { version = "*", default-features = false }
+serde = { version = "*", features = ["derive"], default-features = false }
+serde_json = { version = "*", default-features = false }
+serde_yaml = { version = "*", default-features = false }
+udp-stream = { version = "*", default-features = false }
+regex = { version = "*", features = ["std"], default-features = false }
+either = { version = "*", default-features = false }
+log = { version = "*", default-features = false }
+env_logger = { version = "*", default-features = false }
+socks5-protocol = { version = "*", default-features = false }
+sha3 = { version = "*", default-features = false }
+hmac = { version = "*", default-features = false }
+rand = { version = "*", default-features = false }
+dirs = { version = "*", default-features = false }
+uuid = { version = "*", features = ["v4"], default-features = false }
+tokio-rustls = { version = "*", optional = true, default-features = false }
+webpki-roots = { version = "*", optional = true, default-features = false }
+hyper = { version = "*", features = ["http2"], default-features = false }
+tokio-native-tls = { version = "*", optional = true, default-features = false }
+native-tls = { version = "*", optional = true, default-features = false }
+
+narrowlink-types = { path = "../types" }
+narrowlink-network = { path = "../network", features = [
+    "rustls",
+], default-features = false }
+
+[features]
+default = ["rustls"]
+rustls = ["dep:tokio-rustls", "dep:webpki-roots"]
+native-tls = ["dep:tokio-native-tls", "dep:native-tls"]
+live_debug = []

@@ -1,0 +1,16 @@
+Narrowlink
+
+Usage:
+  narrowlink [OPTIONS] <COMMAND>
+
+Available Commands:
+  list          List agents
+  forward       Create a port forwarding tunnel
+  connect       Connect to a remote end node like netcat
+  proxy         Create a local socks5 proxy server
+
+Options:
+  -c, --config=    Specify a config file
+  -h, --help       Print help information
+      --version    Print version information
+

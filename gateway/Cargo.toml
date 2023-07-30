@@ -1,0 +1,39 @@
+[package]
+name = "narrowlink-gateway"
+version = "0.1.1"
+edition = "2021"
+description = "Narrowlink Gateway"
+readme = "README.md"
+homepage = "https://narrowlink.com"
+repository = "https://github.com/narrowlink/narrowlink/"
+license = "AGPL-3.0-only"
+keywords = ["narrowlink"]
+authors = ['Narrowlink <opensource@narrowlink.com>']
+
+include = ["Cargo.toml", "LICENSE", "sample_gateway.yaml", "src/**/*"]
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+hyper = { version = "*", features = ["full"] }
+log = { version = "*" }
+env_logger = { version = "*" }
+dirs = { version = "*" }
+serde_json = { version = "*" }
+serde_yaml = "*"
+serde = { version = "1", features = ["derive"] }
+async-trait = { version = "*" }
+futures-util = { version = "*" }
+askama = { version = "*" }
+pem = { version = "*" }
+uuid = { version = "*", features = ["v4", "serde"] }
+either = { version = "*" }
+instant-acme = { version = "*" }
+tokio-rustls = { version = "*" }
+rustls = { version = "*" }
+rustls-pemfile = { version = "*" }
+validator = { version = "*", features = ["derive"] }
+rcgen = { version = "*", features = ["pem", "x509-parser"] }
+x509-parser = { version = "*" }
+clap_lex = { version = "*" }
+narrowlink-types = { path = "../types" }
+narrowlink-network = { path = "../network" }

@@ -1,0 +1,52 @@
+[package]
+name = "narrowlink-agent"
+version = "0.1.1"
+description = 'Narrowlink Agent'
+readme = "README.md"
+homepage = "https://narrowlink.com"
+repository = "https://github.com/narrowlink/narrowlink/"
+license = 'MPL-2.0'
+keywords = ["narrowlink"]
+authors = ['Narrowlink <opensource@narrowlink.com>']
+edition = "2021"
+
+include = ["Cargo.toml", "LICENSE", "sample_agent.yaml", "src/**/*"]
+
+[dependencies]
+tokio = { version = "1", default-features = false, features = [
+  "macros",
+  "rt",
+  "time",
+  "rt-multi-thread",
+] }
+futures-util = { version = "*", default-features = false }
+tokio-util = { version = "*", default-features = false }
+serde = { version = "*", default-features = false, features = ["derive"] }
+serde_json = { version = "*", default-features = false }
+serde_yaml = { version = "*", default-features = false }
+uuid = { version = "*", default-features = false }
+sysinfo = { version = "*", default-features = false }
+futures-channel = { version = "*", features = ["sink"] }
+udp-stream = { version = "*", default-features = false }
+sha3 = { version = "*", default-features = false }
+hmac = { version = "*", default-features = false }
+native-tls = { version = "*", optional = true, default-features = false }
+webpki-roots = { version = "*", optional = true, default-features = false }
+tokio-rustls = { version = "*", optional = true, default-features = false }
+tokio-native-tls = { version = "*", optional = true, default-features = false }
+dirs = { version = "*", default-features = false }
+log = { version = "*" }
+env_logger = { version = "*" }
+clap_lex = { version = "*", default-features = false }
+
+narrowlink-types = { path = "../types" }
+narrowlink-network = { path = "../network", features = [
+  "rustls",
+], default-features = false }
+
+[features]
+default = ["rustls"]
+rustls = ["dep:tokio-rustls", "dep:webpki-roots"]
+native-tls = ["dep:tokio-native-tls", "dep:native-tls"]
+local_api_server = []
+live_debug = []

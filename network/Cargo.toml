@@ -1,0 +1,48 @@
+[package]
+name = "narrowlink-network"
+version = "0.1.1"
+edition = "2021"
+description = "Narrowlink Network Library"
+readme = "README.md"
+homepage = "https://narrowlink.com"
+repository = "https://github.com/narrowlink/narrowlink/"
+license = 'MPL-2.0'
+keywords = ["narrowlink"]
+authors = ['Narrowlink <opensource@narrowlink.com>']
+
+include = ["Cargo.toml", "LICENSE", "src/**/*"]
+
+[dependencies]
+bytes = "*"
+serde = { version = "*", features = ["derive"], default-features = false }
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+futures-util = { version = "*", default-features = false }
+tokio = { version = "*", features = [
+    "macros",
+    "rt",
+    "io-std",
+    "net",
+    "rt-multi-thread",
+], default-features = false }
+tokio-rustls = { version = "*", optional = true, default-features = false }
+tokio-native-tls = { version = "*", optional = true, default-features = false }
+native-tls = { version = "*", optional = true, default-features = false }
+webpki-roots = { version = "*", optional = true, default-features = false }
+hyper = { version = "*", features = [
+    "client",
+    "http1",
+    "tcp",
+], default-features = false }
+tokio-tungstenite = { version = "*", default-features = false }
+tungstenite = "*"
+chacha20 = "*"
+narrowlink-types = { path = "../types" }
+log = { version = "*" }
+env_logger = { version = "*" }
+
+[features]
+default = ["rustls"]
+rustls = ["dep:tokio-rustls", "dep:webpki-roots"]
+native-tls = ["dep:tokio-native-tls", "dep:native-tls"]
+agent = []
+client = []

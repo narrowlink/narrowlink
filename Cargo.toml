@@ -1,0 +1,15 @@
+[workspace]
+
+members = ["gateway", "network", "client", "agent", "types"]
+
+[profile.release]
+opt-level = "z"          # Optimize for size.
+lto = true               # Enable Link Time Optimization
+codegen-units = 1        # Reduce number of codegen units to increase optimizations.
+panic = "abort"          # Abort on panic
+debug = false            # Strip debug symbols from the binary.
+rpath = false            # Do not embed the path to the dynamic library in the binary.
+debug-assertions = false # Remove assertions from the binary.
+incremental = false      # Disable incremental compilation.
+overflow-checks = false  # Disable overflow checks.
+strip = true             # Automatically strip symbols from the binary.
