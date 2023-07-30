@@ -44,8 +44,8 @@ To get started with Narrowlink, please refer to the [documentation](https://narr
 
 ## Contributing
 
-We welcome contributions to the Narrowlink project. To contribute, please read the [Contribution Guidelines](CONTRIBUTING.md) and follow the code of conduct.
+We welcome contributions to the Narrowlink project. To contribute, please read the [Contribution Guidelines](CONTRIBUTION.md) and follow the code of conduct.
 
 ## License
 
-Narrowlink is released under the MPL-V2 and AGPL-3.0 licenses. Please see the [LICENSE](LICENSE) file for more details.
+Narrowlink is released under the MPL-V2 and AGPL-3.0 licenses. Please see the [LICENSE](LICENSE.md) file for more details.
