@@ -54,7 +54,7 @@ jobs:
     strategy:
       matrix:
         platform: [x86_64-apple-darwin, aarch64-apple-darwin]
-        package: [narrowlink, narrowlink-gateway, narrowlink-agent]
+        package: [narrowlink, narrowlink-gateway, narrowlink-agent, narrowlink-token-generator]
     if: ${{ needs.check_date.outputs.should_run != 'false' }}
     runs-on: macos-latest
     permissions: 
@@ -78,7 +78,7 @@ jobs:
     strategy:
       matrix:
         platform: [aarch64-unknown-linux-musl, i686-unknown-linux-musl,x86_64-unknown-linux-musl, arm-unknown-linux-musleabi]
-        package: [narrowlink, narrowlink-gateway, narrowlink-agent]
+        package: [narrowlink, narrowlink-gateway, narrowlink-agent, narrowlink-token-generator]
     if: ${{ needs.check_date.outputs.should_run != 'false' }}
     runs-on: ubuntu-latest
     permissions: 
