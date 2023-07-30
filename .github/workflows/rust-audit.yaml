@@ -1,0 +1,23 @@
+name: Audit
+
+on:
+  pull_request:
+    paths:
+      - '**/Cargo.toml'
+  push:
+    paths:
+      - '**/Cargo.toml'
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  audit:
+    strategy:
+      matrix:
+        package: [client, agent, gateway, types, network]
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: EmbarkStudios/cargo-deny-action@v1
+      with:
+        arguments: --manifest-path=${{ matrix.package }}/Cargo.toml
