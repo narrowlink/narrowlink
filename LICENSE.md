@@ -3,11 +3,11 @@ This project is dual-licensed under two different licenses, depending on the spe
 
 1. Components `agent`, `client`, `token-generator`, `network`, and `types`:
    - These components of the project are licensed under the Mozilla Public License Version 2.0 (MPL-2.0).
-   - You can find the full text of the MPL-2.0 license in the [LICENSE-MPL-2.0](LICENSE-MPL-2.0.md) file.
+   - You can find the full text of the MPL-2.0 license in the [LICENSE-MPL-2.0](LICENSE-MPL-2.0) file.
 
 2. Component `gateway`
    - The "gateway" component of this project is licensed under the GNU Affero General Public License Version 3.0 (AGPL-3.0).
-   - You can find the full text of the AGPL-3.0 license in the [LICENSE-AGPL-3.0](LICENSE-AGPL-3.0-only.md) file.
+   - You can find the full text of the AGPL-3.0 license in the [LICENSE-AGPL-3.0](LICENSE-AGPL-3.0) file.
 
 Please ensure that you review and comply with the terms of the appropriate license for each component of this project that you are using or contributing to. If you have any questions or need further 
 clarification regarding the licensing, feel free to contact the project maintainers.
