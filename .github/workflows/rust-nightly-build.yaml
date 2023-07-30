@@ -29,7 +29,7 @@ jobs:
     strategy:
       matrix:
         platform: [x86_64-pc-windows-msvc, i686-pc-windows-msvc] # aarch64-pc-windows-msvc
-        package: [narrowlink, narrowlink-gateway, narrowlink-agent]
+        package: [narrowlink, narrowlink-gateway, narrowlink-agent, narrowlink-token-generator]
 
     if: ${{ needs.check_date.outputs.should_run != 'false' }}
     runs-on: windows-2019
