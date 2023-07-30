@@ -1,0 +1,25 @@
+[package]
+name = "narrowlink-token-generator"
+version = "0.0.0"
+description = 'Token generator for narrowlink'
+readme = "README.md"
+homepage = "https://narrowlink.com"
+repository = "https://github.com/narrowlink/token-generator"
+license = 'MPL-2.0'
+keywords = ["narrowlink"]
+authors = ['Narrowlink <opensource@narrowlink.com>']
+edition = "2021"
+
+include = ["Cargo.toml", "LICENSE", "sample_config.yaml", "src/**/*"]
+
+[[bin]]
+name = "narrowlink-token-generator"
+path = "src/main.rs"
+
+[dependencies]
+narrowlink-types = { path = "../types" }
+jsonwebtoken = { version = "*" }
+serde = { version = "*", features = ["derive"] }
+serde_yaml = { version = "*" }
+dirs = { version = "*" }
+clap_lex = { version = "*" }

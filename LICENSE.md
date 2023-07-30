@@ -1,7 +1,7 @@
 # License
 This project is dual-licensed under two different licenses, depending on the specific components being used:
 
-1. Components `agent`, `client`, `network`, and `types`:
+1. Components `agent`, `client`, `network`, `token-generator`, and `types`:
    - These components of the project are licensed under the Mozilla Public License Version 2.0 (MPL-2.0).
    - You can find the full text of the MPL-2.0 license in the [LICENSE-MPL-2.0.txt](LICENSE-MPL-2.0.txt) file.
 

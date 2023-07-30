@@ -1,6 +1,6 @@
 [workspace]
 
-members = ["gateway", "network", "client", "agent", "types"]
+members = ["gateway", "network", "client", "agent", "types","token-generator"]
 
 [profile.release]
 opt-level = "z"          # Optimize for size.

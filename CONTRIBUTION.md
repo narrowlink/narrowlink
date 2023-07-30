@@ -48,7 +48,7 @@ Help improve the project's documentation by fixing errors, adding explanations, 
 
 ## Licensing
 
-By contributing to Narrowlink, you agree that your contributions will be licensed under the same licenses as the files you are modifying. The `agent`, `client`, `network`, and `types` components use the MPL v2.0 license, while the `gateway` component uses the AGPL-3.0 license.
+By contributing to Narrowlink, you agree that your contributions will be licensed under the same licenses as the files you are modifying. The `agent`, `client`, `network`, `token-generator` and `types` components use the MPL v2.0 license, while the `gateway` component uses the AGPL-3.0 license.
 
 If your contributions include new files, they will be subject to the same license as the component they belong to.
 

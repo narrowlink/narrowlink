@@ -4,4 +4,4 @@ Cargo.lock
 .vscode
 .db
 *.yaml
-!sample_agent.yaml
+!sample_*.yaml
