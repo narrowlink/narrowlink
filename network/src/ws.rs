@@ -109,7 +109,7 @@ impl WsConnection {
                     hyper::body::to_bytes(response.into_body()).await?.as_ref()
                 )
             );
-            
+
             return Err(NetworkError::UnableToUpgrade(status_code));
         }
 

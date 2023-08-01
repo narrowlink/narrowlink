@@ -311,8 +311,7 @@ async fn main() -> Result<(), ClientError> {
                             403 => {
                                 error!("Access denied");
                             }
-                            _ => {
-                            }
+                            _ => {}
                         }
                     };
                     error!("Unable to connect to the gateway: {}", e.to_string());
