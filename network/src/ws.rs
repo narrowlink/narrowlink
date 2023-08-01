@@ -102,13 +102,15 @@ impl WsConnection {
         let response_headers = response.headers().clone();
         trace!("response status: {}", response.status().to_string());
         if response.status() != StatusCode::SWITCHING_PROTOCOLS {
+            let status_code = response.status().as_u16();
             trace!(
                 "response body: {}",
                 String::from_utf8_lossy(
                     hyper::body::to_bytes(response.into_body()).await?.as_ref()
                 )
             );
-            return Err(NetworkError::UnableToUpgrade);
+            
+            return Err(NetworkError::UnableToUpgrade(status_code));
         }
 
         let upgraded = hyper::upgrade::on(response).await?;
@@ -381,13 +383,14 @@ impl WsConnectionBinary {
         let response_headers = response.headers().clone();
         debug!("ws connection status: {}", response.status());
         if response.status() != StatusCode::SWITCHING_PROTOCOLS {
+            let status_code = response.status().as_u16();
             trace!(
                 "response body: {}",
                 String::from_utf8_lossy(
                     hyper::body::to_bytes(response.into_body()).await?.as_ref()
                 )
             );
-            return Err(NetworkError::UnableToUpgrade);
+            return Err(NetworkError::UnableToUpgrade(status_code));
         }
         let upgraded = hyper::upgrade::on(response).await?;
         let ws_stream = tokio_tungstenite::WebSocketStream::from_raw_socket(

@@ -7,7 +7,7 @@ pub enum NetworkError {
     HyperError(hyper::Error),
     Tungstenite(tungstenite::Error),
     TlsError,
-    UnableToUpgrade,
+    UnableToUpgrade(u16),
     RequestCanceled,
     JsonSerializationError(serde_json::Error),
     Invalid(&'static str),
@@ -43,7 +43,7 @@ impl fmt::Display for NetworkError {
             NetworkError::HyperError(e) => write!(f, "E-Hyper:{}", e),
             NetworkError::Tungstenite(e) => write!(f, "E-Tungstenite:{}", e),
             NetworkError::TlsError => write!(f, "E-Tls"),
-            NetworkError::UnableToUpgrade => write!(f, "E-UnableToUpgrade"),
+            NetworkError::UnableToUpgrade(code) => write!(f, "E-UnableToUpgrade, Error({})", code),
             NetworkError::RequestCanceled => write!(f, "E-RequestCanceled::Error"),
             NetworkError::JsonSerializationError(e) => {
                 write!(f, "E-JsonSerialization:{}", e)

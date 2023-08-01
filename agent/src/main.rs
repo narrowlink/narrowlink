@@ -82,6 +82,19 @@ async fn main() -> Result<(), AgentError> {
                     });
                 }
                 Err(e) => {
+                    if let NetworkError::UnableToUpgrade(status) = e {
+                        match status {
+                            401 => {
+                                error!("Authentication failed");
+                                break;
+                            }
+                            403 => {
+                                error!("Access denied");
+                            }
+                            _ => {
+                            }
+                        }
+                    };
                     error!("Unable to connect to the gateway: {}", e.to_string());
                     if sleep_time == 0{
                         info!("Try again");
