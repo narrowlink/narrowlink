@@ -158,7 +158,7 @@ async fn main() -> Result<(), ClientError> {
                         }
                     }
 
-                    println!("\tConnection Ping: {}\r\n", agent.ping);
+                    println!("\tConnection Ping: {}ms\r\n", agent.ping);
                 }
                 req.shutdown().await;
                 break;
