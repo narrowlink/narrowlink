@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use narrowlink_types::{
-    generic::{AgentInfo, Connect},
+    generic::{AgentInfo, AgentPublishInfo, Connect},
     policy::Policies,
 };
 use uuid::Uuid;
@@ -236,11 +236,22 @@ impl Users {
         if let Some(user) = self.users.get(&user_id) {
             let agents = user.agents.values();
             for agent in agents {
+                let mut publish_info = Vec::new();
+                for (host, connect) in agent.publish_map.iter() {
+                    for (src_port, connect) in connect.iter() {
+                        publish_info.push(AgentPublishInfo::from_connect(
+                            host.clone(),
+                            *src_port,
+                            connect,
+                        ));
+                    }
+                }
                 ret.push(AgentInfo {
                     name: agent.name.clone(),
                     socket_addr: agent.socket_addr.to_string(),
                     forward_addr: agent.forward_addr.clone(),
                     system_info: agent.system_info.as_ref().filter(|_| verbose).cloned(),
+                    publish_info,
                     since: agent.since,
                     ping: agent.ping,
                 })

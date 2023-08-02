@@ -69,6 +69,20 @@ pub enum Protocol {
     QUIC,
 }
 
+impl ToString for Protocol {
+    fn to_string(&self) -> String {
+        match self {
+            Protocol::TCP => "tcp".to_owned(),
+            Protocol::UDP => "udp".to_owned(),
+            Protocol::HTTP => "http".to_owned(),
+            Protocol::HTTPS => "https".to_owned(),
+            Protocol::TLS => "tls".to_owned(),
+            Protocol::DTLS => "dtls".to_owned(),
+            Protocol::QUIC => "quic".to_owned(),
+        }
+    }
+}
+
 impl Protocol {
     pub fn from_schemaed_string(addr: &str) -> Option<Self> {
         match addr.to_lowercase().as_str() {
@@ -97,11 +111,55 @@ pub struct SystemInfo {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
+pub struct AgentPublishInfo {
+    src_host: String,
+    src_port: u16,
+    dst_host: String,
+    dst_port: u16,
+    protocol: Protocol,
+}
+
+impl ToString for AgentPublishInfo {
+    fn to_string(&self) -> String {
+        let src_protocol = format!(
+            "{}://",
+            if self.src_port == 0 {
+                "any".to_owned()
+            } else {
+                self.src_port.to_string()
+            }
+        );
+        format!(
+            "{}://{}:{}->{}://{}:{}",
+            src_protocol,
+            self.src_host,
+            self.src_port,
+            self.protocol.to_string(),
+            self.dst_host,
+            self.dst_port
+        )
+    }
+}
+
+impl AgentPublishInfo {
+    pub fn from_connect(host: String, src_port: u16, connect: &Connect) -> Self {
+        Self {
+            src_host: host,
+            src_port,
+            dst_host: connect.host.clone(),
+            dst_port: connect.port,
+            protocol: connect.protocol.clone(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 pub struct AgentInfo {
     pub name: String,
     pub socket_addr: String,
     pub forward_addr: Option<String>,
     pub system_info: Option<SystemInfo>,
+    pub publish_info: Vec<AgentPublishInfo>,
     pub since: u64,
     pub ping: u16,
 }
