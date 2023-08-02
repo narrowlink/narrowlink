@@ -6,7 +6,7 @@ use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 
-use instant_acme::Account;
+use instant_acme::{Account, AccountCredentials};
 
 use pem::Pem;
 
@@ -20,23 +20,47 @@ pub const ACME_TLS_ALPN_NAME: &[u8] = b"acme-tls/1";
 
 #[async_trait]
 pub trait CertificateStorage {
-    async fn set_default_account(&self, account: Account) -> Result<(), GatewayError>;
-    async fn get_default_account(&self) -> Result<Account, GatewayError>;
+    async fn set_default_account_credentials(
+        &self,
+        account: AccountCredentials,
+    ) -> Result<(), GatewayError>;
+    async fn get_default_account_credentials(&self) -> Result<AccountCredentials, GatewayError>;
     async fn put(
         &self,
         account: &str,
         service: &str,
-        acme_account: Option<Account>,
+        acme_account: Option<AccountCredentials>,
         pems: Vec<Pem>,
     ) -> Result<(), GatewayError>;
     async fn get(
         &self,
         account: &str,
         service: &str,
-    ) -> Result<(Certificate, Option<Account>), GatewayError>;
-    async fn get_acme_account(&self, account: &str, service: &str) -> Option<Account>;
+    ) -> Result<(Certificate, Option<AccountCredentials>), GatewayError>;
+    async fn get_acme_account_credentials(
+        &self,
+        account: &str,
+        service: &str,
+    ) -> Option<AccountCredentials>;
     async fn set_fail(&self, account: &str, service: &str) -> Result<(), GatewayError>;
+    async fn get_default_account(&self) -> Result<Account, GatewayError> {
+        let account_credentials = self.get_default_account_credentials().await?;
+        Ok(Account::from_credentials(account_credentials).await?)
+    }
+    async fn get_acme_account(
+        &self,
+        account: &str,
+        service: &str,
+    ) -> Result<Account, GatewayError> {
+        let account_credentials = self.get_acme_account_credentials(account, service).await;
+        if let Some(account_credentials) = account_credentials {
+            Ok(Account::from_credentials(account_credentials).await?)
+        } else {
+            Err(GatewayError::Invalid("No account credentials found"))
+        }
+    }
 }
+
 pub struct Certificate {
     certificate_chain: Vec<rustls::Certificate>,
     // private_key: rustls::PrivateKey,

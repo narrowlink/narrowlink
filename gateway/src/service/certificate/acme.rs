@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use instant_acme::{
-    Account, Authorization, AuthorizationStatus, ChallengeType, Identifier, NewAccount, NewOrder,
-    Order, OrderStatus,
+    Account, AccountCredentials, Authorization, AuthorizationStatus, ChallengeType, Identifier,
+    NewAccount, NewOrder, Order, OrderStatus,
 };
 use log::{debug, trace};
 use rcgen::{CertificateParams, DistinguishedName, DnType, KeyPair};
@@ -55,8 +55,11 @@ pub enum ACMEChallenge {
 }
 
 impl Acme {
-    pub async fn new(email: &str, directory: &str) -> Result<Self, GatewayError> {
-        let account = Account::create(
+    pub async fn new(
+        email: &str,
+        directory: &str,
+    ) -> Result<(Self, AccountCredentials), GatewayError> {
+        let (account, account_credentials) = Account::create(
             &NewAccount {
                 contact: &[&format!("mailto:{}", email)],
                 terms_of_service_agreed: true,
@@ -66,11 +69,14 @@ impl Acme {
             None,
         )
         .await?;
-        Ok(Self {
-            account,
-            authorizations: Vec::new(),
-            order: None,
-        })
+        Ok((
+            Self {
+                account,
+                authorizations: Vec::new(),
+                order: None,
+            },
+            account_credentials,
+        ))
     }
     pub fn from_account(account: Account) -> Result<Self, GatewayError> {
         Ok(Self {

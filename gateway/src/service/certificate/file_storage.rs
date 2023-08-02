@@ -2,7 +2,7 @@ use std::io::{BufReader, BufWriter};
 
 use askama::Result;
 use async_trait::async_trait;
-use instant_acme::Account;
+use instant_acme::AccountCredentials;
 use pem::Pem;
 use tokio::{fs, io::AsyncWriteExt};
 
@@ -22,42 +22,44 @@ impl CertificateFileStorage {
 
 #[async_trait]
 impl CertificateStorage for CertificateFileStorage {
-    async fn get_default_account(&self) -> Result<Account, GatewayError> {
+    async fn get_default_account_credentials(&self) -> Result<AccountCredentials, GatewayError> {
         let mut final_path = self.path.clone();
         fs::create_dir_all(&final_path).await?;
         final_path.push("default.account");
         let defaul_account_file = std::fs::File::open(final_path)?;
-        Ok(Account::from_credentials(serde_json::de::from_reader(
-            BufReader::new(defaul_account_file),
-        )?)?)
+        serde_json::de::from_reader(BufReader::new(defaul_account_file)).map_err(|e| e.into())
     }
-    async fn set_default_account(&self, account: Account) -> Result<(), GatewayError> {
+    async fn set_default_account_credentials(
+        &self,
+        account: AccountCredentials,
+    ) -> Result<(), GatewayError> {
         let mut final_path = self.path.clone();
         fs::create_dir_all(&final_path).await?;
         final_path.push("default.account");
+
         Ok(serde_json::ser::to_writer(
             BufWriter::new(std::fs::File::create(final_path)?),
-            &account.credentials(),
+            &account,
         )?)
     }
     async fn put(
         &self,
         account: &str,
         service: &str,
-        acme_account: Option<Account>,
+        acme_account_credentials: Option<AccountCredentials>,
         cert: Vec<Pem>,
     ) -> Result<(), GatewayError> {
         let mut final_path = self.path.clone();
         final_path.push(account);
         fs::create_dir_all(&final_path).await?;
         final_path.push(service);
-        if let Some(acme_account) = acme_account {
+        if let Some(acme_account_credentials) = acme_account_credentials {
             let mut acme_account_path = final_path.clone();
             acme_account_path.set_extension("account");
 
             serde_json::ser::to_writer(
                 BufWriter::new(std::fs::File::create(acme_account_path)?),
-                &acme_account.credentials(),
+                &acme_account_credentials,
             )
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
         }
@@ -72,7 +74,7 @@ impl CertificateStorage for CertificateFileStorage {
         &self,
         account: &str,
         service: &str,
-    ) -> Result<(Certificate, Option<Account>), GatewayError> {
+    ) -> Result<(Certificate, Option<AccountCredentials>), GatewayError> {
         let mut final_path = self.path.clone();
         final_path.push(account);
         final_path.push(service);
@@ -85,10 +87,15 @@ impl CertificateStorage for CertificateFileStorage {
         acme_account_path.set_extension("account");
         let acme_account = if cert.renew_needed() {
             if let Ok(acme_account_file) = std::fs::File::open(acme_account_path) {
-                Account::from_credentials(serde_json::de::from_reader(BufReader::new(
-                    acme_account_file,
-                ))?)
-                .ok()
+                // let account_credentials :Option<AccountCredentials>= serde_json::de::from_reader(BufReader::new(
+                //     acme_account_file,
+                // )).ok();
+                // todo!()
+                // Account::from_credentials(serde_json::de::from_reader(BufReader::new(
+                //     acme_account_file,
+                // ))?)
+                // .ok()
+                serde_json::de::from_reader(BufReader::new(acme_account_file)).ok()
             } else {
                 None
             }
@@ -98,16 +105,19 @@ impl CertificateStorage for CertificateFileStorage {
 
         Ok((cert, acme_account))
     }
-    async fn get_acme_account(&self, account: &str, service: &str) -> Option<Account> {
+    async fn get_acme_account_credentials(
+        &self,
+        account: &str,
+        service: &str,
+    ) -> Option<AccountCredentials> {
         let mut acme_account_path = self.path.clone();
         acme_account_path.push(account);
         acme_account_path.push(service);
         std::fs::File::open(acme_account_path)
             .ok()
             .and_then(|acme_account_file| {
-                serde_json::de::from_reader(BufReader::new(acme_account_file))
-                    .ok()
-                    .and_then(|credentials| Account::from_credentials(credentials).ok())
+                serde_json::de::from_reader(BufReader::new(acme_account_file)).ok()
+                // .and_then(|credentials| Account::from_credentials(credentials).ok())
                 // serde_json::de::from_reader(BufReader::new(acme_account_file))
             })
     }

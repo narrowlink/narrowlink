@@ -128,9 +128,11 @@ impl CertificateManager {
             let account = if let Ok(account) = storage.get_default_account().await {
                 account
             } else {
-                let account = Acme::new(&acme_info.0, &acme_info.2).await?.account;
-                storage.set_default_account(account.clone()).await?;
-                account
+                let (acme, account_credentials) = Acme::new(&acme_info.0, &acme_info.2).await?;
+                storage
+                    .set_default_account_credentials(account_credentials)
+                    .await?;
+                acme.account
             };
             Self {
                 certificate_store,
@@ -169,7 +171,7 @@ impl CertificateManager {
                                         && cm.is_acme_enabled()
                                     {
                                         if let Err(e) =
-                                            cm.issue(&uid, &agent_name, &domains, None, None).await
+                                            cm.issue(&uid, &agent_name, &domains, None).await
                                         {
                                             log::error!(
                                                 "unable to issue certificate for: {:?} : {}",
@@ -211,18 +213,16 @@ impl CertificateManager {
         uid: &str,
         agent_name: &str,
         domains: &Vec<String>,
-        account: Option<Account>,
         suggested_private_key: Option<PrivateKey>,
     ) -> Result<(), GatewayError> {
         debug!("start to issue acme certificate for {:?}", &domains);
-        let (Some(acme_account),Some(challenge_type)) = (account.clone().or(self.storage.get_acme_account(uid, agent_name).await).or(self.acme_account.clone()),self.acme_type.clone()) else{
+        // we can create acme account for each agent later
+        let (Some(acme_account),Some(challenge_type)) = (self.storage.get_acme_account(uid, agent_name).await.ok().or(self.acme_account.clone()),self.acme_type.clone()) else{
             return Err(GatewayError::ACMEIsDisabled);
         };
 
-        // account.or()
         let mut acme = Acme::from_account(acme_account.clone())?;
 
-        // let acme_account = acme.clone().account;
         if let Some(pem) = acme
             .new_order(
                 domains.iter().map(|d| d.to_string()).collect(),
@@ -266,7 +266,7 @@ impl CertificateManager {
                         };
             if self
                 .storage
-                .put(&uid, &agent_name, account, pem)
+                .put(&uid, &agent_name, None, pem)
                 .await
                 .is_err()
             {
