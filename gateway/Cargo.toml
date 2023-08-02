@@ -27,7 +27,7 @@ askama = { version = "*" }
 pem = { version = "*" }
 uuid = { version = "*", features = ["v4", "serde"] }
 either = { version = "*" }
-instant-acme = { version = "*" }
+instant-acme = { version = "0.3.4" }
 tokio-rustls = { version = "*" }
 rustls = { version = "*" }
 rustls-pemfile = { version = "*" }
