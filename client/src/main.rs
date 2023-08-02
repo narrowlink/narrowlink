@@ -134,7 +134,27 @@ async fn main() -> Result<(), ClientError> {
             }
 
             let (mut socket, agent_name) = if let ArgCommands::List(_) = arg_commands.as_ref() {
-                dbg!(agents);
+                for agent in agents.iter() {
+                    println!("{}:", agent.name);
+                    println!("\tAddress: {}", agent.socket_addr);
+
+                    if let Some(forward_addr) = &agent.forward_addr {
+                        println!("\tForward Address: {}", forward_addr);
+                    }
+                    if let Some(system_info) = &agent.system_info {
+                        println!("\tSystem Info:");
+                        println!("\t\tLoad Avarage: {}", system_info.loadavg);
+                        println!("\t\tCPU Cores: {}", system_info.cpus);
+                    }
+                    if let Some(since) =
+                        &chrono::NaiveDateTime::from_timestamp_opt(agent.since as i64, 0)
+                    {
+                        let datetime: chrono::DateTime<chrono::Local> =
+                            chrono::DateTime::from_utc(*since, *chrono::Local::now().offset());
+                        println!("\tConnection Time: {}", datetime);
+                    }
+                    println!("\tConnection Ping: {}\r\n", agent.ping);
+                }
                 req.shutdown().await;
                 break;
             } else {

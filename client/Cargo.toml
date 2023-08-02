@@ -47,6 +47,7 @@ webpki-roots = { version = "*", optional = true, default-features = false }
 hyper = { version = "*", features = ["http2"], default-features = false }
 tokio-native-tls = { version = "*", optional = true, default-features = false }
 native-tls = { version = "*", optional = true, default-features = false }
+chrono = { version = "*", default-features = false }
 
 narrowlink-types = { path = "../types" }
 narrowlink-network = { path = "../network", features = [
