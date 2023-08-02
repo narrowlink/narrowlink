@@ -30,7 +30,7 @@ use narrowlink_types::{
     client::EventOutBound as ClientEventOutBound,
     client::EventRequest as ClientEventRequest,
     generic::{self, Protocol},
-    GetResponse, agent,
+    GetResponse,
 };
 use sha3::{Digest, Sha3_256};
 use socks5_protocol::{
