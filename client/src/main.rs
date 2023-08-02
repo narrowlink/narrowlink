@@ -148,10 +148,13 @@ async fn main() -> Result<(), ClientError> {
                         println!("\t\tLoad Avarage: {}", system_info.loadavg);
                         println!("\t\tCPU Cores: {}", system_info.cpus);
                     }
-                    for agent_publish_info in &agent.publish_info {
-                        println!("\tPublish Info: {}", agent_publish_info.to_string());
-                    }
                     if list_args.verbose {
+                        if !agent.publish_info.is_empty() {
+                            println!("\tPublish Info:");
+                            for agent_publish_info in &agent.publish_info {
+                                println!("\t\t{}", agent_publish_info.to_string());
+                            }
+                        }
                         if let Some(since) =
                             &chrono::NaiveDateTime::from_timestamp_opt(agent.since as i64, 0)
                         {

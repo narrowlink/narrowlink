@@ -121,19 +121,14 @@ pub struct AgentPublishInfo {
 
 impl ToString for AgentPublishInfo {
     fn to_string(&self) -> String {
-        let src_protocol = format!(
-            "{}://",
+        format!(
+            "{}:{}->{}://{}:{}",
+            self.src_host,
             if self.src_port == 0 {
                 "any".to_owned()
             } else {
                 self.src_port.to_string()
-            }
-        );
-        format!(
-            "{}://{}:{}->{}://{}:{}",
-            src_protocol,
-            self.src_host,
-            self.src_port,
+            },
             self.protocol.to_string(),
             self.dst_host,
             self.dst_port
