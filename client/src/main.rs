@@ -30,7 +30,7 @@ use narrowlink_types::{
     client::EventOutBound as ClientEventOutBound,
     client::EventRequest as ClientEventRequest,
     generic::{self, Protocol},
-    GetResponse,
+    GetResponse, agent,
 };
 use sha3::{Digest, Sha3_256};
 use socks5_protocol::{
@@ -147,6 +147,9 @@ async fn main() -> Result<(), ClientError> {
                         println!("\tSystem Info:");
                         println!("\t\tLoad Avarage: {}", system_info.loadavg);
                         println!("\t\tCPU Cores: {}", system_info.cpus);
+                    }
+                    for agent_publish_info in &agent.publish_info {
+                        println!("\tPublish Info: {}", agent_publish_info.to_string());
                     }
                     if list_args.verbose {
                         if let Some(since) =
