@@ -136,7 +136,7 @@ async fn main() -> Result<(), ClientError> {
             let (mut socket, agent_name) = if let ArgCommands::List(list_args) =
                 arg_commands.as_ref()
             {
-                if agents.is_empty(){
+                if agents.is_empty() {
                     println!("Agent not found");
                 }
                 for agent in agents.iter() {
