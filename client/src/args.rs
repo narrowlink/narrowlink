@@ -37,7 +37,7 @@ pub fn extract_addr(addr: &str, local: bool) -> Result<(String, u16), ClientErro
 
 #[derive(Debug)]
 pub struct ListArgs {
-    verbose: bool, //a verbose
+    pub verbose: bool, //a verbose
 }
 
 #[derive(Debug, Clone)]

@@ -133,7 +133,9 @@ async fn main() -> Result<(), ClientError> {
                 list_of_agents_refresh_required.store(false, Ordering::Relaxed);
             }
 
-            let (mut socket, agent_name) = if let ArgCommands::List(_) = arg_commands.as_ref() {
+            let (mut socket, agent_name) = if let ArgCommands::List(list_args) =
+                arg_commands.as_ref()
+            {
                 for agent in agents.iter() {
                     println!("{}:", agent.name);
                     println!("\tAddress: {}", agent.socket_addr);
@@ -146,13 +148,16 @@ async fn main() -> Result<(), ClientError> {
                         println!("\t\tLoad Avarage: {}", system_info.loadavg);
                         println!("\t\tCPU Cores: {}", system_info.cpus);
                     }
-                    if let Some(since) =
-                        &chrono::NaiveDateTime::from_timestamp_opt(agent.since as i64, 0)
-                    {
-                        let datetime: chrono::DateTime<chrono::Local> =
-                            chrono::DateTime::from_utc(*since, *chrono::Local::now().offset());
-                        println!("\tConnection Time: {}", datetime);
+                    if list_args.verbose {
+                        if let Some(since) =
+                            &chrono::NaiveDateTime::from_timestamp_opt(agent.since as i64, 0)
+                        {
+                            let datetime: chrono::DateTime<chrono::Local> =
+                                chrono::DateTime::from_utc(*since, *chrono::Local::now().offset());
+                            println!("\tConnection Time: {}", datetime);
+                        }
                     }
+
                     println!("\tConnection Ping: {}\r\n", agent.ping);
                 }
                 req.shutdown().await;
