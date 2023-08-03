@@ -33,6 +33,8 @@ jobs:
 
     if: ${{ needs.check_date.outputs.should_run != 'false' }}
     runs-on: windows-2019
+    env:
+      RUSTFLAGS: '-C target-feature=+crt-static'
     permissions: 
       deployments: write
       contents: read
