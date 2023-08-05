@@ -91,13 +91,13 @@ impl Sink<Vec<u8>> for StreamCrypt {
         mut self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> Poll<Result<(), Self::Error>> {
-        self.poll_ready_unpin(cx)
+        self.inner.poll_ready_unpin(cx)
     }
 
     fn start_send(mut self: Pin<&mut Self>, item: Vec<u8>) -> Result<(), Self::Error> {
         let mut buf = item.to_vec();
         self.cipher.apply_keystream(&mut buf);
-        self.start_send_unpin(buf)
+        self.inner.start_send_unpin(buf)
     }
 
     fn poll_flush(
