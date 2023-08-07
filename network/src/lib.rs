@@ -1,12 +1,11 @@
 pub use async_tools::{AsyncToStream, StreamToAsync};
-use chacha20::XChaCha20;
+use chacha20poly1305::{aead::Aead, KeyInit, XChaCha20Poly1305};
 use std::{pin::Pin, task::Poll};
 mod async_tools;
 pub mod error;
 pub mod event;
 pub mod transport;
 pub mod ws;
-use chacha20::cipher::{KeyIvInit, StreamCipher};
 use error::NetworkError;
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -50,7 +49,8 @@ pub async fn stream_forward(
 
 pub struct StreamCrypt {
     inner: Box<dyn UniversalStream<Vec<u8>, NetworkError>>,
-    cipher: XChaCha20,
+    cipher: XChaCha20Poly1305,
+    nonce: [u8; 24],
 }
 
 impl StreamCrypt {
@@ -59,10 +59,11 @@ impl StreamCrypt {
         nonce: [u8; 24],
         inner: impl UniversalStream<Vec<u8>, NetworkError>,
     ) -> Self {
-        let cipher = XChaCha20::new(&key.into(), &nonce.into());
+        let cipher = XChaCha20Poly1305::new(&key.into());
         Self {
             inner: Box::new(inner),
             cipher,
+            nonce,
         }
     }
 }
@@ -75,9 +76,12 @@ impl Stream for StreamCrypt {
         cx: &mut std::task::Context<'_>,
     ) -> Poll<Option<Self::Item>> {
         match self.inner.poll_next_unpin(cx)? {
-            Poll::Ready(Some(mut buf)) => {
-                self.cipher.apply_keystream(&mut buf);
-                Poll::Ready(Some(Ok(buf)))
+            Poll::Ready(Some(buf)) => {
+                Poll::Ready(Some(
+                    self.cipher
+                        .decrypt(&self.nonce.into(), buf.as_ref())
+                        .map_err(|e| e.into()),
+                ))
             }
             Poll::Ready(None) => Poll::Ready(None),
             Poll::Pending => Poll::Pending,
@@ -95,8 +99,7 @@ impl Sink<Vec<u8>> for StreamCrypt {
     }
 
     fn start_send(mut self: Pin<&mut Self>, item: Vec<u8>) -> Result<(), Self::Error> {
-        let mut buf = item.to_vec();
-        self.cipher.apply_keystream(&mut buf);
+        let buf = self.cipher.encrypt(&self.nonce.into(), item.as_ref())?;
         self.inner.start_send_unpin(buf)
     }
 

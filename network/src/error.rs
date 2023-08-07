@@ -10,6 +10,7 @@ pub enum NetworkError {
     UnableToUpgrade(u16),
     RequestCanceled,
     JsonSerializationError(serde_json::Error),
+    XChaCha20Poly1305(chacha20poly1305::Error),
     Invalid(&'static str),
 }
 
@@ -48,6 +49,7 @@ impl fmt::Display for NetworkError {
             NetworkError::JsonSerializationError(e) => {
                 write!(f, "E-JsonSerialization:{}", e)
             }
+            NetworkError::XChaCha20Poly1305(e) => write!(f, "E-XChaCha20Poly1305:{}", e),
             NetworkError::Invalid(msg) => write!(f, "Invalid {}", msg),
         }
     }
@@ -76,6 +78,12 @@ impl From<hyper::Error> for NetworkError {
 impl From<serde_json::Error> for NetworkError {
     fn from(err: serde_json::Error) -> Self {
         Self::JsonSerializationError(err)
+    }
+}
+
+impl From<chacha20poly1305::Error> for NetworkError {
+    fn from(err: chacha20poly1305::Error) -> Self {
+        Self::XChaCha20Poly1305(err)
     }
 }
 
