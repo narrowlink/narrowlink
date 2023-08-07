@@ -76,13 +76,11 @@ impl Stream for StreamCrypt {
         cx: &mut std::task::Context<'_>,
     ) -> Poll<Option<Self::Item>> {
         match self.inner.poll_next_unpin(cx)? {
-            Poll::Ready(Some(buf)) => {
-                Poll::Ready(Some(
-                    self.cipher
-                        .decrypt(&self.nonce.into(), buf.as_ref())
-                        .map_err(|e| e.into()),
-                ))
-            }
+            Poll::Ready(Some(buf)) => Poll::Ready(Some(
+                self.cipher
+                    .decrypt(&self.nonce.into(), buf.as_ref())
+                    .map_err(|e| e.into()),
+            )),
             Poll::Ready(None) => Poll::Ready(None),
             Poll::Pending => Poll::Pending,
         }
