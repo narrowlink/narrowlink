@@ -50,11 +50,13 @@ native-tls = { version = "*", optional = true, default-features = false }
 chrono = { version = "*", default-features = false }
 
 narrowlink-types = { path = "../types" }
-narrowlink-network = { path = "../network", features = [
-    "rustls",
-], default-features = false }
+narrowlink-network = { path = "../network", default-features = false }
 
 [features]
 default = ["rustls"]
-rustls = ["dep:tokio-rustls", "dep:webpki-roots"]
-native-tls = ["dep:tokio-native-tls", "dep:native-tls"]
+rustls = ["dep:tokio-rustls", "dep:webpki-roots", "narrowlink-network/rustls"]
+native-tls = [
+    "dep:tokio-native-tls",
+    "dep:native-tls",
+    "narrowlink-network/native-tls",
+]

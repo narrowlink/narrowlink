@@ -2,7 +2,6 @@ use std::{
     io,
     net::SocketAddr,
     pin::Pin,
-    sync::Arc,
     task::{Context, Poll},
 };
 
@@ -40,6 +39,7 @@ impl UnifiedSocket {
                     #[cfg(feature = "rustls")]
                     {
                         debug!("using rustls to connect to {}", peer_addr.to_string());
+                        use std::sync::Arc;
                         use tokio_rustls::{
                             rustls::{ClientConfig, OwnedTrustAnchor, RootCertStore, ServerName},
                             TlsConnector,
