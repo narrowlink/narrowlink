@@ -25,6 +25,7 @@ tokio = { version = "*", features = [
     "rt-multi-thread",
 ], default-features = false }
 futures-util = { version = "*", default-features = false }
+futures-sink = { version = "*", features = ["alloc"], default-features = false }
 futures-timer = { version = "*", default-features = false }
 tokio-tungstenite = { version = "*", default-features = false }
 tungstenite = { version = "*", default-features = false }
@@ -44,7 +45,6 @@ dirs = { version = "*", default-features = false }
 uuid = { version = "*", features = ["v4"], default-features = false }
 tokio-rustls = { version = "*", optional = true, default-features = false }
 webpki-roots = { version = "*", optional = true, default-features = false }
-hyper = { version = "*", features = ["http2"], default-features = false }
 tokio-native-tls = { version = "*", optional = true, default-features = false }
 native-tls = { version = "*", optional = true, default-features = false }
 chrono = { version = "*", default-features = false }
@@ -58,4 +58,3 @@ narrowlink-network = { path = "../network", features = [
 default = ["rustls"]
 rustls = ["dep:tokio-rustls", "dep:webpki-roots"]
 native-tls = ["dep:tokio-native-tls", "dep:native-tls"]
-live_debug = []

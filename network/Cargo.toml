@@ -20,7 +20,6 @@ futures-util = { version = "*", default-features = false }
 tokio = { version = "*", features = [
     "macros",
     "rt",
-    "io-std",
     "net",
     "rt-multi-thread",
 ], default-features = false }

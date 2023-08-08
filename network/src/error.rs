@@ -49,7 +49,7 @@ impl fmt::Display for NetworkError {
             NetworkError::JsonSerializationError(e) => {
                 write!(f, "E-JsonSerialization:{}", e)
             }
-            NetworkError::XChaCha20Poly1305(e) => write!(f, "E-XChaCha20Poly1305:{}", e),
+            NetworkError::XChaCha20Poly1305(e) => write!(f, "Cryptography Failure :{}", e),
             NetworkError::Invalid(msg) => write!(f, "Invalid {}", msg),
         }
     }
