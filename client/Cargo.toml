@@ -51,8 +51,8 @@ tokio-native-tls = { version = "0.3.1", optional = true, default-features = fals
 native-tls = { version = "0.2.11", optional = true, default-features = false }
 chrono = { version = "0.4.26", default-features = false }
 
-narrowlink-types = { path = "../types" }
-narrowlink-network = { path = "../network", default-features = false }
+narrowlink-types = { version = "0.1.2" }
+narrowlink-network = { version = "0.1.2" }
 
 [features]
 default = ["rustls"]

@@ -35,5 +35,5 @@ validator = { version = "0.16.1", features = ["derive"] }
 rcgen = { version = "0.11.1", features = ["pem", "x509-parser"] }
 x509-parser = { version = "0.15.1" }
 clap_lex = { version = "0.5.0" }
-narrowlink-types = { path = "../types" }
-narrowlink-network = { path = "../network" }
+narrowlink-types = { version = "0.1.2" }
+narrowlink-network = { version = "0.1.2" }
