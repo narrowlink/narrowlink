@@ -10,7 +10,7 @@ keywords = ["narrowlink"]
 authors = ['Narrowlink <opensource@narrowlink.com>']
 edition = "2021"
 
-include = ["Cargo.toml", "LICENSE", "sample_client.yaml", "src/**/*"]
+include = ["Cargo.toml", "LICENSE", "sample_client.yaml", "src/**/*", "*help.arg"]
 
 [[bin]]
 name = "narrowlink"

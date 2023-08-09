@@ -1,6 +1,7 @@
 # Narrowlink Token Generator
 <p align="center">
-<img src="https://github.com/narrowlink/docs/blob/main/docs/assets/NarrowLink-888.svg" width="50%" height="50%" alt="Narrowlink Logo">
+<img src="https://raw.githubusercontent.com/narrowlink/homepage/main/static/img/NarrowLink-888.svg" width="50%" height="50%" 
+alt="Narrowlink Logo">
 </p>
 
 ## Introduction

@@ -10,7 +10,7 @@ keywords = ["narrowlink"]
 authors = ['Narrowlink <opensource@narrowlink.com>']
 edition = "2021"
 
-include = ["Cargo.toml", "LICENSE", "sample_agent.yaml", "src/**/*"]
+include = ["Cargo.toml", "LICENSE", "sample_agent.yaml", "src/**/*", "*help.arg"]
 
 [dependencies]
 tokio = { version = "1.29.1", default-features = false, features = [
