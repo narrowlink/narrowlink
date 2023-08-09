@@ -10,7 +10,7 @@ license = "AGPL-3.0"
 keywords = ["narrowlink"]
 authors = ['Narrowlink <opensource@narrowlink.com>']
 
-include = ["Cargo.toml", "LICENSE", "sample_gateway.yaml", "src/**/*", "*help.arg"]
+include = ["Cargo.toml", "LICENSE", "sample_gateway.yaml", "src/**/*", "*help.arg", "templates/*.html"]
 
 [dependencies]
 tokio = { version = "1.29.1", features = ["full"] }
