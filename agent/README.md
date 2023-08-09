@@ -5,10 +5,7 @@
 
 ## Introduction
 
-Agent runs on your target devices that you want to access remotely. It is responsible for forwarding requests to the gateway and receiving responses from the gateway. The agent handles encryption and decryption of requests and responses. Currently, it supports websockets over HTTP and HTTPS protocols as the transport layer. Additionally, the agent can be configured to publish a webserver to the gateway without intervention from the client. In this case, when the gateway receives a request for the published domain name, it will forward the request to the agent, and the agent will further forward the request to the webserver. The agent also supports optional end-to-end encryption for requests and responses.
-## Getting Started
-
-Follow the [Documentation](https://narrowlink.com/docs/intro) to set up Narrowlink, or check the [Agent](https://narrowlink.com/docs/agent) page in the documentation for more information.
+This component contains the source code for the Narrowlink Agent, a component of the Narrowlink platform. It is responsible for forwarding requests that received from the gateway forward them to its network. For instructions on setting up Narrowlink, please refer to the [Documentation](https://narrowlink.com/docs/intro), or visit the [Agent](https://narrowlink.com/docs/agent) page in the documentation for more information.
 
 ## Disclaimer
 

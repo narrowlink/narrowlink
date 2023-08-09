@@ -5,11 +5,7 @@
 
 ## Introduction
 
-The Narrowlink client is a versatile and powerful tool that offers a wide range of features to access net network resource by connecting to the agent thorough of the gateway. From setting up sock proxy servers to connecting to share internet access of a computer behind of a net network to connect their services like RDP and SSH, It also offers end-to-end encryption based on Xchacha20 and SHA3 for enhanced security.
-
-## Getting Started
-
-Follow the [Documentation](https://narrowlink.com/docs/intro) to set up Narrowlink, or check the [Client](https://narrowlink.com/docs/client) page in the documentation for more information.
+This component contains the source code for the Narrowlink Client, a component of the [Narrowlink](https://narrowlink.com) platform. It is responsible for connecting to the gateway and forwarding requests to the agent. For instructions on setting up Narrowlink, please refer to the [Documentation](https://narrowlink.com/docs/intro), or visit the [Client](https://narrowlink.com/docs/client) page in the documentation for more information.
 
 ## Disclaimer
 

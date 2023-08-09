@@ -5,11 +5,7 @@
 
 ## Introduction
 
-Token generator is a minimal component of Narrowlink that is responsible for generating tokens used to authenticate and configure clients and agents. This component is not actively involved in the Narrowlink infrastructure and is only used to generate tokens for the client and agent components. It receives a configuration file that contains the secret and a list of tokens and generates the tokens. The configuration file is in YAML format. The following is an example of a configuration file:
-
-## Getting Started
-
-Follow the [Documentation](https://narrowlink.com/docs/intro) to set up Narrowlink, or check the [Token Generator](https://narrowlink.com/docs/token-generator) page in the documentation for more information.
+This component contains the source code for the Narrowlink Token Generator, a component of the [Narrowlink](https://narrowlink.com) platform. It is responsible for generating tokens used to authenticate and configure clients and agents. For instructions on setting up Narrowlink, please refer to the [Documentation](https://narrowlink.com/docs/intro), or visit the [Token Generator](https://narrowlink.com/docs/token-generator) page in the documentation for more information.
 
 ## Disclaimer
 

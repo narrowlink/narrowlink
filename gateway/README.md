@@ -5,11 +5,7 @@
 
 ## Introduction
 
-The Narrowlink gateway is a vital component of the Narrowlink system that facilitates secure communication and seamless connectivity between clients and agents. As the central hub, the gateway plays a critical role in enabling remote access to devices and services behind NAT and firewalls.
-
-## Getting Started
-
-Follow the [Documentation](https://narrowlink.com/docs/intro) to set up Narrowlink, or check the [Gateway](https://narrowlink.com/docs/client) page in the documentation for more information.
+This component contains the source code for the Narrowlink Gateway, a component of the [Narrowlink](https://narrowlink.com) platform. It facilitates secure communication and seamless connectivity between clients and agents. As the central hub, the gateway plays a critical role in enabling remote access to devices and services behind NAT and firewalls.  For instructions on setting up Narrowlink, please refer to the [Documentation](https://narrowlink.com/docs/intro), or visit the [Gateway](https://narrowlink.com/docs/gateway) page in the documentation for more information.
 
 ## Disclaimer
 
