@@ -13,27 +13,27 @@ authors = ['Narrowlink <opensource@narrowlink.com>']
 include = ["Cargo.toml", "LICENSE", "sample_gateway.yaml", "src/**/*"]
 
 [dependencies]
-tokio = { version = "1", features = ["full"] }
-hyper = { version = "*", features = ["full"] }
-log = { version = "*" }
-env_logger = { version = "*" }
-dirs = { version = "*" }
-serde_json = { version = "*" }
-serde_yaml = "*"
-serde = { version = "1", features = ["derive"] }
-async-trait = { version = "*" }
-futures-util = { version = "*" }
-askama = { version = "*" }
-pem = { version = "*" }
-uuid = { version = "*", features = ["v4", "serde"] }
-either = { version = "*" }
-instant-acme = { version = "*" }
-tokio-rustls = { version = "*" }
-rustls = { version = "*" }
-rustls-pemfile = { version = "*" }
-validator = { version = "*", features = ["derive"] }
-rcgen = { version = "*", features = ["pem", "x509-parser"] }
-x509-parser = { version = "*" }
-clap_lex = { version = "*" }
+tokio = { version = "1.29.1", features = ["full"] }
+hyper = { version = "0.14.27", features = ["full"] }
+log = { version = "0.4.19" }
+env_logger = { version = "0.10.0" }
+dirs = { version = "5.0.1" }
+serde_json = { version = "1.0.104" }
+serde_yaml = "0.9.25"
+serde = { version = "1.0.183", features = ["derive"] }
+async-trait = { version = "0.1.72" }
+futures-util = { version = "0.3.28" }
+askama = { version = "0.12.0" }
+pem = { version = "3.0.1" }
+uuid = { version = "1.4.1", features = ["v4", "serde"] }
+either = { version = "1.9.0" }
+instant-acme = { version = "0.4.0" }
+tokio-rustls = { version = "0.24.1" }
+rustls = { version = "0.21.6" }
+rustls-pemfile = { version = "1.0.3" }
+validator = { version = "0.16.1", features = ["derive"] }
+rcgen = { version = "0.11.1", features = ["pem", "x509-parser"] }
+x509-parser = { version = "0.15.1" }
+clap_lex = { version = "0.5.0" }
 narrowlink-types = { path = "../types" }
 narrowlink-network = { path = "../network" }

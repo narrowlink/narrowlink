@@ -17,14 +17,14 @@ include = [
 ]
 
 [dependencies]
-uuid = { version = "*", features = ["serde"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "*"
-jsonwebtoken = { version = "*" }
-ipnet = { version = "*", features = ["serde"] }
-wildmatch = { version = "*" }
-validator = { version = "*", features = ["derive"] }
-regex = "*"
-hmac = { version = "*", default-features = false }
-sha3 = { version = "*", default-features = false }
-chrono = { version = "*", default-features = false,features = ["clock"] }
+uuid = { version = "1.4.1", features = ["serde"] }
+serde = { version = "1.0.183", features = ["derive"] }
+serde_json = "1.0.104"
+jsonwebtoken = { version = "8.3.0" }
+ipnet = { version = "2.8.0", features = ["serde"] }
+wildmatch = { version = "2.1.1" }
+validator = { version = "0.16.1", features = ["derive"] }
+regex = "1.9.3"
+hmac = { version = "0.12.1", default-features = false }
+sha3 = { version = "0.10.8", default-features = false }
+chrono = { version = "0.4.26", default-features = false,features = ["clock"] }

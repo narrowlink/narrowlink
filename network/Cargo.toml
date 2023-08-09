@@ -13,31 +13,33 @@ authors = ['Narrowlink <opensource@narrowlink.com>']
 include = ["Cargo.toml", "LICENSE", "src/**/*"]
 
 [dependencies]
-bytes = "*"
-serde = { version = "*", features = ["derive"], default-features = false }
-serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
-futures-util = { version = "*", default-features = false }
-tokio = { version = "*", features = [
+bytes = "1.4.0"
+serde = { version = "1.0.183", features = ["derive"], default-features = false }
+serde_json = { version = "1.0.104", default-features = false, features = [
+    "alloc",
+] }
+futures-util = { version = "0.3.28", default-features = false }
+tokio = { version = "1.29.1", features = [
     "macros",
     "rt",
     "net",
     "rt-multi-thread",
 ], default-features = false }
-tokio-rustls = { version = "*", optional = true, default-features = false }
-tokio-native-tls = { version = "*", optional = true, default-features = false }
-native-tls = { version = "*", optional = true, default-features = false }
-webpki-roots = { version = "*", optional = true, default-features = false }
-hyper = { version = "*", features = [
+tokio-rustls = { version = "0.24.1", optional = true, default-features = false }
+tokio-native-tls = { version = "0.3.1", optional = true, default-features = false }
+native-tls = { version = "0.2.11", optional = true, default-features = false }
+webpki-roots = { version = "0.25.1", optional = true, default-features = false }
+hyper = { version = "0.14.27", features = [
     "client",
     "http1",
     "tcp",
 ], default-features = false }
-tokio-tungstenite = { version = "*", default-features = false }
-tungstenite = "*"
-chacha20poly1305 = "*"
+tokio-tungstenite = { version = "0.20.0", default-features = false }
+tungstenite = "0.20.0"
+chacha20poly1305 = "0.10.1"
 narrowlink-types = { path = "../types" }
-log = { version = "*" }
-env_logger = { version = "*" }
+log = { version = "0.4.19" }
+env_logger = { version = "0.10.0" }
 
 [features]
 default = ["rustls"]

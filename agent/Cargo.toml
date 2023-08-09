@@ -13,31 +13,31 @@ edition = "2021"
 include = ["Cargo.toml", "LICENSE", "sample_agent.yaml", "src/**/*"]
 
 [dependencies]
-tokio = { version = "1", default-features = false, features = [
+tokio = { version = "1.29.1", default-features = false, features = [
   "macros",
   "rt",
   "time",
   "rt-multi-thread",
 ] }
-futures-util = { version = "*", default-features = false }
-tokio-util = { version = "*", default-features = false }
-serde = { version = "*", default-features = false, features = ["derive"] }
-serde_json = { version = "*", default-features = false }
-serde_yaml = { version = "*", default-features = false }
-uuid = { version = "*", default-features = false }
-sysinfo = { version = "*", default-features = false }
-futures-channel = { version = "*", features = ["sink"] }
-udp-stream = { version = "*", default-features = false }
-sha3 = { version = "*", default-features = false }
-hmac = { version = "*", default-features = false }
-native-tls = { version = "*", optional = true, default-features = false }
-webpki-roots = { version = "*", optional = true, default-features = false }
-tokio-rustls = { version = "*", optional = true, default-features = false }
-tokio-native-tls = { version = "*", optional = true, default-features = false }
-dirs = { version = "*", default-features = false }
-log = { version = "*" }
-env_logger = { version = "*" }
-clap_lex = { version = "*", default-features = false }
+futures-util = { version = "0.3.28", default-features = false }
+tokio-util = { version = "0.7.8", default-features = false }
+serde = { version = "1.0.183", default-features = false, features = ["derive"] }
+serde_json = { version = "1.0.104", default-features = false }
+serde_yaml = { version = "0.9.25", default-features = false }
+uuid = { version = "1.4.1", default-features = false }
+sysinfo = { version = "0.29.7", default-features = false }
+futures-channel = { version = "0.3.28", features = ["sink"] }
+udp-stream = { version = "0.0.9", default-features = false }
+sha3 = { version = "0.10.8", default-features = false }
+hmac = { version = "0.12.1", default-features = false }
+native-tls = { version = "0.2.11", optional = true, default-features = false }
+webpki-roots = { version = "0.25.1", optional = true, default-features = false }
+tokio-rustls = { version = "0.24.1", optional = true, default-features = false }
+tokio-native-tls = { version = "0.3.1", optional = true, default-features = false }
+dirs = { version = "5.0.1", default-features = false }
+log = { version = "0.4.19" }
+env_logger = { version = "0.10.0" }
+clap_lex = { version = "0.5.0", default-features = false }
 
 narrowlink-types = { path = "../types" }
 narrowlink-network = { path = "../network", default-features = false }

@@ -17,37 +17,39 @@ name = "narrowlink"
 path = "src/main.rs"
 
 [dependencies]
-clap_lex = { version = "*", default-features = false }
-tokio = { version = "*", features = [
+clap_lex = { version = "0.5.0", default-features = false }
+tokio = { version = "1.29.1", features = [
     "macros",
     "rt",
     "io-std",
     "rt-multi-thread",
 ], default-features = false }
-futures-util = { version = "*", default-features = false }
-futures-sink = { version = "*", features = ["alloc"], default-features = false }
-futures-timer = { version = "*", default-features = false }
-tokio-tungstenite = { version = "*", default-features = false }
-tungstenite = { version = "*", default-features = false }
-serde = { version = "*", features = ["derive"], default-features = false }
-serde_json = { version = "*", default-features = false }
-serde_yaml = { version = "*", default-features = false }
-udp-stream = { version = "*", default-features = false }
-regex = { version = "*", features = ["std"], default-features = false }
-either = { version = "*", default-features = false }
-log = { version = "*", default-features = false }
-env_logger = { version = "*", default-features = false }
-socks5-protocol = { version = "*", default-features = false }
-sha3 = { version = "*", default-features = false }
-hmac = { version = "*", default-features = false }
-rand = { version = "*", default-features = false }
-dirs = { version = "*", default-features = false }
-uuid = { version = "*", features = ["v4"], default-features = false }
-tokio-rustls = { version = "*", optional = true, default-features = false }
-webpki-roots = { version = "*", optional = true, default-features = false }
-tokio-native-tls = { version = "*", optional = true, default-features = false }
-native-tls = { version = "*", optional = true, default-features = false }
-chrono = { version = "*", default-features = false }
+futures-util = { version = "0.3.28", default-features = false }
+futures-sink = { version = "0.3.28", features = [
+    "alloc",
+], default-features = false }
+futures-timer = { version = "3.0.2", default-features = false }
+tokio-tungstenite = { version = "0.20.0", default-features = false }
+tungstenite = { version = "0.20.0", default-features = false }
+serde = { version = "1.0.183", features = ["derive"], default-features = false }
+serde_json = { version = "1.0.104", default-features = false }
+serde_yaml = { version = "0.9.25", default-features = false }
+udp-stream = { version = "0.0.9", default-features = false }
+regex = { version = "1.9.3", features = ["std"], default-features = false }
+either = { version = "1.9.0", default-features = false }
+log = { version = "0.4.19", default-features = false }
+env_logger = { version = "0.10.0", default-features = false }
+socks5-protocol = { version = "0.3.5", default-features = false }
+sha3 = { version = "0.10.8", default-features = false }
+hmac = { version = "0.12.1", default-features = false }
+rand = { version = "0.8.5", default-features = false }
+dirs = { version = "5.0.1", default-features = false }
+uuid = { version = "1.4.1", features = ["v4"], default-features = false }
+tokio-rustls = { version = "0.24.1", optional = true, default-features = false }
+webpki-roots = { version = "0.25.1", optional = true, default-features = false }
+tokio-native-tls = { version = "0.3.1", optional = true, default-features = false }
+native-tls = { version = "0.2.11", optional = true, default-features = false }
+chrono = { version = "0.4.26", default-features = false }
 
 narrowlink-types = { path = "../types" }
 narrowlink-network = { path = "../network", default-features = false }
