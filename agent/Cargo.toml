@@ -1,6 +1,6 @@
 [package]
 name = "narrowlink-agent"
-version = "0.0.2"
+version = "0.1.2"
 description = 'Narrowlink Agent'
 readme = "README.md"
 homepage = "https://narrowlink.com"

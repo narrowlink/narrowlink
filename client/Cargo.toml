@@ -1,6 +1,6 @@
 [package]
 name = "narrowlink-client"
-version = "0.0.2"
+version = "0.1.2"
 description = "Narrowlink Client"
 readme = "README.md"
 homepage = "https://narrowlink.com"
