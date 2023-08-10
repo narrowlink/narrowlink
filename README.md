@@ -22,7 +22,7 @@ Narrowlink is a self-hosted platform that allows you to establish secure remote 
     
 -   **User Management:** Create different user spaces with individual access control policies, providing services to multiple users with a single gateway.
     
--   **Automatic Certificate Management:** Automatic generation and management of TLS certificates for published services using the ACME protocol.
+-   **Automatic Certificate Provisioning:** Automatic generation and management of TLS certificates for published services using the ACME protocol.
     
 -   **SNI Proxy:** Prevent the gateway from decrypting your TLS traffic by handling it on the agent's server with your certificate.
     
