@@ -13,7 +13,7 @@ authors = ['Narrowlink <opensource@narrowlink.com>']
 include = ["Cargo.toml", "LICENSE", "sample_gateway.yaml", "src/**/*", "*help.arg", "templates/*.html"]
 
 [dependencies]
-tokio = { version = "1.29.1", features = ["full"] }
+tokio = { version = "1.30.0", features = ["full"] }
 hyper = { version = "0.14.27", features = ["full"] }
 log = { version = "0.4.19" }
 env_logger = { version = "0.10.0" }
