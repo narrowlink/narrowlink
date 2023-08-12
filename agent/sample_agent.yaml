@@ -3,3 +3,4 @@ token: eyJ0eX....kNHYQ_4 # token for authentication
 publish: eyJ0eX....kNHYQ_4 # token for publishing webserver (optional)
 service_type: Wss # Wss or Ws (default: Wss)
 #key: "your_key" # key for end to end encryption (optional)
+#key_policy: Lax # Lax or Strict (default: Lax) Lax allows clients to connect without a key, while Strict requires a key

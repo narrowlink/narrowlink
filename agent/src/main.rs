@@ -1,6 +1,7 @@
 use std::{collections::HashMap, env, net::SocketAddr, str::FromStr, time::Duration};
 mod args;
 use args::Args;
+use config::KeyPolicy;
 use error::AgentError;
 use futures_util::{SinkExt, StreamExt};
 use hmac::Mac;
@@ -116,10 +117,7 @@ async fn main() -> Result<(), AgentError> {
         let event_sender = event.get_sender();
         let token = token.clone();
         let gateway = conf.gateway.clone();
-        let key = conf
-            .key
-            .clone()
-            .map(|k| (k, conf.enforce_key.unwrap_or(false)));
+        let key = conf.key.clone().map(|k| (k, conf.key_policy));
         let service_type = service_type.clone();
 
         match event.next().await {
@@ -183,7 +181,7 @@ async fn data_connect(
     connection: Uuid,
     req: generic::Connect,
     ip_policies: Option<Policies>,
-    key: Option<&(String, bool)>,
+    key: Option<&(String, KeyPolicy)>,
     service_type: ServiceType,
 ) -> Result<(), AgentError> {
     let addr = format!("{}:{}", req.host, req.port);
@@ -207,7 +205,11 @@ async fn data_connect(
     let nonce: Option<[u8; 24]> = req.get_cryptography_nonce();
     if nonce.is_some() && key.is_none() {
         return Err(AgentError::KeyNotFound);
-    } else if nonce.is_none() && key.filter(|(_, enforce_key)| *enforce_key).is_some() {
+    } else if nonce.is_none()
+        && key
+            .filter(|(_, policy)| &KeyPolicy::Strict == policy)
+            .is_some()
+    {
         return Err(AgentError::AccessDenied);
     }
 
