@@ -10,6 +10,7 @@ pub struct Config {
     pub token: String,
     pub publish: Option<String>,
     pub key: Option<String>,
+    pub enforce_key: Option<bool>,
     #[serde(default = "ServiceType::default")]
     pub service_type: ServiceType,
 }
