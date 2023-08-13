@@ -4,12 +4,21 @@ use std::{env, fs::File, io::Read, path::PathBuf};
 
 use crate::error::AgentError;
 
+#[derive(Deserialize, Default, PartialEq, Clone, Copy)]
+pub enum KeyPolicy {
+    #[default]
+    Lax,
+    Strict,
+}
+
 #[derive(Deserialize)]
 pub struct Config {
     pub gateway: String,
     pub token: String,
     pub publish: Option<String>,
     pub key: Option<String>,
+    #[serde(default = "KeyPolicy::default")]
+    pub key_policy: KeyPolicy,
     #[serde(default = "ServiceType::default")]
     pub service_type: ServiceType,
 }
