@@ -1,7 +1,7 @@
 ---
 name: Bug report
 about: Create a report to help us improve
-title: Component name - Title
+title: "[Component name] - Title"
 labels: bug
 assignees: SajjadPourali
 
