@@ -99,7 +99,31 @@ jobs:
 #         name: ${{ matrix.platform }}
         name: binaries
         path: target/${{ matrix.platform }}/release/${{ matrix.package }}-${{ matrix.platform }}
-        
+  build-misc:
+    needs: ["check_date"]
+    strategy:
+      matrix:
+        platform: [x86_64-unknown-freebsd]
+        package: [narrowlink, narrowlink-gateway, narrowlink-agent, narrowlink-token-generator]
+    if: ${{ needs.check_date.outputs.should_run != 'false' }}
+    runs-on: ubuntu-latest
+    permissions: 
+      deployments: write
+      contents: read
+    steps:
+    - uses: actions/checkout@v3
+    - name: Cross installation
+      run: cargo install cross --git https://github.com/cross-rs/cross
+    - name: Build ${{ matrix.platform }}
+      run: cross build --config net.git-fetch-with-cli=true --release --verbose --target ${{ matrix.platform }} --bin ${{ matrix.package }}
+    - name: Rename
+      run: mv target/${{ matrix.platform }}/release/${{ matrix.package }} target/${{ matrix.platform }}/release/${{ matrix.package }}-${{ matrix.platform }}
+    - uses: actions/upload-artifact@v3
+      with:
+#         name: ${{ matrix.platform }}
+        name: binaries
+        path: target/${{ matrix.platform }}/release/${{ matrix.package }}-${{ matrix.platform }}
+                
   publish:
     needs: ["build-windows", "build-macos", "build-linux"]
     if: ${{ needs.check_date.outputs.should_run != 'false' }}
