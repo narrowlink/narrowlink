@@ -16,7 +16,7 @@ use either::Either;
 use error::ClientError;
 use futures_util::stream::StreamExt;
 use hmac::Mac;
-use log::{error, info, warn};
+use log::{debug, error, info, trace, warn};
 use narrowlink_network::{
     error::NetworkError,
     event::{NarrowEvent, NarrowEventRequest},
@@ -57,6 +57,7 @@ async fn main() -> Result<(), ClientError> {
     )> = None;
     let mut socket_listener = None;
     let arg_commands = args.arg_commands.clone();
+    trace!("{:?}", arg_commands.as_ref());
     match arg_commands.as_ref() {
         ArgCommands::List(_) | ArgCommands::Connect(_) => {}
         ArgCommands::Forward(forward_args) => {
@@ -130,6 +131,7 @@ async fn main() -> Result<(), ClientError> {
                     break;
                 };
                 agents = list_of_agents;
+                trace!("Agents: {:?}", agents);
                 list_of_agents_refresh_required.store(false, Ordering::Relaxed);
             }
 
@@ -286,7 +288,7 @@ async fn main() -> Result<(), ClientError> {
                             }
                             None => (None, None),
                         };
-
+                    trace!("Connect: {:?}", connect);
                     let gateway_address = conf.gateway.clone();
 
                     let cmd = serde_json::to_string(&ClientDataOutBound::Connect(
@@ -328,6 +330,7 @@ async fn main() -> Result<(), ClientError> {
 
                     if let Err(e) = stream_forward(data_stream, AsyncToStream::new(socket)).await {
                         if let Some(connection_id) = connection_id {
+                            // Change 0.2: make connection_id mandatory
                             let reason = connections.lock().await.remove(&connection_id);
                             if let Some(reason) = reason {
                                 warn!("{} : {}:{}", reason, connect.host, connect.port);
@@ -400,6 +403,7 @@ async fn main() -> Result<(), ClientError> {
                             connection_id,
                             msg,
                         ) => {
+                            debug!("Connection Error: {}", msg);
                             connections
                                 .lock()
                                 .await
