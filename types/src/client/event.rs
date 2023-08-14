@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use crate::{error::MessageError, generic::AgentInfo, GetResponse};
 
@@ -12,6 +13,7 @@ pub enum OutBound {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum InBound {
     Response(usize, Response),
+    ConnectionError(Uuid, String),
 }
 
 #[derive(Debug, Serialize, Deserialize)]

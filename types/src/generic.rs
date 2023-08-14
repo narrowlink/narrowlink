@@ -2,7 +2,7 @@ use chrono;
 use hmac::Hmac;
 use serde::{Deserialize, Serialize};
 use sha3::Sha3_256;
-use std::{net::SocketAddr, str::FromStr};
+use std::{fmt::Debug, net::SocketAddr, str::FromStr};
 
 pub type HmacSha256 = Hmac<Sha3_256>;
 
@@ -15,7 +15,7 @@ pub enum SigningAlgorithm {
     HmacSha256([u8; 32]), //IV
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Connect {
     pub host: String,
     pub port: u16,
@@ -55,6 +55,22 @@ impl Connect {
             cryptography: None,
             sign: None,
         })
+    }
+}
+
+impl Debug for Connect {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut debug = f.debug_struct("Connect");
+        debug.field("host", &self.host);
+        debug.field("port", &self.port);
+        debug.field("protocol", &self.protocol);
+        if self.cryptography.is_some() {
+            debug.field("cryptography", &"XXXXXX");
+        }
+        if self.sign.is_some() {
+            debug.field("sign", &"XXXXXX");
+        }
+        debug.finish()
     }
 }
 

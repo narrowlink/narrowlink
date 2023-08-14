@@ -52,7 +52,7 @@ impl Connection {
         Self {
             id,
             session_id,
-            data: ConnectionData::new(client_socket, agent_socket),
+            data: ConnectionData::new(id, session_id, client_socket, agent_socket),
             policies,
         }
     }
@@ -78,16 +78,22 @@ impl Connection {
 
 // #[derive(Debug)]
 pub struct ConnectionData {
+    pub id: Uuid,
+    pub session_id: Option<Uuid>,
     pub client_socket: Option<ClientConnection>,
     pub agent_socket: Option<AgentConnection>,
 }
 
 impl ConnectionData {
     pub fn new(
+        id: Uuid,
+        session_id: Option<Uuid>,
         client_socket: Option<ClientConnection>,
         agent_socket: Option<AgentConnection>,
     ) -> Self {
         Self {
+            id,
+            session_id,
             client_socket,
             agent_socket,
         }
@@ -102,8 +108,8 @@ impl ConnectionData {
                 if client_response
                     .and_then(|res| {
                         res.send(Ok(ResponseHeaders {
-                            session: None,
-                            connection: None,
+                            session: self.session_id,
+                            connection: Some(self.id),
                         }))
                         .ok()
                     })
@@ -112,8 +118,8 @@ impl ConnectionData {
                 if agent_response
                     .and_then(|res| {
                         res.send(Ok(ResponseHeaders {
-                            session: None,
-                            connection: None,
+                            session: self.session_id,
+                            connection: Some(self.id),
                         }))
                         .ok()
                     })
@@ -137,8 +143,8 @@ impl ConnectionData {
                 if agent_response
                     .and_then(|res| {
                         res.send(Ok(ResponseHeaders {
-                            session: None,
-                            connection: None,
+                            session: self.session_id,
+                            connection: Some(self.id),
                         }))
                         .ok()
                     })

@@ -16,7 +16,7 @@ use either::Either;
 use error::ClientError;
 use futures_util::stream::StreamExt;
 use hmac::Mac;
-use log::{error, info, warn};
+use log::{debug, error, info, trace, warn};
 use narrowlink_network::{
     error::NetworkError,
     event::{NarrowEvent, NarrowEventRequest},
@@ -36,7 +36,7 @@ use sha3::{Digest, Sha3_256};
 use socks5_protocol::{
     AuthMethod, AuthRequest, AuthResponse, Command, CommandRequest, CommandResponse, Version,
 };
-use tokio::{net::TcpListener, time};
+use tokio::{net::TcpListener, sync::Mutex, time};
 use udp_stream::UdpListener;
 
 use env_logger::Env;
@@ -57,6 +57,7 @@ async fn main() -> Result<(), ClientError> {
     )> = None;
     let mut socket_listener = None;
     let arg_commands = args.arg_commands.clone();
+    trace!("{:?}", arg_commands.as_ref());
     match arg_commands.as_ref() {
         ArgCommands::List(_) | ArgCommands::Connect(_) => {}
         ArgCommands::Forward(forward_args) => {
@@ -105,7 +106,7 @@ async fn main() -> Result<(), ClientError> {
     let list_of_agents_refresh_required = Arc::new(AtomicBool::new(true));
     let mut sleep_time = 0;
     let arg_commands = args.arg_commands.clone();
-
+    let connections = Arc::new(Mutex::new(HashMap::new()));
     loop {
         let arg_commands = arg_commands.clone();
         let conf = conf.clone();
@@ -130,6 +131,7 @@ async fn main() -> Result<(), ClientError> {
                     break;
                 };
                 agents = list_of_agents;
+                trace!("Agents: {:?}", agents);
                 list_of_agents_refresh_required.store(false, Ordering::Relaxed);
             }
 
@@ -201,6 +203,7 @@ async fn main() -> Result<(), ClientError> {
             let list_of_agents_refresh_required = list_of_agents_refresh_required.clone();
             let task = tokio::spawn({
                 let arg_commands = arg_commands.clone();
+                let connections = connections.clone();
                 async move {
                     let mut connect = match arg_commands.as_ref() {
                         ArgCommands::List(_) => {
@@ -285,37 +288,56 @@ async fn main() -> Result<(), ClientError> {
                             }
                             None => (None, None),
                         };
-
+                    trace!("Connect: {:?}", connect);
                     let gateway_address = conf.gateway.clone();
 
-                    let cmd =
-                        serde_json::to_string(&ClientDataOutBound::Connect(agent_name, connect))
-                            .unwrap();
-                    let mut data_stream: Box<dyn UniversalStream<Vec<u8>, NetworkError>> =
-                        match WsConnectionBinary::new(
-                            &gateway_address,
-                            HashMap::from([
-                                ("NL-TOKEN", token.clone()),
-                                ("NL-SESSION", session_id.clone()),
-                                ("NL-COMMAND", cmd.clone()),
-                            ]),
-                            conf.service_type.clone(),
-                        )
-                        .await
-                        {
-                            Ok(data_stream) => Box::new(data_stream),
-                            Err(_e) => {
-                                warn!("Unable to connect server: {}", _e);
-                                list_of_agents_refresh_required.store(true, Ordering::Relaxed);
-                                return;
-                            }
-                        };
+                    let cmd = serde_json::to_string(&ClientDataOutBound::Connect(
+                        agent_name,
+                        connect.clone(),
+                    ))
+                    .unwrap();
+                    let (mut data_stream, connection_id): (
+                        Box<dyn UniversalStream<Vec<u8>, NetworkError>>,
+                        Option<String>,
+                    ) = match WsConnectionBinary::new(
+                        &gateway_address,
+                        HashMap::from([
+                            ("NL-TOKEN", token.clone()),
+                            ("NL-SESSION", session_id.clone()),
+                            ("NL-COMMAND", cmd.clone()),
+                        ]),
+                        conf.service_type.clone(),
+                    )
+                    .await
+                    {
+                        Ok(data_stream) => {
+                            let connection_id = data_stream
+                                .get_header("NL-CONNECTION")
+                                .map(|c| c.to_string());
+
+                            (Box::new(data_stream), connection_id)
+                        }
+                        Err(_e) => {
+                            warn!("Unable to connect server: {}", _e);
+                            list_of_agents_refresh_required.store(true, Ordering::Relaxed);
+                            return;
+                        }
+                    };
+
                     if let (Some(k), Some(n)) = (key, nonce) {
                         data_stream = Box::new(StreamCrypt::new(k, n, data_stream));
                     }
 
-                    if let Err(_e) = stream_forward(data_stream, AsyncToStream::new(socket)).await {
-                        warn!("{}", _e);
+                    if let Err(e) = stream_forward(data_stream, AsyncToStream::new(socket)).await {
+                        if let Some(connection_id) = connection_id {
+                            // Change 0.2: make connection_id mandatory
+                            let reason = connections.lock().await.remove(&connection_id);
+                            if let Some(reason) = reason {
+                                warn!("{} : {}:{}", reason, connect.host, connect.port);
+                            }
+                        } else {
+                            warn!("{}", e);
+                        }
                     };
                 }
             });
@@ -373,9 +395,24 @@ async fn main() -> Result<(), ClientError> {
                 NarrowEvent::new(event_stream);
             let req = event.get_request();
             let (_event_tx, mut event_rx) = event.split();
+            let connections = connections.clone();
             let event_stream_task = tokio::spawn(async move {
-                while (event_rx.next().await).is_some() {
-                    continue;
+                while let Some(Ok(msg)) = event_rx.next().await {
+                    match msg {
+                        narrowlink_types::client::EventInBound::ConnectionError(
+                            connection_id,
+                            msg,
+                        ) => {
+                            debug!("Connection Error: {}", msg);
+                            connections
+                                .lock()
+                                .await
+                                .insert(connection_id.to_string(), msg);
+                        }
+                        _ => {
+                            continue;
+                        }
+                    }
                 }
             });
 
