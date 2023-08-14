@@ -118,9 +118,10 @@ impl State {
                     match msg{
                         Ok(AgentEventOutBound::Ready(_id))=>{},
                         Ok(AgentEventOutBound::NotSure(_id))=>{},
-                        Ok(AgentEventOutBound::Error(id, _err))=>{
-                            // todo err
-                            let _ = users.del_connection(uid,id);
+                        Ok(AgentEventOutBound::Error(id, err))=>{
+                            if let Some(client) = users.del_connection(uid,id).and_then(|c|c.session_id).and_then(|s|users.get_mut_client(uid, s)) {
+                                client.send(ClientEventInBound::ConnectionError(id,err.to_string())).await.ok();
+                            }
                         },
                         Ok(AgentEventOutBound::Request(request_id, request))=>{
                             if let Some(agent) = users.get_mut_agent(uid,name){

@@ -374,8 +374,18 @@ async fn main() -> Result<(), ClientError> {
             let req = event.get_request();
             let (_event_tx, mut event_rx) = event.split();
             let event_stream_task = tokio::spawn(async move {
-                while (event_rx.next().await).is_some() {
-                    continue;
+                while let Some(Ok(msg)) = event_rx.next().await {
+                    match msg {
+                        narrowlink_types::client::EventInBound::ConnectionError(
+                            _connection_id,
+                            msg,
+                        ) => {
+                            warn!("Connection Error: {}", msg);
+                        }
+                        _ => {
+                            continue;
+                        }
+                    }
                 }
             });
 

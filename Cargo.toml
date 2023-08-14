@@ -2,6 +2,10 @@
 
 members = ["gateway", "network", "client", "agent", "types","token-generator"]
 
+[patch.crates-io]
+narrowlink-types = { path = "types" }
+narrowlink-network = { path = "network" }
+
 [profile.release]
 opt-level = "z"          # Optimize for size.
 lto = true               # Enable Link Time Optimization
