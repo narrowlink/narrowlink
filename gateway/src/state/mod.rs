@@ -302,7 +302,7 @@ impl State {
                                 };
 
                                 let response = if CONNECTION_ORIANTED {
-                                    if response.send(Ok(ResponseHeaders{session:None,connection:None})).is_err(){
+                                    if response.send(Ok(ResponseHeaders{session:Some(session),connection:Some(connection_id)})).is_err(){
                                             continue
                                         }
                                     None
@@ -348,7 +348,7 @@ impl State {
                                     }
                                 }
                                 let response = if CONNECTION_ORIANTED {
-                                    if response.send(Ok(ResponseHeaders{session:None,connection:None})).is_err(){
+                                    if response.send(Ok(ResponseHeaders{session:requested_connection.session_id,connection:Some(connection)})).is_err(){
                                             continue
                                         }
                                     None
