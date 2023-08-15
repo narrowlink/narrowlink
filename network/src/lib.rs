@@ -35,6 +35,7 @@ pub async fn stream_forward(
                 match res{
                     Some(v)=>right_tx.send(v?).await?,
                     None=>{
+                        let _ = left_tx.close().await;
                         let _ = right_tx.close().await;
                         return Ok(())
                     }
@@ -45,6 +46,7 @@ pub async fn stream_forward(
                     Some(v)=>left_tx.send(v?).await?,
                     None=>{
                         let _ = left_tx.close().await;
+                        let _ = right_tx.close().await;
                         return Ok(())
                     }
                 };

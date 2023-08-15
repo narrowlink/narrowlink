@@ -1,7 +1,10 @@
 use core::fmt;
 use std::error::Error;
 
+use narrowlink_network::error::NetworkError;
+
 pub enum GatewayError {
+    NetworkError(NetworkError),
     IoError(std::io::Error),
     YamlDeError(serde_yaml::Error),
     ACMEError(instant_acme::Error),
@@ -42,6 +45,7 @@ impl fmt::Debug for GatewayError {
 impl Error for GatewayError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
+            Self::NetworkError(e) => Some(e),
             Self::IoError(e) => Some(e),
             Self::YamlDeError(e) => Some(e),
             Self::ACMEError(e) => Some(e),
@@ -57,6 +61,7 @@ impl Error for GatewayError {
 impl fmt::Display for GatewayError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            GatewayError::NetworkError(source) => write!(f, "Network Error: {}", source),
             GatewayError::IoError(source) => write!(f, "IO Error: {}", source),
             GatewayError::YamlDeError(source) => {
                 write!(f, "YAML Deserialization Error: {}", source)
@@ -137,5 +142,11 @@ impl From<serde_json::Error> for GatewayError {
 impl From<validator::ValidationErrors> for GatewayError {
     fn from(err: validator::ValidationErrors) -> Self {
         Self::ValidationError(err)
+    }
+}
+
+impl From<NetworkError> for GatewayError {
+    fn from(err: NetworkError) -> Self {
+        Self::NetworkError(err)
     }
 }

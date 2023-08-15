@@ -1,11 +1,10 @@
 use std::net::SocketAddr;
 
-use futures_util::StreamExt;
 use hyper::{client::conn, http::HeaderValue, Body, Request, Response};
 use log::debug;
 use narrowlink_network::{error::NetworkError, UniversalStream};
 use narrowlink_types::policy::Policies;
-use tokio::{net::TcpStream, select, sync::oneshot};
+use tokio::{net::TcpStream, sync::oneshot};
 use uuid::Uuid;
 
 use crate::error::GatewayError;
@@ -128,16 +127,9 @@ impl ConnectionData {
 
                 let client_socket = client_socket_receiver.await.unwrap();
                 let agent_socket = agent_socket_receiver.await.unwrap();
-                let (agent_tx, agent_rx) = agent_socket.split();
-                let (client_tx, client_rx) = client_socket.split();
-                select! {
-                    _ = client_rx.forward(agent_tx) =>{
-                        Ok(())
-                    }
-                    _ = agent_rx.forward(client_tx) =>{
-                        Ok(())
-                    }
-                }
+                narrowlink_network::stream_forward(client_socket, agent_socket)
+                    .await
+                    .map_err(|e| e.into())
             }
             ClientConnection::TlsTransparent(tcp_stream) => {
                 if agent_response
@@ -152,17 +144,12 @@ impl ConnectionData {
                 {};
 
                 let agent_socket = agent_socket_receiver.await.unwrap();
-                let (agent_tx, agent_rx) = agent_socket.split();
-                let (client_tx, client_rx) =
-                    narrowlink_network::AsyncToStream::new(tcp_stream).split();
-                select! {
-                    _ = client_rx.forward(agent_tx) =>{
-                        Ok(())
-                    }
-                    _ = agent_rx.forward(client_tx) =>{
-                        Ok(())
-                    }
-                }
+                narrowlink_network::stream_forward(
+                    narrowlink_network::AsyncToStream::new(tcp_stream),
+                    agent_socket,
+                )
+                .await
+                .map_err(|e| e.into())
             }
             ClientConnection::HttpTransparent(mut request, peer_addr, replay) => {
                 let agent_stream = agent_socket_receiver.await.unwrap();
