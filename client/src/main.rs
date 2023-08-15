@@ -334,10 +334,10 @@ async fn main() -> Result<(), ClientError> {
                             let reason = connections.lock().await.remove(&connection_id);
                             if let Some(reason) = reason {
                                 warn!("{} : {}:{}", reason, connect.host, connect.port);
+                                return;
                             }
-                        } else {
-                            warn!("{}", e);
                         }
+                        warn!("{}", e);
                     };
                 }
             });
