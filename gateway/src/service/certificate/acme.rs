@@ -4,7 +4,7 @@ use instant_acme::{
     Account, AccountCredentials, Authorization, AuthorizationStatus, ChallengeType, Identifier,
     NewAccount, NewOrder, Order, OrderStatus,
 };
-use log::{debug, trace};
+use tracing::{debug, trace};
 use rcgen::{CertificateParams, DistinguishedName, DnType, KeyPair};
 use rustls::{PrivateKey, ServerConfig};
 use serde::Deserialize;

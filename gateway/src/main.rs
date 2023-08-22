@@ -2,8 +2,12 @@ use std::env;
 
 use error::GatewayError;
 use futures_util::{stream::FuturesUnordered, StreamExt};
-use log::{debug, info, trace};
 use state::State;
+use tracing::{debug, error, info, trace, Level};
+use tracing_subscriber::{
+    filter::LevelFilter, fmt::writer::MakeWriterExt, prelude::__tracing_subscriber_SubscriberExt,
+    util::SubscriberInitExt, EnvFilter, Layer,
+};
 use validator::Validate;
 
 use crate::{args::Args, service::Service};
@@ -17,7 +21,40 @@ const CONNECTION_ORIANTED: bool = true;
 
 #[tokio::main]
 async fn main() -> Result<(), GatewayError> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    let (stdout, _stdout_guard) = tracing_appender::non_blocking(std::io::stdout());
+    let (stderr, _stderr_guard) = tracing_appender::non_blocking(std::io::stderr());
+
+    let cmd = EnvFilter::builder()
+        .with_default_directive(LevelFilter::TRACE.into())
+        .with_env_var("LOG")
+        .from_env()
+        .map(|filter| {
+            tracing_subscriber::fmt::layer()
+                // .compact()
+                .with_test_writer()
+                .with_writer(
+                    stdout
+                        .with_min_level(Level::WARN)
+                        .and(stderr.with_max_level(Level::ERROR)),
+                )
+                .with_filter(filter)
+        })
+        .map_err(|_| GatewayError::Invalid("Invalid Log Filter Format"))?;
+
+    // let debug_file =
+    //     tracing_appender::rolling::minutely("log", "debug").with_min_level(Level::DEBUG);
+    // let log_file =
+    //     tracing_appender::rolling::daily("log", "info").with_max_level(Level::INFO);
+
+    // let file = tracing_subscriber::fmt::layer()
+    //     .with_writer(log_file)
+    //     .json();
+
+    tracing_subscriber::registry()
+        .with(cmd)
+        // .with(file)
+        .init();
+
     let args = Args::parse(env::args())?;
 
     let conf = config::Config::load(args.config_path)?;
@@ -46,12 +83,12 @@ async fn main() -> Result<(), GatewayError> {
     for service in conf.services() {
         match service {
             config::Service::Ws(ws) => {
-                info!("Ws service added");
+                info!("Ws service added: {:?}", ws);
                 services.push(service::ws::Ws::from(ws, state.get_sender(), cm.clone()).run());
             }
             config::Service::Wss(wss) => {
                 if let Some(cm) = &cm {
-                    info!("Wss service added");
+                    info!("Wss service added: {:?}", wss);
                     services
                         .push(service::wss::Wss::from(wss, state.get_sender(), cm.clone()).run());
                 }
@@ -61,7 +98,7 @@ async fn main() -> Result<(), GatewayError> {
     tokio::join!(
         state.run(),
         services.for_each(|_s| {
-            log::error!("{:?}", _s);
+            error!("{:?}", _s);
             std::future::ready(())
         })
     );

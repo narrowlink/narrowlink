@@ -10,7 +10,7 @@ use crate::{
     state::connection::AgentConnection,
     CONNECTION_ORIANTED,
 };
-use log::{debug, trace};
+use tracing::{debug, trace};
 use narrowlink_network::{error::NetworkError, event::NarrowEvent, UniversalStream};
 use narrowlink_types::token::{AgentPublishToken, AgentToken, ClientToken};
 use narrowlink_types::{

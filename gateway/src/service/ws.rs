@@ -10,7 +10,7 @@ use hyper::{
     service::Service as HyperService,
     upgrade, Body, Request, Response, StatusCode,
 };
-use log::debug;
+use tracing::debug;
 use tokio::{
     net::TcpListener,
     sync::{mpsc::UnboundedSender, oneshot},
