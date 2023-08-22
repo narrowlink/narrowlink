@@ -4,11 +4,11 @@ use instant_acme::{
     Account, AccountCredentials, Authorization, AuthorizationStatus, ChallengeType, Identifier,
     NewAccount, NewOrder, Order, OrderStatus,
 };
-use tracing::{debug, trace};
 use rcgen::{CertificateParams, DistinguishedName, DnType, KeyPair};
 use rustls::{PrivateKey, ServerConfig};
 use serde::Deserialize;
 use tokio::time;
+use tracing::{debug, trace};
 
 use crate::error::GatewayError;
 

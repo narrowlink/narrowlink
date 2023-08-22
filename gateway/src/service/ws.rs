@@ -10,11 +10,11 @@ use hyper::{
     service::Service as HyperService,
     upgrade, Body, Request, Response, StatusCode,
 };
-use tracing::debug;
 use tokio::{
     net::TcpListener,
     sync::{mpsc::UnboundedSender, oneshot},
 };
+use tracing::debug;
 
 use crate::{
     error::GatewayError,

@@ -1,10 +1,10 @@
 use std::net::SocketAddr;
 
 use hyper::{client::conn, http::HeaderValue, Body, Request, Response};
-use tracing::debug;
 use narrowlink_network::{error::NetworkError, UniversalStream};
 use narrowlink_types::policy::Policies;
 use tokio::{net::TcpStream, sync::oneshot};
+use tracing::debug;
 use uuid::Uuid;
 
 use crate::error::GatewayError;

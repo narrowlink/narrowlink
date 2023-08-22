@@ -4,10 +4,10 @@ use crate::{config::TlsConfig, error::GatewayError, state::InBound};
 
 use async_trait::async_trait;
 use hyper::server::conn::Http;
-use tracing::debug;
 use rustls::{internal::msgs::codec::Codec, ServerConfig};
 use tokio::{net::TcpListener, sync::mpsc::UnboundedSender};
 use tokio_rustls::TlsAcceptor;
+use tracing::debug;
 
 use super::{certificate::manager::CertificateManager, ws::WsService, Service};
 

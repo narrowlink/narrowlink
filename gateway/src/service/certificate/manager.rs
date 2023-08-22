@@ -5,8 +5,8 @@ use std::{
 };
 
 use instant_acme::Account;
-use tracing::{debug, trace};
 use rustls::{PrivateKey, ServerConfig};
+use tracing::{debug, trace};
 
 use tokio::{
     sync::{

@@ -58,17 +58,18 @@ async fn main() -> Result<(), GatewayError> {
     let args = Args::parse(env::args())?;
 
     let conf = config::Config::load(args.config_path)?;
+    trace!("config successfully read");
     conf.validate()?;
-    debug!("config successfully read");
-    trace!("config: {:?}", &conf);
+    trace!("config successfully validated");
+    debug!("config: {:?}", &conf);
 
     let cm = if let Some(tls_config) = conf.tls_config() {
-        debug!("setting up tls config");
+        trace!("setting up tls config");
         let tls_engine = service::wss::TlsEngine::new(tls_config).await?;
-        debug!("tls config successfully created");
+        trace!("tls config successfully created");
         Some(tls_engine)
     } else {
-        debug!("tls config in not required");
+        trace!("tls config in not required");
         None
     };
 
@@ -79,8 +80,10 @@ async fn main() -> Result<(), GatewayError> {
             _ => None,
         }),
     );
+    trace!("state successfully created");
     let services = FuturesUnordered::new();
     for service in conf.services() {
+        debug!("adding service: {:?}", service);
         match service {
             config::Service::Ws(ws) => {
                 info!("Ws service added: {:?}", ws);
