@@ -147,11 +147,7 @@ impl Config {
         #[cfg(target_os = "linux")]
         trace!(
             "config file in etc dir: {}",
-            if etc.is_some() {
-                "found"
-            } else {
-                "not found"
-            }
+            if etc.is_some() { "found" } else { "not found" }
         );
         let path = custom_path
             .or(current_dir)
