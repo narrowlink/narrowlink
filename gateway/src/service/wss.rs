@@ -72,6 +72,7 @@ impl Wss {
         }
     }
     // buf is the first 1024 bytes of the tcp stream, which is the client hello
+    #[instrument(name = "peek_sni_and_alpns")]
     pub fn peek_sni_and_alpns(buf: &[u8]) -> Option<(String, Vec<Vec<u8>>)> {
         trace!("peeking sni and alpns from client hello");
         let message = rustls::internal::msgs::message::OpaqueMessage::read(
@@ -139,8 +140,9 @@ impl Service for Wss {
                     .map_err(|_| {
                         span.in_scope(|| trace!("failed to peek client hello"));
                     })?;
-                let Some((sni,alpns)) = Self::peek_sni_and_alpns(&buf) else {
-                    span.in_scope(|| {warn!("failed to peek sni and alpns")});
+
+                let Some((sni,alpns)) = span.in_scope(|| Self::peek_sni_and_alpns(&buf)) else {
+                    span.in_scope(|| warn!("failed to peek sni and alpns"));
                     return Err::<(), ()>(());
                 };
                 span.record("sni", &sni);
