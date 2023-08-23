@@ -32,7 +32,7 @@ use tokio::{
         oneshot,
     },
 };
-use tracing::{debug, instrument, trace, Instrument};
+use tracing::{debug, info, instrument, trace, Instrument};
 
 pub struct State {
     #[allow(dead_code)]
@@ -99,7 +99,7 @@ impl State {
             select! (
                 Some(client_types) = client_types.next()=>{
                     let (uid, session, msg): (Uuid,Uuid,Result<ClientEventOutBound, NetworkError>) = client_types;
-                    let client_event_message_span = tracing::span!(tracing::Level::INFO, "ClientMessage", user_id = uid.to_string(), client_session = session.to_string());
+                    let client_event_message_span = tracing::span!(tracing::Level::TRACE, "client_message", user_id = uid.to_string(), client_session = session.to_string());
                     let _agent_data_gaurd = client_event_message_span.enter();
 
                     match msg{
@@ -116,14 +116,14 @@ impl State {
                         }
                         Err(_e)=>{
                             users.del_client(uid,session);
-                            trace!("Client disconnected");
+                            info!("Client {}:{} disconnected", uid, session);
                             // dbg!((e as NetworkError).to_string());
                         }
                     }
                 },
                 Some(agent_types) = agent_types.next()=>{
                     let (uid, name, msg, peer_socket_addr): (Uuid, String, Result<narrowlink_types::agent::EventOutBound, NetworkError>, std::net::SocketAddr) = agent_types;
-                    let client_event_message_span = tracing::span!(tracing::Level::INFO, "AgentMessage", user_id = uid.to_string(), agent_name = name);
+                    let client_event_message_span = tracing::span!(tracing::Level::TRACE, "agent_message", user_id = uid.to_string(), agent_name = name);
                     let _agent_data_gaurd = client_event_message_span.enter();
                     trace!("Agent Message Received: {:?}", msg);
                     match msg{
@@ -163,6 +163,7 @@ impl State {
                                     continue
                                 }
                             }
+                            info!("Agent {}:{} disconnected",uid, name);
                             debug!("Agent disconnected due to {}",(e as NetworkError).to_string());
                             if let Some(cm_sender) = certificate_manager.as_ref() {
                                 let _ = cm_sender.send(crate::service::certificate::manager::CertificateServiceMessage::Unload(uid.to_string(),name));
@@ -182,14 +183,14 @@ impl State {
                             peer_forward_addr,
                             response,
                         )) => {
-                            let event_span = tracing::span!(tracing::Level::INFO, "Event", peer_addr = %peer_socket_addr, peer_forward_addr = ?peer_forward_addr);
+                            let event_span = tracing::span!(tracing::Level::TRACE, "event", peer_addr = %peer_socket_addr, peer_forward_addr = ?peer_forward_addr);
                             let _event_gaurd = event_span.enter();
                             trace!("Event Request Received");
                             // debug!("Client Event Received");
                             //Client Event
                             //todo client request acl
                             if let Ok(client_token) = ClientToken::from_str(&token, &self.client_token) {
-                                let client_event_span = tracing::span!(tracing::Level::INFO, "Client", user_id = %client_token.uid, client_name = %client_token.name);
+                                let client_event_span = tracing::span!(tracing::Level::TRACE, "client", user_id = %client_token.uid, client_name = %client_token.name);
                                 let _client_event_gaurd = client_event_span.enter();
                                 trace!("Client Token Verification Success");
                                 let Some(policies) = client_token.policies else
@@ -212,8 +213,8 @@ impl State {
                                 let (sender, receiver) = stream.split();
 
                                 //policy todo
+                                info!("Client {}:{}:{} ({}) added", client_token.uid, client_token.name, session,peer_socket_addr);
                                 users.add_client(client_token.uid,client::Client::new(client_token.name, session,policies, sender));
-                                debug!("Client {}:{} added",client_token.uid,session);
                                 client_types.push(receiver.map(move |f| (client_token.uid, session, f)));
 
                             } else {
@@ -230,7 +231,7 @@ impl State {
                                     let _ = response.send(Err(ResponseErrors::Unauthorized));
                                     continue
                                 };
-                                let agent_event_span = tracing::span!(tracing::Level::INFO, "Agent", user_id = %agent_token.uid, agent_name = %agent_token.name);
+                                let agent_event_span = tracing::span!(tracing::Level::TRACE, "agent", user_id = %agent_token.uid, agent_name = %agent_token.name);
                                 let _agent_event_gaurd = agent_event_span.enter();
 
                                 if response.send(Ok(ResponseHeaders{session:None,connection:None})).is_err(){
@@ -261,7 +262,7 @@ impl State {
                                         let cert_required_connect = publish_hosts.iter().filter(|ph|matches!(ph.connect.protocol, narrowlink_types::generic::Protocol::HTTP | narrowlink_types::generic::Protocol::HTTPS | narrowlink_types::generic::Protocol::QUIC));
                                         // cert_required_connect.map(|ph|ph.host);
                                         let hosts = cert_required_connect.map(|ph|ph.host.clone());
-                                        trace!("Loading new certificate for {:?}",hosts);
+                                        info!("Loading new certificate for {:?}",hosts);
                                         let _ = cm_sender.send(crate::service::certificate::manager::CertificateServiceMessage::Load(
                                             agent_token.uid.to_string(),
                                             agent_token.name.to_owned(),
@@ -272,11 +273,11 @@ impl State {
                                 let agent_name = agent_token.name.clone();
                                 agent_types.push(receiver.map(move |f| (agent_token.uid, agent_name.to_owned(), f,peer_socket_addr)));
                                 if let Some(mut privous_agent) = users.add_agent(agent_token.uid,agent::Agent::new(agent_token.name.to_owned(),publish_hosts,peer_socket_addr,peer_forward_addr,sender)) {
-                                    debug!("Previous agent {}:{} ({}) disconnected",agent_token.uid,privous_agent.name,peer_socket_addr);
+                                    info!("Previous agent {}:{} ({}) disconnected",agent_token.uid,privous_agent.name,peer_socket_addr);
                                     let _ = privous_agent.send(AgentEventInBound::Shutdown).await;
                                 }
 
-                                debug!("Agent {}:{} added",agent_token.uid,agent_token.name);
+                                info!("Agent {}:{} ({}) added",agent_token.uid,agent_token.name,peer_socket_addr);
                             }
                         }
                         Some(InBound::DataRequest(
@@ -292,7 +293,7 @@ impl State {
                             forward_address,
                             response
                         )) => {
-                            let data_span = tracing::span!(tracing::Level::INFO, "Data", peer_addr = %peer_socket_addr, forward_addr = ?forward_address);
+                            let data_span = tracing::span!(tracing::Level::TRACE, "data", peer_addr = %peer_socket_addr, forward_addr = ?forward_address);
                             let _data_gaurd = data_span.enter();
                             trace!("Data Request Received");
                             if let Some(command) = command {
@@ -303,7 +304,7 @@ impl State {
                                     let _ = response.send(Err(ResponseErrors::Unauthorized));
                                     continue
                                 };
-                                let client_data_span = tracing::span!(tracing::Level::INFO, "Client", user_id = %client_token.uid, client_name = %client_token.name);
+                                let client_data_span = tracing::span!(tracing::Level::TRACE, "client", user_id = %client_token.uid, client_name = %client_token.name);
                                 let _client_data_gaurd = client_data_span.enter();
                                 let Some(session) = session.and_then(|s|Uuid::from_str(&s).ok())else{
                                     let _ = response.send(Err(ResponseErrors::NotAcceptable(None)));
@@ -362,7 +363,7 @@ impl State {
                                     let _ = response.send(Err(ResponseErrors::NotAcceptable(None)));
                                     continue
                                 };
-                                let agent_data_span = tracing::span!(tracing::Level::INFO, "Agent", user_id = %agent_token.uid, agent_name = %agent_token.name, connected_address = ?connected_address);
+                                let agent_data_span = tracing::span!(tracing::Level::TRACE, "agent", user_id = %agent_token.uid, agent_name = %agent_token.name, connected_address = ?connected_address);
                                 let _agent_data_gaurd = agent_data_span.enter();
 
                                 let Some(connection) = connection.as_ref().and_then(|c|Uuid::from_str(c).ok())else{

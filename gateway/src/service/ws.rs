@@ -54,7 +54,7 @@ impl Ws {
 #[async_trait]
 impl Service for Ws {
     async fn run(self) -> Result<(), GatewayError> {
-        let span = span!(tracing::Level::INFO, "Ws", listen_addr = %self.listen_addr, domains = ?self.domains);
+        let span = span!(tracing::Level::TRACE, "ws", listen_addr = %self.listen_addr, domains = ?self.domains);
         let tcp_listener: TcpListener = TcpListener::bind(&self.listen_addr).await?;
         span.in_scope(|| trace!("tcp listener successfully bound"));
         loop {
@@ -63,9 +63,12 @@ impl Service for Ws {
                 span.in_scope(|| {warn!("failed to accept tcp connection")});
                 continue;
             };
-            span.in_scope(|| debug!("new connection from {}", peer_addr));
+            let span_connection =
+                span.in_scope(|| span!(tracing::Level::TRACE, "connection", peer_addr = %peer_addr));
+
+            span_connection.in_scope(|| debug!("new connection from {}", peer_addr));
             let ws = self.clone();
-            let span = span.clone();
+            let span_connection = span_connection.clone();
             tokio::spawn(async move {
                 if let Err(http_err) = Http::new()
                     .serve_connection(
@@ -80,10 +83,10 @@ impl Service for Ws {
                         },
                     )
                     .with_upgrades()
-                    .instrument(span.clone())
+                    .instrument(span_connection.clone())
                     .await
                 {
-                    span.in_scope(|| warn!("{}", http_err));
+                    span_connection.in_scope(|| warn!("{}", http_err));
                 };
                 Ok::<(), ()>(())
             });
@@ -113,7 +116,7 @@ impl HyperService<Request<Body>> for WsService {
     }
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
-        let span = span!(tracing::Level::INFO, "Service", peer_addr = %self.peer_addr);
+        let span = span!(tracing::Level::INFO, "service", peer_addr = %self.peer_addr);
         span.in_scope(|| debug!("request: {:?}", req));
         let Some(host) = req.uri().host().or(req.headers().get(HOST).and_then(|h|h.to_str().ok())).map(|h|h.to_owned()) else{ //inconsistency:port number
             return Box::pin(async { Ok(crate::service::http_templates::response_error(crate::service::http_templates::ErrorFormat::Html,

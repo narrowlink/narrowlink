@@ -963,19 +963,15 @@ dependencies = [
  "log",
  "narrowlink-network",
  "narrowlink-types",
- "native-tls",
  "serde",
  "serde_json",
  "serde_yaml",
  "sha3",
  "sysinfo",
  "tokio",
- "tokio-native-tls",
- "tokio-rustls",
  "tokio-util",
  "udp-stream",
  "uuid",
- "webpki-roots",
 ]
 
 [[package]]
@@ -994,7 +990,6 @@ dependencies = [
  "log",
  "narrowlink-network",
  "narrowlink-types",
- "native-tls",
  "rand",
  "regex",
  "serde",
@@ -1003,13 +998,10 @@ dependencies = [
  "sha3",
  "socks5-protocol",
  "tokio",
- "tokio-native-tls",
- "tokio-rustls",
  "tokio-tungstenite",
  "tungstenite",
  "udp-stream",
  "uuid",
- "webpki-roots",
 ]
 
 [[package]]
@@ -1026,7 +1018,7 @@ dependencies = [
  "instant-acme",
  "narrowlink-network",
  "narrowlink-types",
- "pem 3.0.1",
+ "pem 3.0.2",
  "rcgen",
  "rustls",
  "rustls-pemfile",
@@ -1054,7 +1046,6 @@ dependencies = [
  "hyper",
  "log",
  "narrowlink-types",
- "native-tls",
  "serde",
  "serde_json",
  "tokio",
@@ -1234,6 +1225,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
+name = "openssl-src"
+version = "111.27.0+1.1.1v"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06e8f197c82d7511c5b014030c9b1efeda40d7d5f99d23b4ceed3524a5e63f02"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "openssl-sys"
 version = "0.9.91"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1241,6 +1241,7 @@ checksum = "866b5f16f90776b9bb8dc1e1802ac6f0513de3a7a7465867bfbc563dc737faac"
 dependencies = [
  "cc",
  "libc",
+ "openssl-src",
  "pkg-config",
  "vcpkg",
 ]
@@ -1295,9 +1296,9 @@ dependencies = [
 
 [[package]]
 name = "pem"
-version = "3.0.1"
+version = "3.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed3127afbfc30b4cad60c34aeb741fb562a808642b81142bcf4afb73142da960"
+checksum = "3163d2912b7c3b52d651a055f2c7eec9ba5cd22d26ef75b8dd3a59980b185923"
 dependencies = [
  "base64 0.21.2",
  "serde",

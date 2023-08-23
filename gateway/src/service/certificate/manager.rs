@@ -6,7 +6,7 @@ use std::{
 
 use instant_acme::Account;
 use rustls::{PrivateKey, ServerConfig};
-use tracing::{debug, instrument, span, trace, Instrument, Span};
+use tracing::{debug, error, instrument, span, trace, Instrument, Span};
 
 use tokio::{
     sync::{
@@ -178,7 +178,7 @@ impl CertificateManager {
                                         if let Err(e) =
                                             cm.issue(&uid, &agent_name, &domains, None).instrument(span.clone()).await
                                         {
-                                            tracing::error!(
+                                            error!(
                                                 "unable to issue certificate for: {:?} : {}",
                                                 &domains,
                                                 e.to_string()

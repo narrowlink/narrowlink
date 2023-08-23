@@ -106,7 +106,7 @@ impl Wss {
 #[async_trait]
 impl Service for Wss {
     async fn run(self) -> Result<(), GatewayError> {
-        let span = span!(tracing::Level::INFO, "Wss", listen_addr = %self.listen_addr, domains = ?self.domains);
+        let span = span!(tracing::Level::TRACE, "wss", listen_addr = %self.listen_addr, domains = ?self.domains);
 
         let wss = self.clone();
         let tls_engine = self.cm.clone();
@@ -127,58 +127,59 @@ impl Service for Wss {
                 span.in_scope(|| {warn!("failed to accept tcp connection")});
                 continue;
             };
+            let span_connection =
+                span.in_scope(|| span!(tracing::Level::TRACE, "connection", peer_addr = %peer_addr));
 
             let wss = wss.clone();
-            let span = span.clone();
             let tls_engine = tls_engine.clone();
             tokio::spawn(async move {
                 let mut buf = vec![0; 1024];
                 tcp_stream
                     .peek(&mut buf)
-                    .instrument(span.clone())
+                    .instrument(span_connection.clone())
                     .await
                     .map_err(|_| {
-                        span.in_scope(|| trace!("failed to peek client hello"));
+                        span_connection.in_scope(|| trace!("failed to peek client hello"));
                     })?;
 
-                let Some((sni,alpns)) = span.in_scope(|| Self::peek_sni_and_alpns(&buf)) else {
-                    span.in_scope(|| warn!("failed to peek sni and alpns"));
+                let Some((sni,alpns)) = span_connection.in_scope(|| Self::peek_sni_and_alpns(&buf)) else {
+                    span_connection.in_scope(|| warn!("failed to peek sni and alpns"));
                     return Err::<(), ()>(());
                 };
-                span.record("sni", &sni);
+                span_connection.record("sni", &sni);
                 let Some(server_config) = (match tls_engine {
                     TlsEngine::Acme(acme) => {
                         if acme.acme_type().is_some()
                             && alpns.contains(&super::certificate::ACME_TLS_ALPN_NAME.to_vec())
                         {
-                            span.in_scope(|| trace!("tls alpn 01 challenge detected"));
-                            acme.get_acme_tls_challenge(&sni).instrument(span.clone()).await.ok()
+                            span_connection.in_scope(|| trace!("tls alpn 01 challenge detected"));
+                            acme.get_acme_tls_challenge(&sni).instrument(span_connection.clone()).await.ok()
                         } else {
-                            span.in_scope(|| trace!("get certificate from acme"));
-                            acme.get(&sni).instrument(span.clone()).await.ok()
+                            span_connection.in_scope(|| trace!("get certificate from acme"));
+                            acme.get(&sni).instrument(span_connection.clone()).await.ok()
                         }
                     }
                     TlsEngine::File((domains, acceptor)) => {
                         if domains.contains(&sni) {
-                            span.in_scope(|| trace!("get certificate from file"));
+                            span_connection.in_scope(|| trace!("get certificate from file"));
                             Some(acceptor)
                         } else {
-                            span.in_scope(|| trace!("no certificate found for this domain in file"));
+                            span_connection.in_scope(|| trace!("no certificate found for this domain in file"));
                             None
                         }
                     }
                 }) else {
-                    span.in_scope(|| {trace!("certificate not found, act as SNI proxy")});
+                    span_connection.in_scope(|| {trace!("certificate not found, act as SNI proxy")});
                     let _ = wss.status_sender.send(InBound::TlsTransparent(sni,tcp_stream,self.listen_addr.port()));
                     return Ok::<(), ()>(());
                 };
-                span.in_scope(|| trace!("setting up tls acceptor"));
+                span_connection.in_scope(|| trace!("setting up tls acceptor"));
                 let secure_stream = TlsAcceptor::from(server_config)
                     .accept(tcp_stream)
-                    .instrument(span.clone())
+                    .instrument(span_connection.clone())
                     .await
                     .map_err(|_| ())?;
-                span.in_scope(|| trace!("tls acceptor successfully created"));
+                span_connection.in_scope(|| trace!("tls acceptor successfully created"));
                 if let Err(http_err) = Http::new()
                     .serve_connection(
                         secure_stream,
@@ -192,10 +193,10 @@ impl Service for Wss {
                         },
                     )
                     .with_upgrades()
-                    .instrument(span.clone())
+                    .instrument(span_connection.clone())
                     .await
                 {
-                    span.in_scope(|| warn!("{}", http_err));
+                    span_connection.in_scope(|| warn!("{}", http_err));
                 };
                 Ok::<(), ()>(())
             });

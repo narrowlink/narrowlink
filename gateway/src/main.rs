@@ -25,8 +25,8 @@ async fn main() -> Result<(), GatewayError> {
     let (stderr, _stderr_guard) = tracing_appender::non_blocking(std::io::stderr());
 
     let cmd = EnvFilter::builder()
-        .with_default_directive(LevelFilter::TRACE.into())
-        .with_env_var("LOG")
+        .with_default_directive(LevelFilter::INFO.into())
+        .with_env_var("RUST_LOG")
         .from_env()
         .map(|filter| {
             tracing_subscriber::fmt::layer()
