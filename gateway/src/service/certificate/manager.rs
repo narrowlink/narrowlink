@@ -6,7 +6,7 @@ use std::{
 
 use instant_acme::Account;
 use rustls::{PrivateKey, ServerConfig};
-use tracing::{debug, instrument, trace, Span};
+use tracing::{debug, instrument, span, trace, Instrument, Span};
 
 use tokio::{
     sync::{
@@ -113,6 +113,7 @@ impl Clone for CertificateManager {
 }
 
 impl CertificateManager {
+    #[instrument(name = "certificate_manager::new", skip(storage))]
     pub async fn new(
         storage: Arc<dyn CertificateStorage + Sync + Send>,
         acme_info: Option<(String, ACMEChallengeType, String)>,
@@ -123,11 +124,14 @@ impl CertificateManager {
 
         let mut res = if let Some(acme_info) = acme_info {
             if !validator::validate_email(&acme_info.0) {
+                trace!("invalid email");
                 return Err(GatewayError::Invalid("email"));
             }
             let account = if let Ok(account) = storage.get_default_account().await {
+                trace!("default account found");
                 account
             } else {
+                trace!("crate new ACME account");
                 let (acme, account_credentials) = Acme::new(&acme_info.0, &acme_info.2).await?;
                 storage
                     .set_default_account_credentials(account_credentials)
@@ -164,14 +168,15 @@ impl CertificateManager {
                         Some(msg) = receiver.recv() =>{
                             match msg {
                                 CertificateServiceMessage::Load(uid, agent_name, domains) => {
+                                    let span = span!(tracing::Level::TRACE, "load_certificate", uid = %uid, agent_name = %agent_name, domains = ?domains);
                                     if cm
-                                        .load_to_memory(&uid, &agent_name, &domains)
+                                        .load_to_memory(&uid, &agent_name, &domains).instrument(span.clone())
                                         .await
                                         .is_err()
                                         && cm.is_acme_enabled()
                                     {
                                         if let Err(e) =
-                                            cm.issue(&uid, &agent_name, &domains, None).await
+                                            cm.issue(&uid, &agent_name, &domains, None).instrument(span.clone()).await
                                         {
                                             tracing::error!(
                                                 "unable to issue certificate for: {:?} : {}",
@@ -179,23 +184,27 @@ impl CertificateManager {
                                                 e.to_string()
                                             );
                                         }
-                                        let _ = cm.load_to_memory(&uid, &agent_name, &domains).await;
+                                        trace!("load certificate to memory");
+                                        let _ = cm.load_to_memory(&uid, &agent_name, &domains).instrument(span.clone()).await;
                                     }
                                 },
                                 CertificateServiceMessage::Unload(uid, agent_name) => {
-                                    cm.unload_from_memory(&uid, &agent_name).await;
+                                    let span = span!(tracing::Level::TRACE, "unload_certificate", uid = %uid, agent_name = %agent_name);
+                                    trace!("unload certificate from memory");
+                                    cm.unload_from_memory(&uid, &agent_name).instrument(span).await;
                                 }
                             }
                         }
                         _ = interval.tick() =>{
                             for (uid,agent_name,domains) in cm.certificate_store.read().await.renew_needed(){
+                                debug!("renew required for certificate {:?} in agent {}:{}", &domains, uid, agent_name);
                                 let _ = sender.send(CertificateServiceMessage::Load(uid,agent_name,domains));
                             }
                         }
                     }
                 }
             }
-        }));
+        }.in_current_span()));
 
         Ok(res)
     }
@@ -208,6 +217,7 @@ impl CertificateManager {
     pub fn get_service_sender(&self) -> UnboundedSender<CertificateServiceMessage> {
         self.sender.clone()
     }
+    #[instrument(name = "issue_acme_certificate", skip(self))]
     pub async fn issue(
         &self,
         uid: &str,
@@ -218,21 +228,25 @@ impl CertificateManager {
         debug!("start to issue acme certificate for {:?}", &domains);
         // we can create acme account for each agent later
         let (Some(acme_account),Some(challenge_type)) = (self.storage.get_acme_account(uid, agent_name).await.ok().or(self.acme_account.clone()),self.acme_type.clone()) else{
+            trace!("acme is disabled");
             return Err(GatewayError::ACMEIsDisabled);
         };
 
         let mut acme = Acme::from_account(acme_account.clone())?;
-
+        trace!("place order");
         if let Some(pem) = acme
             .new_order(
                 domains.iter().map(|d| d.to_string()).collect(),
                 suggested_private_key.as_ref(),
             )
+            .in_current_span()
             .await?
         {
+            trace!("order placed, withouth challenge");
             self.storage.put(uid, agent_name, None, pem).await?;
             return Ok(());
         }
+        trace!("order placed, require challenge");
 
         let challenges = match challenge_type {
             ACMEChallengeType::Http01 => acme.get_http_01_certificate_challenges()?,
@@ -253,6 +267,7 @@ impl CertificateManager {
         let uid = uid.to_owned();
         let agent_name = agent_name.to_owned();
         let success = 'status: {
+            trace!("check challenge status");
             let Ok(pem) = acme
                         .check_challenge(
                             challenges,
@@ -260,7 +275,7 @@ impl CertificateManager {
                             10 * 1000,
                             suggested_private_key.as_ref(),
                         )
-                        .await
+                        .in_current_span().await
                         else {
                             break 'status false;
                         };
@@ -298,6 +313,7 @@ impl CertificateManager {
     ) -> Result<(), GatewayError> {
         let (cert, _) = self.storage.get(uid, agent_name).await?;
         if cert.renew_needed() {
+            trace!("certificate renewal required");
             return Err(GatewayError::CertificateRenewalRequired);
         }
 
@@ -313,7 +329,7 @@ impl CertificateManager {
     }
 
     pub async fn unload_from_memory(&self, uid: &str, agent_name: &str) {
-        debug!("unload certificate for {}:{} from memory", uid, agent_name);
+        debug!("unload certificate");
         self.certificate_store
             .write()
             .await

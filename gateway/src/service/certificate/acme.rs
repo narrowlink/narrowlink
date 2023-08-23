@@ -8,7 +8,7 @@ use rcgen::{CertificateParams, DistinguishedName, DnType, KeyPair};
 use rustls::{PrivateKey, ServerConfig};
 use serde::Deserialize;
 use tokio::time;
-use tracing::{debug, trace};
+use tracing::{debug, instrument, trace};
 
 use crate::error::GatewayError;
 
@@ -85,6 +85,7 @@ impl Acme {
             order: None,
         })
     }
+    #[instrument(name = "acme::new_order", skip(self))]
     pub async fn new_order(
         &mut self,
         domains: Vec<String>,
@@ -286,6 +287,7 @@ impl Acme {
         let mut delay = std::time::Duration::from_millis(delay);
 
         let state = loop {
+            trace!("waiting for acme verification");
             time::sleep(delay).await;
             let state = order.refresh().await?;
 
@@ -297,13 +299,15 @@ impl Acme {
             delay *= 2;
             tries_counter += 1;
             if tries_counter > tries {
+                trace!("acme verification timeout");
                 return Err(GatewayError::ACMEVerificationTimeOut);
             }
         };
         if state.status == OrderStatus::Invalid {
+            trace!("acme verification failed");
             return Err(GatewayError::ACMEVerificationFailed);
         }
-
+        trace!("acme verification successful");
         let mut params = CertificateParams::new(domain);
         params.key_pair =
             suggested_private_key.and_then(|private_key| KeyPair::from_der(&private_key.0).ok());
@@ -311,14 +315,14 @@ impl Acme {
         let cert = rcgen::Certificate::from_params(params)?;
         let csr = cert.serialize_request_der()?;
         order.finalize(&csr).await?;
+        trace!("acme certificate finalized");
         let cert_chain_pem = loop {
             match order.certificate().await? {
                 Some(cert_chain_pem) => break cert_chain_pem,
                 None => tokio::time::sleep(tokio::time::Duration::from_secs(1)).await,
             }
         };
-        // dbg!("xxx");
-        // let mut certificates = Vec::new();
+        trace!("acme certificate received");
 
         Ok(pem::parse_many(cert_chain_pem).and_then(|mut c| {
             pem::parse(cert.get_key_pair().serialize_pem()).map(|p| {

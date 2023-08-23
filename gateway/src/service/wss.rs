@@ -40,6 +40,7 @@ impl TlsEngine {
                     certificate_file_storage,
                     Some((acme.email, acme.challenge_type, acme.directory_url)),
                 )
+                .in_current_span()
                 .await?;
                 trace!("acme tls engine successfully created");
                 Ok(Self::Acme(Arc::new(certificate_manager)))
