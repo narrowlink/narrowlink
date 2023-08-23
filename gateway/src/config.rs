@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::{env, fmt::Debug, fs, io::Read, net::SocketAddr, path::PathBuf};
-use tracing::{debug, trace};
+use tracing::{debug, instrument, trace};
 use validator::{Validate, ValidationError};
 
 use crate::{error::GatewayError, service::certificate::ACMEChallengeType};
@@ -25,6 +25,7 @@ impl Debug for Config {
 }
 
 impl Config {
+    #[instrument(name = "config::verify")]
     pub fn verify(&self) -> Result<(), ValidationError> {
         trace!("verifying config");
         let mut http_port_80 = false;
@@ -69,6 +70,7 @@ impl Config {
         trace!("config successfully verified");
         Ok(())
     }
+    #[instrument(name = "config::load")]
     pub fn load(path: Option<String>) -> Result<Self, GatewayError> {
         trace!("loading config");
         let custom_path = if let Some(path) = path {

@@ -6,7 +6,7 @@ use std::{
 
 use instant_acme::Account;
 use rustls::{PrivateKey, ServerConfig};
-use tracing::{debug, trace};
+use tracing::{debug, instrument, trace, Span};
 
 use tokio::{
     sync::{
@@ -327,41 +327,54 @@ impl CertificateManager {
             .get_config(domain)
             .ok_or(GatewayError::CertificateNotFound)
     }
-
+    #[instrument(name = "get_acme_tls_challenge", skip(self))]
     pub async fn get_acme_tls_challenge(
         &self,
         domain: &str,
     ) -> Result<Arc<ServerConfig>, GatewayError> {
+        trace!("get acme tls challenge");
         self.acme_configurations
             .read()
             .await
             .get(domain)
-            .ok_or(GatewayError::CertificateNotFound)
+            .ok_or({
+                trace!("acme http challenge for this domain not found");
+                GatewayError::CertificateNotFound
+            })
             .and_then(|challenge_info| {
                 if let ACMEChallenge::TlsAlpn01(conf) = challenge_info {
+                    trace!("acme http challenge found");
                     Ok(conf)
                 } else {
+                    trace!("acme http challenge not found for this challenge not found");
                     Err(GatewayError::CertificateNotFound)
                     // improve error
                 }
             })
             .cloned()
     }
-
+    #[instrument(name = "get_acme_http_challenge", skip(self))]
     pub async fn get_acme_http_challenge(
         &self,
         domain: &str,
     ) -> Result<(String, String), GatewayError> {
+        Span::current().record("challenge_domain", domain);
+        trace!("get acme http challenge");
         self.acme_configurations
             .read()
             .await
             .get(domain)
-            .ok_or(GatewayError::ACMEChallengeNotFound)
+            .ok_or({
+                trace!("acme http challenge for this domain not found");
+                GatewayError::ACMEChallengeNotFound
+            })
             .and_then(|challenge_info| {
                 if let ACMEChallenge::Http01(token, key_authorization) = challenge_info {
+                    trace!("acme http challenge found");
                     Ok((token.to_owned(), key_authorization.to_owned()))
                 } else {
-                    Err(GatewayError::ACMEChallengeNotFound) // improve error
+                    trace!("acme http challenge not found for this challenge not found");
+                    Err(GatewayError::ACMEChallengeNotFound)
                 }
             })
     }

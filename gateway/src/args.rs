@@ -1,4 +1,4 @@
-use tracing::{debug, trace};
+use tracing::{debug, instrument, trace};
 
 use crate::error::GatewayError;
 
@@ -11,8 +11,9 @@ pub struct Args {
 }
 
 impl Args {
+    #[instrument(name = "args::parse")]
     pub fn parse(
-        raw: impl IntoIterator<Item = impl Into<std::ffi::OsString>>,
+        raw: impl IntoIterator<Item = impl Into<std::ffi::OsString>> + std::fmt::Debug,
     ) -> Result<Self, GatewayError> {
         trace!("parsing args");
         let raw = clap_lex::RawArgs::new(raw);

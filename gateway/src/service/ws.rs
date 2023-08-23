@@ -14,7 +14,7 @@ use tokio::{
     net::TcpListener,
     sync::{mpsc::UnboundedSender, oneshot},
 };
-use tracing::debug;
+use tracing::{debug, span, trace, warn, Instrument};
 
 use crate::{
     error::GatewayError,
@@ -54,18 +54,20 @@ impl Ws {
 #[async_trait]
 impl Service for Ws {
     async fn run(self) -> Result<(), GatewayError> {
+        let span = span!(tracing::Level::INFO, "Ws", listen_addr = %self.listen_addr, domains = ?self.domains);
         let tcp_listener: TcpListener = TcpListener::bind(&self.listen_addr).await?;
+        span.in_scope(|| trace!("tcp listener successfully bound"));
         loop {
             let listen_addr = self.listen_addr;
-            let Ok((tcp_stream, _addr)) = tcp_listener.accept().await else{
+            let Ok((tcp_stream, peer_addr)) = tcp_listener.accept().await else{
+                span.in_scope(|| {warn!("failed to accept tcp connection")});
                 continue;
             };
-            let Ok(peer_addr) = tcp_stream.peer_addr() else{
-                continue;
-            };
+            span.in_scope(|| debug!("new connection from {}", peer_addr));
             let ws = self.clone();
+            let span = span.clone();
             tokio::spawn(async move {
-                if let Err(_http_err) = Http::new()
+                if let Err(http_err) = Http::new()
                     .serve_connection(
                         tcp_stream,
                         WsService {
@@ -78,9 +80,10 @@ impl Service for Ws {
                         },
                     )
                     .with_upgrades()
+                    .instrument(span.clone())
                     .await
                 {
-                    debug!("{}", _http_err);
+                    span.in_scope(|| warn!("{}", http_err));
                 };
                 Ok::<(), ()>(())
             });
@@ -110,11 +113,17 @@ impl HyperService<Request<Body>> for WsService {
     }
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
+        let span =
+            span!(tracing::Level::INFO, "Service", peer_addr = %self.peer_addr, sni = ?self.sni);
+        span.in_scope(|| debug!("request: {:?}", req));
         let Some(host) = req.uri().host().or(req.headers().get(HOST).and_then(|h|h.to_str().ok())).map(|h|h.to_owned()) else{ //inconsistency:port number
             return Box::pin(async { Ok(crate::service::http_templates::response_error(crate::service::http_templates::ErrorFormat::Html,
                 crate::service::http_templates::HttpErrors::BadRequest))
              });
         };
+
+        span.record("host", &host);
+        span.in_scope(|| trace!("host: {}", host));
         let tunnel_permit =
             self.domains.iter().any(|domain| domain == &host) || self.domains.is_empty();
         let cm = self.cm.clone().filter(|_| self.sni.is_none());
@@ -125,8 +134,9 @@ impl HyperService<Request<Body>> for WsService {
             let req_version = req.version();
             if let Some(acme) = cm.as_ref() {
                 if req.uri().path().starts_with("/.well-known/acme-challenge/") {
+                    trace!("acme challenge");
                     if let Ok((token, key_authorization)) =
-                        acme.get_acme_http_challenge(&host).await
+                        acme.get_acme_http_challenge(&host).in_current_span().await
                     {
                         if req.uri().path() == format!("/.well-known/acme-challenge/{}", token) {
                             return Response::builder()
@@ -134,6 +144,8 @@ impl HyperService<Request<Body>> for WsService {
                                 .status(StatusCode::OK)
                                 .body::<Body>(key_authorization.into());
                         }
+                    }else{
+                        trace!("acme challenge not found for {}", host);
                     }
                 }
                 // return Response::builder()
@@ -159,6 +171,19 @@ impl HyperService<Request<Body>> for WsService {
                 .and_then(|t| t.to_str().ok())
                 .map(|t| t.to_owned())
             {
+                debug!("narrowlink token found: {}", token);
+                let Some(derived_key) = req
+                .headers()
+                .get(header::SEC_WEBSOCKET_KEY)
+                .map(|t| {
+                    narrowlink_network::ws::WsConnection::drive_key(
+                        t.as_bytes(),
+                    )
+                }) else {
+                    trace!("invalid websocket key or key header not found");
+                    return Ok(crate::service::http_templates::response_error(crate::service::http_templates::ErrorFormat::Html,crate::service::http_templates::HttpErrors::BadRequest));
+                };
+
                 let publish = req
                     .headers()
                     .get("NL-PUBLISH")
@@ -195,16 +220,6 @@ impl HyperService<Request<Body>> for WsService {
                     .and_then(|t| t.to_str().ok())
                     .map(|t| t.to_owned());
 
-                let Some(derived_key) = req
-                    .headers()
-                    .get(header::SEC_WEBSOCKET_KEY)
-                    .map(|t| {
-                        narrowlink_network::ws::WsConnection::drive_key(
-                            t.as_bytes(),
-                        )
-                    }) else {
-                        return Ok(crate::service::http_templates::response_error(crate::service::http_templates::ErrorFormat::Html,crate::service::http_templates::HttpErrors::BadRequest));
-                    };
 
                 let (response_sender, response_receiver) = oneshot::channel();
                 let (request, sender) = if command.is_some() ^ connection.is_some() {
@@ -315,7 +330,7 @@ impl HyperService<Request<Body>> for WsService {
                     )),
                 }
             }
-        })
+        }.instrument(span))
     }
 }
 

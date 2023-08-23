@@ -24,12 +24,14 @@ tokio = { version = "1.31.0", features = ["full"] }
 hyper = { version = "0.14.27", features = ["full"] }
 # log = { version = "0.4.20" }
 # env_logger = { version = "0.10.0" }
-tracing = { version = "0.1.37", default-features = false }
+tracing = { version = "0.1.37", default-features = false, features = [
+    "attributes",
+] }
 tracing-subscriber = { version = "0.3.17", default-features = false, features = [
     "fmt",
     "std",
     "env-filter",
-    "json"
+    "json",
 ] }
 tracing-appender = { version = "0.2.2" }
 dirs = { version = "5.0.1" }
