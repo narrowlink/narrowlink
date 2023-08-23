@@ -25,7 +25,7 @@ pub enum TlsEngine {
 }
 
 impl TlsEngine {
-    #[instrument(name = "tls_engine::new")]
+    #[instrument(name = "tls_engine::new", skip(conf))]
     pub async fn new(conf: TlsConfig) -> Result<Self, GatewayError> {
         debug!("tls config: {:?}", conf);
         match conf {
@@ -72,7 +72,7 @@ impl Wss {
         }
     }
     // buf is the first 1024 bytes of the tcp stream, which is the client hello
-    #[instrument(name = "peek_sni_and_alpns")]
+    #[instrument(name = "peek_sni_and_alpns", skip(buf))]
     pub fn peek_sni_and_alpns(buf: &[u8]) -> Option<(String, Vec<Vec<u8>>)> {
         trace!("peeking sni and alpns from client hello");
         let message = rustls::internal::msgs::message::OpaqueMessage::read(

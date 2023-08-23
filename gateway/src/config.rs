@@ -25,32 +25,29 @@ impl Debug for Config {
 }
 
 impl Config {
-    #[instrument(name = "config::verify")]
+    #[instrument(name = "config::verify", skip(self))]
     pub fn verify(&self) -> Result<(), ValidationError> {
         trace!("verifying config");
         let mut http_port_80 = false;
         let mut is_http01_enabled = false;
         for service in &self.services {
-            debug!("checking service: {:?}", service);
             match service {
                 Service::Ws(s) => {
-                    trace!("checking ws service: {:?}", s);
+                    debug!("checking ws service: {:?}", s);
                     if s.listen_addr.port() == 80 {
                         http_port_80 = true;
                     }
                 }
                 Service::Wss(s) => {
-                    trace!("checking wss service: {:?}", s);
+                    debug!("checking wss service: {:?}", s);
                     if let TlsConfig::Acme(acme) = &s.tls_config {
-                        trace!("checking acme config: {:?}", acme);
+                        debug!("checking acme config: {:?}", acme);
                         match acme.challenge_type {
                             ACMEChallengeType::Http01 => {
                                 is_http01_enabled = true;
                             }
                             ACMEChallengeType::TlsAlpn01 => {
-                                if s.listen_addr.port() == 443 {
-                                    return Ok(());
-                                } else {
+                                if s.listen_addr.port() != 443 {
                                     return Err(ValidationError::new(
                                         "To use TLS-SNI-01, the server must be listening on port 443",
                                     ));
@@ -70,7 +67,7 @@ impl Config {
         trace!("config successfully verified");
         Ok(())
     }
-    #[instrument(name = "config::load")]
+    #[instrument(name = "config::load", skip(path))]
     pub fn load(path: Option<String>) -> Result<Self, GatewayError> {
         trace!("loading config");
         let custom_path = if let Some(path) = path {

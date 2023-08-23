@@ -31,7 +31,7 @@ async fn main() -> Result<(), GatewayError> {
         .map(|filter| {
             tracing_subscriber::fmt::layer()
                 .compact()
-                .with_target(false)
+                // .with_target(false)
                 .with_writer(
                     stdout
                         .with_min_level(Level::WARN)
@@ -64,14 +64,14 @@ async fn main() -> Result<(), GatewayError> {
     debug!("config: {:?}", &conf);
     drop(_gaurd);
     let cm = if let Some(tls_config) = conf.tls_config() {
-        span.in_scope(|| trace!("setting up tls config"));
+        span.in_scope(|| trace!("setting up tls engine"));
         let tls_engine = service::wss::TlsEngine::new(tls_config)
             .instrument(span.clone())
             .await?;
-        span.in_scope(|| trace!("tls config successfully created"));
+        span.in_scope(|| trace!("tls engine successfully created"));
         Some(tls_engine)
     } else {
-        span.in_scope(|| trace!("tls config in not required"));
+        span.in_scope(|| trace!("tls engine in not required"));
         None
     };
 

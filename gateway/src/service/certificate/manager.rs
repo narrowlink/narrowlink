@@ -159,7 +159,7 @@ impl CertificateManager {
             }
         };
         let cm = res.clone();
-        res.handler = Some(tokio::spawn({
+        res.handler = Some(tokio::spawn(
             async move {
                 let sender: UnboundedSender<CertificateServiceMessage> = sender.clone();
                 let mut interval = time::interval(Duration::from_secs(60 * 60 * 6)); // every six hours
@@ -203,8 +203,8 @@ impl CertificateManager {
                         }
                     }
                 }
-            }
-        }.in_current_span()));
+            }.in_current_span()
+        ));
 
         Ok(res)
     }
