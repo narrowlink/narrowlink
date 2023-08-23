@@ -1,4 +1,7 @@
-use std::env;
+use std::{
+    env,
+    io::{self, IsTerminal},
+};
 
 use error::GatewayError;
 use futures_util::{stream::FuturesUnordered, StreamExt};
@@ -21,15 +24,16 @@ const CONNECTION_ORIANTED: bool = true;
 
 #[tokio::main]
 async fn main() -> Result<(), GatewayError> {
-    let (stdout, _stdout_guard) = tracing_appender::non_blocking(std::io::stdout());
-    let (stderr, _stderr_guard) = tracing_appender::non_blocking(std::io::stderr());
+    let (stdout, _stdout_guard) = tracing_appender::non_blocking(io::stdout());
+    let (stderr, _stderr_guard) = tracing_appender::non_blocking(io::stderr());
+
     let cmd = EnvFilter::builder()
         .with_default_directive(LevelFilter::INFO.into())
         .with_env_var("RUST_LOG")
         .from_env()
         .map(|filter| {
             tracing_subscriber::fmt::layer()
-                .with_ansi(atty::is(atty::Stream::Stderr) && atty::is(atty::Stream::Stdout))
+                .with_ansi(io::stdout().is_terminal() && io::stderr().is_terminal())
                 .compact()
                 // .with_target(false)
                 .with_writer(
