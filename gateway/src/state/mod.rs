@@ -32,7 +32,7 @@ use tokio::{
         oneshot,
     },
 };
-use tracing::{debug, trace};
+use tracing::{debug, instrument, trace, Instrument};
 
 pub struct State {
     #[allow(dead_code)]
@@ -58,6 +58,7 @@ pub enum InBound {
         ServiceDataRequest,
         oneshot::Receiver<Box<dyn UniversalStream<Vec<u8>, NetworkError>>>,
         SocketAddr,
+        Option<String>, // Forward address
         oneshot::Sender<Result<ResponseHeaders, ResponseErrors>>,
     ),
     HttpTransparent(
@@ -78,6 +79,7 @@ pub struct ResponseHeaders {
     pub(crate) connection: Option<Uuid>,
 }
 
+#[derive(Debug)]
 pub enum ResponseErrors {
     Unauthorized,
     Forbidden,
@@ -86,7 +88,9 @@ pub enum ResponseErrors {
 }
 
 impl State {
+    #[instrument(name = "state::run", skip(self))]
     pub async fn run(&mut self) {
+        trace!("state running");
         let mut users = users::Users::new();
         let mut client_types = futures_util::stream::SelectAll::new();
         let mut agent_types = futures_util::stream::SelectAll::new();
@@ -94,9 +98,13 @@ impl State {
         loop {
             select! (
                 Some(client_types) = client_types.next()=>{
-                    let (uid, session, msg) = client_types;
+                    let (uid, session, msg): (Uuid,Uuid,Result<ClientEventOutBound, NetworkError>) = client_types;
+                    let client_event_message_span = tracing::span!(tracing::Level::INFO, "ClientMessage", user_id = uid.to_string(), client_session = session.to_string());
+                    let _agent_data_gaurd = client_event_message_span.enter();
+
                     match msg{
                         Ok(ClientEventOutBound::Request(request_id,req))=>{
+                            debug!("Client Message {}: {:?}", request_id, req);
                             match req {
                                 ClientEventRequest::ListOfAgents(verbose)=>{
                                     let agents = users.get_agents_info(uid,verbose);
@@ -108,13 +116,16 @@ impl State {
                         }
                         Err(_e)=>{
                             users.del_client(uid,session);
-                            debug!("Client {}:{} connected",uid,session);
+                            trace!("Client disconnected");
                             // dbg!((e as NetworkError).to_string());
                         }
                     }
                 },
                 Some(agent_types) = agent_types.next()=>{
-                    let (uid, name, msg, peer_socket_addr) = agent_types;
+                    let (uid, name, msg, peer_socket_addr): (Uuid, String, Result<narrowlink_types::agent::EventOutBound, NetworkError>, std::net::SocketAddr) = agent_types;
+                    let client_event_message_span = tracing::span!(tracing::Level::INFO, "AgentMessage", user_id = uid.to_string(), agent_name = name);
+                    let _agent_data_gaurd = client_event_message_span.enter();
+                    trace!("Agent Message Received: {:?}", msg);
                     match msg{
                         Ok(AgentEventOutBound::Ready(_id))=>{},
                         Ok(AgentEventOutBound::NotSure(_id))=>{},
@@ -152,7 +163,7 @@ impl State {
                                     continue
                                 }
                             }
-                            debug!("Agent {}:{} disconnected due to {}",uid,name,(e as NetworkError).to_string());
+                            debug!("Agent disconnected due to {}",(e as NetworkError).to_string());
                             if let Some(cm_sender) = certificate_manager.as_ref() {
                                 let _ = cm_sender.send(crate::service::certificate::manager::CertificateServiceMessage::Unload(uid.to_string(),name));
                             }
@@ -171,20 +182,29 @@ impl State {
                             peer_forward_addr,
                             response,
                         )) => {
-                            debug!("Client Event Received");
+                            let event_span = tracing::span!(tracing::Level::INFO, "Event", peer_addr = %peer_socket_addr, peer_forward_addr = ?peer_forward_addr);
+                            let _event_gaurd = event_span.enter();
+                            trace!("Event Request Received");
+                            // debug!("Client Event Received");
                             //Client Event
                             //todo client request acl
                             if let Ok(client_token) = ClientToken::from_str(&token, &self.client_token) {
+                                let client_event_span = tracing::span!(tracing::Level::INFO, "Client", user_id = %client_token.uid, client_name = %client_token.name);
+                                let _client_event_gaurd = client_event_span.enter();
+                                trace!("Client Token Verification Success");
                                 let Some(policies) = client_token.policies else
                                 {
+                                    trace!("client token does not have any policy");
                                     let _ = response.send(Err(ResponseErrors::Unauthorized));
                                     continue
                                 };
 
                                 let session = Uuid::new_v4();
+                                client_event_span.record("session_id", session.to_string());
                                 if response.send(Ok(ResponseHeaders{session:Some(session),connection:None})).is_err(){
                                     continue
                                 }
+                                trace!("Waiting for client event stream");
                                 let Ok(stream) = stream_receiver.await else{
                                     continue
                                 };
@@ -193,7 +213,7 @@ impl State {
 
                                 //policy todo
                                 users.add_client(client_token.uid,client::Client::new(client_token.name, session,policies, sender));
-                                debug!("Client {}:{} connected",client_token.uid,session);
+                                debug!("Client {}:{} added",client_token.uid,session);
                                 client_types.push(receiver.map(move |f| (client_token.uid, session, f)));
 
                             } else {
@@ -210,9 +230,13 @@ impl State {
                                     let _ = response.send(Err(ResponseErrors::Unauthorized));
                                     continue
                                 };
+                                let agent_event_span = tracing::span!(tracing::Level::INFO, "Agent", user_id = %agent_token.uid, agent_name = %agent_token.name);
+                                let _agent_event_gaurd = agent_event_span.enter();
+
                                 if response.send(Ok(ResponseHeaders{session:None,connection:None})).is_err(){
                                     continue
                                 }
+                                trace!("Waiting for agent event stream");
                                 let Ok(stream) = stream_receiver.await else{
                                     continue
                                 };
@@ -225,10 +249,10 @@ impl State {
                                 if let Some(publish_token) = publish.and_then(|publish_token| {
                                     AgentPublishToken::from_str(&publish_token, &self.agent_token).ok()
                                 }) {
-                                    debug!("Publish Token Verification");
+                                    trace!("Publish Token Verification");
                                     if publish_token.uid == agent_token.uid && publish_token.name == agent_token.name{
-                                        debug!("Publish Token Verification Success");
-                                        trace!("Publish token address {:?}",publish_token.publish_hosts);
+                                        trace!("Publish Token Verification Success");
+                                        debug!("Publish token address {:?}",publish_token.publish_hosts);
                                         publish_hosts.extend(publish_token.publish_hosts);
                                     }
                                 };
@@ -252,7 +276,7 @@ impl State {
                                     let _ = privous_agent.send(AgentEventInBound::Shutdown).await;
                                 }
 
-                                debug!("Agent {}:{} ({}) connected",agent_token.uid,agent_token.name,peer_socket_addr);
+                                debug!("Agent {}:{} added",agent_token.uid,agent_token.name);
                             }
                         }
                         Some(InBound::DataRequest(
@@ -264,9 +288,13 @@ impl State {
                                 connecting_address
                             },
                             socket_receiver,
-                            _peer_addr,
+                            peer_socket_addr,
+                            forward_address,
                             response
                         )) => {
+                            let data_span = tracing::span!(tracing::Level::INFO, "Data", peer_addr = %peer_socket_addr, forward_addr = ?forward_address);
+                            let _data_gaurd = data_span.enter();
+                            trace!("Data Request Received");
                             if let Some(command) = command {
                                 //Client Data
                                 let Ok(client_token) =
@@ -275,28 +303,33 @@ impl State {
                                     let _ = response.send(Err(ResponseErrors::Unauthorized));
                                     continue
                                 };
-
+                                let client_data_span = tracing::span!(tracing::Level::INFO, "Client", user_id = %client_token.uid, client_name = %client_token.name);
+                                let _client_data_gaurd = client_data_span.enter();
                                 let Some(session) = session.and_then(|s|Uuid::from_str(&s).ok())else{
                                     let _ = response.send(Err(ResponseErrors::NotAcceptable(None)));
                                     continue
                                 };
-
+                                client_data_span.record("session_id", session.to_string());
                                 let Ok(ClientDataOutBound::Connect(agent_name, connect)) = ClientDataOutBound::from_str(&command) else {
+                                    debug!("command is not valid: {}",command);
                                     let _ = response.send(Err(ResponseErrors::NotAcceptable(None)));
                                     continue
                                 };
                                 let connection_id = Uuid::new_v4();
+                                client_data_span.record("connection_id", connection_id.to_string());
 
                                 let client_policy = users.get_client_policy(client_token.uid,session);
 
                                 if client_policy.as_ref().filter(|p|p.permit(Some(&agent_name), &connect)).is_none(){
-                                    trace!("Client {}:{} connect to {}:{:?} forbidden",client_token.uid,session,agent_name,connect);
-                                    trace!("{:?}",client_policy);
+                                    debug!("Client {}:{} connect to {}:{:?} forbidden",client_token.uid,session,agent_name,connect);
+                                    debug!("{:?}",client_policy);
                                     let _ = response.send(Err(ResponseErrors::Forbidden));
                                     continue
                                 };
+                                debug!("Client policy: {:?}",client_policy);
 
-                                let Some(agent) = users.get_mut_agent(client_token.uid,agent_name) else{
+                                let Some(agent) = users.get_mut_agent(client_token.uid,agent_name.clone()) else{
+                                    debug!("Agent {}:{} not found",client_token.uid,agent_name);
                                     let _ = response.send(Err(ResponseErrors::NotFound(Some("The requested agent could not be found"))));
                                     continue
                                 };
@@ -313,8 +346,8 @@ impl State {
 
                                 let connection = connection::Connection::new(connection_id, Some(session), Some(connection::ClientConnection::Client(response,socket_receiver)), None,client_policy);
 
+                                debug!("Connection to {}:{} with agent {} added to pool",connect.host,connect.port, agent_name);
                                 let _ = agent.send(AgentEventInBound::Connect(connection_id, connect, None)).await;
-
                                 users.add_connection(client_token.uid,connection);
                             } else {
                                 //Agent Data
@@ -324,25 +357,34 @@ impl State {
                                     let _ = response.send(Err(ResponseErrors::Unauthorized));
                                     continue
                                 };
-                                let Some(connected_address) = connecting_address.and_then(|addr|narrowlink_types::generic::Connect::from_schemaed_string(&addr)) else {
+                                let Some(connected_address) = connecting_address.as_ref().and_then(|addr|narrowlink_types::generic::Connect::from_schemaed_string(addr)) else {
+                                    debug!("connecting address is not valid: {:?}",connecting_address);
                                     let _ = response.send(Err(ResponseErrors::NotAcceptable(None)));
                                     continue
                                 };
-                                let Some(connection) = connection.and_then(|c|Uuid::from_str(&c).ok())else{
+                                let agent_data_span = tracing::span!(tracing::Level::INFO, "Agent", user_id = %agent_token.uid, agent_name = %agent_token.name, connected_address = ?connected_address);
+                                let _agent_data_gaurd = agent_data_span.enter();
+
+                                let Some(connection) = connection.as_ref().and_then(|c|Uuid::from_str(c).ok())else{
+                                    debug!("connection id is not valid: {:?}",connection);
                                     let _ = response.send(Err(ResponseErrors::NotAcceptable(None)));
                                     continue
                                 };
+                                agent_data_span.record("connection_id", connection.to_string());
 
                                 let Some(mut requested_connection) = users.get_mut_connection(agent_token.uid,connection)else{
+                                    debug!("Connection {}:{} not found",agent_token.uid,connection);
                                     let _ = response.send(Err(ResponseErrors::NotFound(Some("The requested connection could not be found"))));
                                     continue
                                 };
                                 if let Some(policy) = requested_connection.take_policy(){
+                                    debug!("Connection policy: {:?}",policy);
                                     if !policy.permit(Some(&agent_token.name), &connected_address){
                                         let _ = response.send(Err(ResponseErrors::Forbidden));
                                         if let Some(client_response) = requested_connection.take_client_socket(){
                                             let _ = client_response.send(Err(ResponseErrors::Forbidden));
                                         }
+                                        trace!("Access denied due to policy violation");
                                         //todo client event notify
                                         continue
                                     }
@@ -356,22 +398,26 @@ impl State {
                                     Some(response)
                                 };
                                 // requested_connection.session_id;
+                                debug!("Connection to client with session id {:?} added to pool",requested_connection.session_id);
                                 requested_connection.set_agent_socket(AgentConnection::Agent(response,socket_receiver));
                                 tokio::spawn(async move {
-                                    requested_connection.data.serve().await.unwrap_or_else(|e| {
+                                    trace!("Connection forwading started");
+                                    requested_connection.data.serve().in_current_span().await.unwrap_or_else(|e| {
                                         debug!("Connection Error: {}", e);
                                     });
-                                });
+                                }.in_current_span());
                             }
                         }
                         Some(InBound::HttpTransparent(domain_name,request,peer_addr,response,service_port))=>{
                             match users.get_mut_agent_by_domain(&domain_name,service_port){ //todo
                                 Some(Ok((user_id,agent,connect)))=>{
                                     let connection = Uuid::new_v4();
+                                    debug!("HttpTransparent Connection ({}) Request to {} with {} address Received", connection,domain_name,peer_addr);
                                     let _ = agent.send(AgentEventInBound::Connect(connection, connect, None)).await;
                                     users.add_connection(user_id, connection::Connection::new(connection,None,Some(connection::ClientConnection::HttpTransparent(request,peer_addr,response)),None,None));
                                 }
                                 None | Some(Err(()))=>{
+                                    debug!("Unoccupied HttpTransparent Connection Request to {} with {} address Rejected", domain_name,peer_addr);
                                     let _ = response.send(Err(ResponseErrors::NotFound(None)));
                                 }
                             }
@@ -380,11 +426,13 @@ impl State {
                             if let Some(Ok((user_id,agent,connect))) = users.get_mut_agent_by_domain(&sni,service_port){ //todo
                                 if connect.protocol == narrowlink_types::generic::Protocol::TCP{
                                     let connection = Uuid::new_v4();
+                                    debug!("TlsTransparent Connection ({}) Request to {} with {:?} address Received", connection,sni,stream.peer_addr());
                                     let _ = agent.send(AgentEventInBound::Connect(connection, connect, None)).await;
                                     users.add_connection(user_id, connection::Connection::new(connection,None,Some(connection::ClientConnection::TlsTransparent(stream)),None,None));
                                     continue
                                 }
                             }
+                            debug!("Unoccupied TlsTransparent Connection Request to {} with {:?} address Rejected", sni,stream.peer_addr());
                             stream.shutdown().await.ok();
                         }
                         None => todo!(),

@@ -4,7 +4,7 @@ use hyper::{client::conn, http::HeaderValue, Body, Request, Response};
 use narrowlink_network::{error::NetworkError, UniversalStream};
 use narrowlink_types::policy::Policies;
 use tokio::{net::TcpStream, sync::oneshot};
-use tracing::debug;
+use tracing::{debug, Instrument};
 use uuid::Uuid;
 
 use crate::error::GatewayError;
@@ -97,6 +97,7 @@ impl ConnectionData {
             agent_socket,
         }
     }
+    #[tracing::instrument(name = "connection_serve", skip(self))]
     pub async fn serve(&mut self) -> Result<(), GatewayError> {
         let (Some(client_connection),Some(agent_connection)) = (self.client_socket.take(),self.agent_socket.take())else{
             return Err(GatewayError::Other("No client or agent socket found"));
@@ -155,11 +156,14 @@ impl ConnectionData {
                 let agent_stream = agent_socket_receiver.await.unwrap();
                 let agent_socket = narrowlink_network::StreamToAsync::new(agent_stream);
                 let (mut request_sender, connection) = conn::handshake(agent_socket).await.unwrap();
-                tokio::spawn(async move {
-                    if let Err(e) = connection.await {
-                        debug!("Error in connection: {}", e);
+                tokio::spawn(
+                    async move {
+                        if let Err(e) = connection.await {
+                            debug!("Error in connection: {}", e);
+                        }
                     }
-                });
+                    .in_current_span(),
+                );
                 let original_version = request.version();
                 if let Some(host) = request
                     .uri()

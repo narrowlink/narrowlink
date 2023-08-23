@@ -113,8 +113,7 @@ impl HyperService<Request<Body>> for WsService {
     }
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
-        let span =
-            span!(tracing::Level::INFO, "Service", peer_addr = %self.peer_addr, sni = ?self.sni);
+        let span = span!(tracing::Level::INFO, "Service", peer_addr = %self.peer_addr);
         span.in_scope(|| debug!("request: {:?}", req));
         let Some(host) = req.uri().host().or(req.headers().get(HOST).and_then(|h|h.to_str().ok())).map(|h|h.to_owned()) else{ //inconsistency:port number
             return Box::pin(async { Ok(crate::service::http_templates::response_error(crate::service::http_templates::ErrorFormat::Html,
@@ -126,11 +125,13 @@ impl HyperService<Request<Body>> for WsService {
         span.in_scope(|| trace!("host: {}", host));
         let tunnel_permit =
             self.domains.iter().any(|domain| domain == &host) || self.domains.is_empty();
+        span.in_scope(|| debug!("tunnel permission: {}", tunnel_permit));
         let cm = self.cm.clone().filter(|_| self.sni.is_none());
         let status_sender = self.status_sender.clone();
         let peer_addr = self.peer_addr;
         let listen_addr = self.listen_addr;
-        Box::pin(async move {
+
+        let handler = async move {
             let req_version = req.version();
             if let Some(acme) = cm.as_ref() {
                 if req.uri().path().starts_with("/.well-known/acme-challenge/") {
@@ -144,7 +145,7 @@ impl HyperService<Request<Body>> for WsService {
                                 .status(StatusCode::OK)
                                 .body::<Body>(key_authorization.into());
                         }
-                    }else{
+                    } else {
                         trace!("acme challenge not found for {}", host);
                     }
                 }
@@ -181,9 +182,9 @@ impl HyperService<Request<Body>> for WsService {
                     )
                 }) else {
                     trace!("invalid websocket key or key header not found");
-                    return Ok(crate::service::http_templates::response_error(crate::service::http_templates::ErrorFormat::Html,crate::service::http_templates::HttpErrors::BadRequest));
+                    use crate::service::http_templates::{ErrorFormat, HttpErrors,response_error};
+                    return Ok(response_error(ErrorFormat::Html,HttpErrors::BadRequest));
                 };
-
                 let publish = req
                     .headers()
                     .get("NL-PUBLISH")
@@ -220,9 +221,9 @@ impl HyperService<Request<Body>> for WsService {
                     .and_then(|t| t.to_str().ok())
                     .map(|t| t.to_owned());
 
-
                 let (response_sender, response_receiver) = oneshot::channel();
                 let (request, sender) = if command.is_some() ^ connection.is_some() {
+                    trace!("data request found");
                     let (socket_sender, socket_receiver) = oneshot::channel();
                     (
                         InBound::DataRequest(
@@ -235,11 +236,13 @@ impl HyperService<Request<Body>> for WsService {
                             },
                             socket_receiver,
                             peer_addr,
+                            forward_address,
                             response_sender,
                         ),
                         Left(socket_sender),
                     )
                 } else {
+                    trace!("event request found");
                     let (stream_sender, stream_receiver) = oneshot::channel();
                     (
                         InBound::EventRequest(
@@ -254,37 +257,43 @@ impl HyperService<Request<Body>> for WsService {
                 };
 
                 let _ = status_sender.send(request);
-
+                trace!("request sent and waiting for response");
                 match response_receiver.await {
                     Ok(Ok(response_headers)) => {
-                        tokio::spawn(async move {
-                            //any change to control
-
-                            match sender {
-                                Left(s) => {
-                                    if let Ok(upgraded) = upgrade::on(req).await {
-                                        let ws_connection = Box::new(
-                                            narrowlink_network::ws::WsConnectionBinary::from(
-                                                upgraded,
-                                            )
-                                            .await
-                                            .unwrap(),
-                                        );
-                                        let _ = s.send(ws_connection);
+                        trace!("response received");
+                        tokio::spawn(
+                            async move {
+                                //any change to control
+                                match sender {
+                                    Left(s) => {
+                                        trace!("upgrading to websocket data channel");
+                                        if let Ok(upgraded) = upgrade::on(req).await {
+                                            let ws_connection = Box::new(
+                                                narrowlink_network::ws::WsConnectionBinary::from(
+                                                    upgraded,
+                                                )
+                                                .await,
+                                            );
+                                            let _ = s.send(ws_connection);
+                                        }
                                     }
-                                }
-                                Right(s) => {
-                                    if let Ok(upgraded) = upgrade::on(req).await {
-                                        let ws_connection = Box::new(
-                                            narrowlink_network::ws::WsConnection::from(upgraded)
-                                                .await
-                                                .unwrap(),
-                                        );
-                                        let _ = s.send(ws_connection);
+                                    Right(s) => {
+                                        trace!("upgrading to websocket event channel");
+                                        if let Ok(upgraded) = upgrade::on(req).await {
+                                            let ws_connection = Box::new(
+                                                narrowlink_network::ws::WsConnection::from(
+                                                    upgraded,
+                                                )
+                                                .await,
+                                            );
+                                            let _ = s.send(ws_connection);
+                                        }
                                     }
-                                }
-                            };
-                        });
+                                };
+                            }
+                            .in_current_span(),
+                        );
+                        trace!("websocket connection established");
                         Response::builder()
                             .version(req_version)
                             .status(StatusCode::SWITCHING_PROTOCOLS)
@@ -300,14 +309,20 @@ impl HyperService<Request<Body>> for WsService {
                                 r
                             })
                     }
-                    Ok(Err(error)) => Ok(crate::service::http_templates::response_error(
-                        crate::service::http_templates::ErrorFormat::Json,
-                        error.into(),
-                    )),
-                    Err(_) => Ok(crate::service::http_templates::response_error(
-                        crate::service::http_templates::ErrorFormat::Html,
-                        super::http_templates::HttpErrors::InternalServerError,
-                    )),
+                    Ok(Err(error)) => {
+                        debug!("an expected response error received: {:?}", error);
+                        Ok(crate::service::http_templates::response_error(
+                            crate::service::http_templates::ErrorFormat::Json,
+                            error.into(),
+                        ))
+                    }
+                    Err(e) => {
+                        debug!("unexpected response error: {}", e);
+                        Ok(crate::service::http_templates::response_error(
+                            crate::service::http_templates::ErrorFormat::Html,
+                            super::http_templates::HttpErrors::InternalServerError,
+                        ))
+                    }
                 }
             } else {
                 let (response_sender, response_receiver) = oneshot::channel();
@@ -318,19 +333,31 @@ impl HyperService<Request<Body>> for WsService {
                     response_sender,
                     listen_addr.port(),
                 ));
+                trace!("http transparent request found and sent and waiting for response");
                 match response_receiver.await {
-                    Ok(Ok(res)) => Ok(res),
-                    Ok(Err(e)) => Ok(crate::service::http_templates::response_error(
-                        crate::service::http_templates::ErrorFormat::Html,
-                        e.into(),
-                    )),
-                    Err(_e) => Ok(crate::service::http_templates::response_error(
-                        crate::service::http_templates::ErrorFormat::Html,
-                        super::http_templates::HttpErrors::ServiceUnavailable,
-                    )),
+                    Ok(Ok(res)) => {
+                        trace!("response received");
+                        Ok(res)
+                    }
+                    Ok(Err(e)) => {
+                        debug!("an expected response error received: {:?}", e);
+                        Ok(crate::service::http_templates::response_error(
+                            crate::service::http_templates::ErrorFormat::Html,
+                            e.into(),
+                        ))
+                    }
+                    Err(e) => {
+                        trace!("unexpected response error: {:?}", e);
+                        Ok(crate::service::http_templates::response_error(
+                            crate::service::http_templates::ErrorFormat::Html,
+                            super::http_templates::HttpErrors::ServiceUnavailable,
+                        ))
+                    }
                 }
             }
-        }.instrument(span))
+        }
+        .instrument(span);
+        Box::pin(handler)
     }
 }
 

@@ -115,7 +115,7 @@ async fn main() -> Result<(), GatewayError> {
     }
 
     tokio::join!(
-        state.run(),
+        state.run().instrument(span.clone()),
         services.for_each(|_s| {
             error!("{:?}", _s);
             std::future::ready(())

@@ -36,7 +36,7 @@ pub struct WsConnection {
 }
 
 impl WsConnection {
-    pub async fn from(server_stream: impl AsyncSocket) -> Result<Self, NetworkError> {
+    pub async fn from(server_stream: impl AsyncSocket) -> Self {
         // let x: Box<dyn AsyncSocket> = Box::new(server_stream);
         let ws_stream = WebSocketStream::from_raw_socket(
             Box::new(server_stream) as Box<dyn AsyncSocket>,
@@ -45,13 +45,13 @@ impl WsConnection {
         )
         .await;
 
-        Ok(Self {
+        Self {
             ws_stream,
             remaining_bytes: None,
             mode: WsMode::Server(tokio::time::interval(core::time::Duration::from_secs(
                 KEEP_ALIVE_TIME,
             ))),
-        })
+        }
     }
     pub async fn new(
         host: &str,
@@ -315,7 +315,7 @@ pub struct WsConnectionBinary {
 }
 
 impl WsConnectionBinary {
-    pub async fn from(server_stream: impl AsyncSocket) -> Result<Self, NetworkError> {
+    pub async fn from(server_stream: impl AsyncSocket) -> Self {
         // let x: Box<dyn AsyncSocket> = Box::new(server_stream);
         let ws_stream = WebSocketStream::from_raw_socket(
             Box::new(server_stream) as Box<dyn AsyncSocket>,
@@ -324,13 +324,13 @@ impl WsConnectionBinary {
         )
         .await;
 
-        Ok(Self {
+        Self {
             ws_stream,
             // remaining_bytes: None,
             mode: WsMode::Server(tokio::time::interval(core::time::Duration::from_secs(
                 KEEP_ALIVE_TIME,
             ))),
-        })
+        }
     }
     pub async fn new(
         host: &str,
