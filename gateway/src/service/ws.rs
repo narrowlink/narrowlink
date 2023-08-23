@@ -63,8 +63,8 @@ impl Service for Ws {
                 span.in_scope(|| {warn!("failed to accept tcp connection")});
                 continue;
             };
-            let span_connection =
-                span.in_scope(|| span!(tracing::Level::TRACE, "connection", peer_addr = %peer_addr));
+            let span_connection = span
+                .in_scope(|| span!(tracing::Level::TRACE, "connection", peer_addr = %peer_addr));
 
             span_connection.in_scope(|| debug!("new connection from {}", peer_addr));
             let ws = self.clone();

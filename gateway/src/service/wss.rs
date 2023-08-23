@@ -127,8 +127,8 @@ impl Service for Wss {
                 span.in_scope(|| {warn!("failed to accept tcp connection")});
                 continue;
             };
-            let span_connection =
-                span.in_scope(|| span!(tracing::Level::TRACE, "connection", peer_addr = %peer_addr));
+            let span_connection = span
+                .in_scope(|| span!(tracing::Level::TRACE, "connection", peer_addr = %peer_addr));
 
             let wss = wss.clone();
             let tls_engine = tls_engine.clone();
