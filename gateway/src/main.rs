@@ -23,13 +23,13 @@ const CONNECTION_ORIANTED: bool = true;
 async fn main() -> Result<(), GatewayError> {
     let (stdout, _stdout_guard) = tracing_appender::non_blocking(std::io::stdout());
     let (stderr, _stderr_guard) = tracing_appender::non_blocking(std::io::stderr());
-
     let cmd = EnvFilter::builder()
         .with_default_directive(LevelFilter::INFO.into())
         .with_env_var("RUST_LOG")
         .from_env()
         .map(|filter| {
             tracing_subscriber::fmt::layer()
+                .with_ansi(atty::is(atty::Stream::Stderr) && atty::is(atty::Stream::Stdout))
                 .compact()
                 // .with_target(false)
                 .with_writer(

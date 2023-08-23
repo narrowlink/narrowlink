@@ -31,6 +31,7 @@ tracing-subscriber = { version = "0.3.17", default-features = false, features = 
     "fmt",
     "std",
     "env-filter",
+    "ansi",
     "json",
 ] }
 tracing-appender = { version = "0.2.2" }
@@ -54,3 +55,4 @@ x509-parser = { version = "0.15.1" }
 clap_lex = { version = "0.5.0" }
 narrowlink-types = { version = "0.1.2" }
 narrowlink-network = { version = "0.1.2" }
+atty = { version = "0.2.14" }
