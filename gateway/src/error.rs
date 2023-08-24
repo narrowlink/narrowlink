@@ -11,6 +11,7 @@ pub enum GatewayError {
     RustlsError(rustls::Error),
     RcgenError(rcgen::RcgenError),
     PEMError(pem::PemError),
+    HyperError(hyper::Error),
     SerdeJsonError(serde_json::Error),
     ValidationError(validator::ValidationErrors),
     CommandNotFound,
@@ -52,6 +53,7 @@ impl Error for GatewayError {
             Self::RustlsError(e) => Some(e),
             Self::RcgenError(e) => Some(e),
             Self::PEMError(e) => Some(e),
+            Self::HyperError(e) => Some(e),
             Self::SerdeJsonError(e) => Some(e),
             _ => None,
         }
@@ -70,6 +72,7 @@ impl fmt::Display for GatewayError {
             GatewayError::RustlsError(source) => write!(f, "Rustls Error: {}", source),
             GatewayError::RcgenError(source) => write!(f, "Rcgen Error: {}", source),
             GatewayError::PEMError(source) => write!(f, "PEM Error: {}", source),
+            GatewayError::HyperError(source) => write!(f, "Hyper Error: {}", source),
             GatewayError::SerdeJsonError(source) => {
                 write!(f, "Json serialization Error: {}", source)
             }
@@ -148,5 +151,11 @@ impl From<validator::ValidationErrors> for GatewayError {
 impl From<NetworkError> for GatewayError {
     fn from(err: NetworkError) -> Self {
         Self::NetworkError(err)
+    }
+}
+
+impl From<hyper::Error> for GatewayError {
+    fn from(err: hyper::Error) -> Self {
+        Self::HyperError(err)
     }
 }

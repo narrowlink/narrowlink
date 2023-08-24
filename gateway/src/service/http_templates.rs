@@ -85,10 +85,16 @@ pub fn response_error(error_format: ErrorFormat, err: HttpErrors) -> hyper::Resp
         .render()
         .map_err(|e| e.into()),
     };
-
-    let response = hyper::Response::new(msg.unwrap());
+    let (status, msg) = if let (Ok(status), Ok(msg)) = (StatusCode::from_u16(status_code), msg) {
+        (status, msg)
+    } else {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            HttpErrors::InternalServerError.parts().1.to_owned(),
+        )
+    };
+    let response = hyper::Response::new(msg);
     let (mut parts, body) = response.into_parts();
-
-    parts.status = StatusCode::from_u16(status_code).unwrap();
+    parts.status = status;
     hyper::Response::from_parts(parts, body.into())
 }

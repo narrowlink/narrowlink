@@ -126,8 +126,12 @@ impl ConnectionData {
                     .is_none()
                 {};
 
-                let client_socket = client_socket_receiver.await.unwrap();
-                let agent_socket = agent_socket_receiver.await.unwrap();
+                let client_socket = client_socket_receiver
+                    .await
+                    .map_err(|_| GatewayError::Other("Client Connection gone"))?;
+                let agent_socket = agent_socket_receiver
+                    .await
+                    .map_err(|_| GatewayError::Other("Agent Connection gone"))?;
                 narrowlink_network::stream_forward(client_socket, agent_socket)
                     .await
                     .map_err(|e| e.into())
@@ -144,7 +148,9 @@ impl ConnectionData {
                     .is_none()
                 {};
 
-                let agent_socket = agent_socket_receiver.await.unwrap();
+                let agent_socket = agent_socket_receiver
+                    .await
+                    .map_err(|_| GatewayError::Other("Agent Connection gone"))?;
                 narrowlink_network::stream_forward(
                     narrowlink_network::AsyncToStream::new(tcp_stream),
                     agent_socket,
@@ -153,9 +159,11 @@ impl ConnectionData {
                 .map_err(|e| e.into())
             }
             ClientConnection::HttpTransparent(mut request, peer_addr, replay) => {
-                let agent_stream = agent_socket_receiver.await.unwrap();
+                let agent_stream = agent_socket_receiver
+                    .await
+                    .map_err(|_| GatewayError::Other("Agent Connection gone"))?;
                 let agent_socket = narrowlink_network::StreamToAsync::new(agent_stream);
-                let (mut request_sender, connection) = conn::handshake(agent_socket).await.unwrap();
+                let (mut request_sender, connection) = conn::handshake(agent_socket).await?;
                 tokio::spawn(
                     async move {
                         if let Err(e) = connection.await {
