@@ -24,7 +24,7 @@ path = "src/main.rs"
 
 [dependencies]
 clap_lex = { version = "0.5.0", default-features = false }
-tokio = { version = "1.31.0", features = [
+tokio = { version = "1.32.0", features = [
     "macros",
     "rt",
     "io-std",
@@ -37,8 +37,8 @@ futures-sink = { version = "0.3.28", features = [
 futures-timer = { version = "3.0.2", default-features = false }
 tokio-tungstenite = { version = "0.20.0", default-features = false }
 tungstenite = { version = "0.20.0", default-features = false }
-serde = { version = "1.0.183", features = ["derive"], default-features = false }
-serde_json = { version = "1.0.104", default-features = false }
+serde = { version = "1.0.186", features = ["derive"], default-features = false }
+serde_json = { version = "1.0.105", default-features = false }
 serde_yaml = { version = "0.9.25", default-features = false }
 udp-stream = { version = "0.0.9", default-features = false }
 regex = { version = "1.9.3", features = ["std"], default-features = false }
