@@ -87,7 +87,9 @@ impl Wss {
         trace!("reading client hello payload");
         let ch = rustls::internal::msgs::handshake::ClientHelloPayload::read(&mut sub).ok()?;
         trace!("extracting sni from client hello");
-        let rustls::internal::msgs::handshake::ServerNamePayload::HostName(ref sni) = ch.get_sni_extension()?.first()?.payload else{
+        let rustls::internal::msgs::handshake::ServerNamePayload::HostName(ref sni) =
+            ch.get_sni_extension()?.first()?.payload
+        else {
             return None;
         };
         debug!("sni: {:?}", sni);
@@ -123,8 +125,8 @@ impl Service for Wss {
 
         let tcp_listener = TcpListener::bind(&self.listen_addr).await?;
         loop {
-            let Ok((tcp_stream, peer_addr)) = tcp_listener.accept().await else{
-                span.in_scope(|| {warn!("failed to accept tcp connection")});
+            let Ok((tcp_stream, peer_addr)) = tcp_listener.accept().await else {
+                span.in_scope(|| warn!("failed to accept tcp connection"));
                 continue;
             };
             let span_connection = span
@@ -142,7 +144,9 @@ impl Service for Wss {
                         span_connection.in_scope(|| trace!("failed to peek client hello"));
                     })?;
 
-                let Some((sni,alpns)) = span_connection.in_scope(|| Self::peek_sni_and_alpns(&buf)) else {
+                let Some((sni, alpns)) =
+                    span_connection.in_scope(|| Self::peek_sni_and_alpns(&buf))
+                else {
                     span_connection.in_scope(|| warn!("failed to peek sni and alpns"));
                     return Err::<(), ()>(());
                 };
@@ -153,10 +157,16 @@ impl Service for Wss {
                             && alpns.contains(&super::certificate::ACME_TLS_ALPN_NAME.to_vec())
                         {
                             span_connection.in_scope(|| trace!("tls alpn 01 challenge detected"));
-                            acme.get_acme_tls_challenge(&sni).instrument(span_connection.clone()).await.ok()
+                            acme.get_acme_tls_challenge(&sni)
+                                .instrument(span_connection.clone())
+                                .await
+                                .ok()
                         } else {
                             span_connection.in_scope(|| trace!("get certificate from acme"));
-                            acme.get(&sni).instrument(span_connection.clone()).await.ok()
+                            acme.get(&sni)
+                                .instrument(span_connection.clone())
+                                .await
+                                .ok()
                         }
                     }
                     TlsEngine::File((domains, acceptor)) => {
@@ -164,13 +174,19 @@ impl Service for Wss {
                             span_connection.in_scope(|| trace!("get certificate from file"));
                             Some(acceptor)
                         } else {
-                            span_connection.in_scope(|| trace!("no certificate found for this domain in file"));
+                            span_connection.in_scope(|| {
+                                trace!("no certificate found for this domain in file")
+                            });
                             None
                         }
                     }
                 }) else {
-                    span_connection.in_scope(|| {trace!("certificate not found, act as SNI proxy")});
-                    let _ = wss.status_sender.send(InBound::TlsTransparent(sni,tcp_stream,self.listen_addr.port()));
+                    span_connection.in_scope(|| trace!("certificate not found, act as SNI proxy"));
+                    let _ = wss.status_sender.send(InBound::TlsTransparent(
+                        sni,
+                        tcp_stream,
+                        self.listen_addr.port(),
+                    ));
                     return Ok::<(), ()>(());
                 };
                 span_connection.in_scope(|| trace!("setting up tls acceptor"));

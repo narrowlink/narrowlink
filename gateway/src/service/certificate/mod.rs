@@ -83,7 +83,9 @@ impl Certificate {
             }
         }
         let Some(private_key) = private_key else {
-            return Err(GatewayError::Invalid("Unable to find private key from pem file"))
+            return Err(GatewayError::Invalid(
+                "Unable to find private key from pem file",
+            ));
         };
         if certificate_chain.is_empty() {
             return Err(GatewayError::Invalid("Invalid Pem FIle"));
@@ -103,7 +105,7 @@ impl Certificate {
 
     pub fn renew_needed(&self) -> bool {
         for certificate in self.certificate_chain.iter() {
-            let Ok((_, cert)) = X509Certificate::from_der(certificate.as_ref()) else{
+            let Ok((_, cert)) = X509Certificate::from_der(certificate.as_ref()) else {
                 return true;
             };
             if cert.is_ca() {

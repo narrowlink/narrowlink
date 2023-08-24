@@ -123,7 +123,7 @@ impl Args {
         raw.next(&mut cursor);
         let mut config_path = None;
         let command_arg = loop {
-            let Some(arg) = raw.next(&mut cursor) else{
+            let Some(arg) = raw.next(&mut cursor) else {
                 print!("{}", HELP);
                 process::exit(0x0);
             };

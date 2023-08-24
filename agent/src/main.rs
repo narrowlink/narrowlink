@@ -51,12 +51,8 @@ async fn main() -> Result<(), AgentError> {
     loop {
         let Some(event) = event_connection.as_mut() else {
             info!("Connecting to gateway: {}", conf.gateway);
-            match WsConnection::new(
-                &conf.gateway,
-                event_headers.clone(),
-                service_type.clone(),
-            )
-            .await
+            match WsConnection::new(&conf.gateway, event_headers.clone(), service_type.clone())
+                .await
             {
                 Ok(event_stream) => {
                     sleep_time = 0;
@@ -70,13 +66,16 @@ async fn main() -> Result<(), AgentError> {
                         let mut s = sysinfo::System::new_all();
                         async move {
                             loop {
-                                    s.refresh_all();
-                                    let _ = req
-                                        .request(AgentEventOutBound::Request(
-                                            0,
-                                            AgentEventRequest::SysInfo(SystemInfo{ loadavg: s.load_average().one, cpus: s.cpus().len() as u8 }),
-                                        ))
-                                        .await;
+                                s.refresh_all();
+                                let _ = req
+                                    .request(AgentEventOutBound::Request(
+                                        0,
+                                        AgentEventRequest::SysInfo(SystemInfo {
+                                            loadavg: s.load_average().one,
+                                            cpus: s.cpus().len() as u8,
+                                        }),
+                                    ))
+                                    .await;
                                 time::sleep(Duration::from_secs(40)).await;
                             }
                         }
@@ -92,19 +91,18 @@ async fn main() -> Result<(), AgentError> {
                             403 => {
                                 error!("Access denied");
                             }
-                            _ => {
-                            }
+                            _ => {}
                         }
                     };
                     error!("Unable to connect to the gateway: {}", e.to_string());
-                    if sleep_time == 0{
+                    if sleep_time == 0 {
                         info!("Try again");
-                    }else if sleep_time == 70{
+                    } else if sleep_time == 70 {
                         error!("Unable to connect");
                         info!("Exit");
-                        break
-                    }else{
-                        info!("Try again in {} secs",sleep_time);
+                        break;
+                    } else {
+                        info!("Try again in {} secs", sleep_time);
                     }
                     time::sleep(Duration::from_secs(sleep_time)).await;
                     sleep_time += 10;
@@ -222,7 +220,7 @@ async fn data_connect(
                 .map(|(n, s)| n ^ s)
                 .collect::<Vec<u8>>(),
         );
-        let Ok(mut mac) = generic::HmacSha256::new_from_slice(&k) else{
+        let Ok(mut mac) = generic::HmacSha256::new_from_slice(&k) else {
             return Err(AgentError::AccessDenied);
         };
         mac.update(

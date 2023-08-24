@@ -59,8 +59,8 @@ impl Service for Ws {
         span.in_scope(|| trace!("tcp listener successfully bound"));
         loop {
             let listen_addr = self.listen_addr;
-            let Ok((tcp_stream, peer_addr)) = tcp_listener.accept().await else{
-                span.in_scope(|| {warn!("failed to accept tcp connection")});
+            let Ok((tcp_stream, peer_addr)) = tcp_listener.accept().await else {
+                span.in_scope(|| warn!("failed to accept tcp connection"));
                 continue;
             };
             let span_connection = span
@@ -118,10 +118,19 @@ impl HyperService<Request<Body>> for WsService {
     fn call(&mut self, req: Request<Body>) -> Self::Future {
         let span = span!(tracing::Level::INFO, "service", peer_addr = %self.peer_addr);
         span.in_scope(|| debug!("request: {:?}", req));
-        let Some(host) = req.uri().host().or(req.headers().get(HOST).and_then(|h|h.to_str().ok())).map(|h|h.to_owned()) else{ //inconsistency:port number
-            return Box::pin(async { Ok(crate::service::http_templates::response_error(crate::service::http_templates::ErrorFormat::Html,
-                crate::service::http_templates::HttpErrors::BadRequest))
-             });
+        let Some(host) = req
+            .uri()
+            .host()
+            .or(req.headers().get(HOST).and_then(|h| h.to_str().ok()))
+            .map(|h| h.to_owned())
+        else {
+            //inconsistency:port number
+            return Box::pin(async {
+                Ok(crate::service::http_templates::response_error(
+                    crate::service::http_templates::ErrorFormat::Html,
+                    crate::service::http_templates::HttpErrors::BadRequest,
+                ))
+            });
         };
 
         span.record("host", &host);
@@ -177,16 +186,13 @@ impl HyperService<Request<Body>> for WsService {
             {
                 debug!("narrowlink token found: {}", token);
                 let Some(derived_key) = req
-                .headers()
-                .get(header::SEC_WEBSOCKET_KEY)
-                .map(|t| {
-                    narrowlink_network::ws::WsConnection::drive_key(
-                        t.as_bytes(),
-                    )
-                }) else {
+                    .headers()
+                    .get(header::SEC_WEBSOCKET_KEY)
+                    .map(|t| narrowlink_network::ws::WsConnection::drive_key(t.as_bytes()))
+                else {
                     trace!("invalid websocket key or key header not found");
-                    use crate::service::http_templates::{ErrorFormat, HttpErrors,response_error};
-                    return Ok(response_error(ErrorFormat::Html,HttpErrors::BadRequest));
+                    use crate::service::http_templates::{response_error, ErrorFormat, HttpErrors};
+                    return Ok(response_error(ErrorFormat::Html, HttpErrors::BadRequest));
                 };
                 let publish = req
                     .headers()

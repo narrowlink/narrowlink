@@ -227,7 +227,14 @@ impl CertificateManager {
     ) -> Result<(), GatewayError> {
         debug!("start to issue acme certificate for {:?}", &domains);
         // we can create acme account for each agent later
-        let (Some(acme_account),Some(challenge_type)) = (self.storage.get_acme_account(uid, agent_name).await.ok().or(self.acme_account.clone()),self.acme_type.clone()) else{
+        let (Some(acme_account), Some(challenge_type)) = (
+            self.storage
+                .get_acme_account(uid, agent_name)
+                .await
+                .ok()
+                .or(self.acme_account.clone()),
+            self.acme_type.clone(),
+        ) else {
             trace!("acme is disabled");
             return Err(GatewayError::ACMEIsDisabled);
         };
@@ -269,16 +276,12 @@ impl CertificateManager {
         let success = 'status: {
             trace!("check challenge status");
             let Ok(pem) = acme
-                        .check_challenge(
-                            challenges,
-                            5,
-                            10 * 1000,
-                            suggested_private_key.as_ref(),
-                        )
-                        .in_current_span().await
-                        else {
-                            break 'status false;
-                        };
+                .check_challenge(challenges, 5, 10 * 1000, suggested_private_key.as_ref())
+                .in_current_span()
+                .await
+            else {
+                break 'status false;
+            };
             if self
                 .storage
                 .put(&uid, &agent_name, None, pem)

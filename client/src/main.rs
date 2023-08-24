@@ -118,15 +118,18 @@ async fn main() -> Result<(), ClientError> {
         {
             if agents.is_empty() || list_of_agents_refresh_required.load(Ordering::Relaxed) {
                 let Ok(list_of_agents_request) = req
-                .request(ClientEventOutBound::Request(
-                    0,
-                    ClientEventRequest::ListOfAgents(arg_commands.verbose()),
-                ))
-                .await else {
-                    session= None;
+                    .request(ClientEventOutBound::Request(
+                        0,
+                        ClientEventRequest::ListOfAgents(arg_commands.verbose()),
+                    ))
+                    .await
+                else {
+                    session = None;
                     continue;
                 };
-                let Some(narrowlink_types::client::EventResponse::ActiveAgents(list_of_agents)) = list_of_agents_request.response() else{
+                let Some(narrowlink_types::client::EventResponse::ActiveAgents(list_of_agents)) =
+                    list_of_agents_request.response()
+                else {
                     error!("Unable to get list the agents");
                     break;
                 };

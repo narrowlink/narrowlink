@@ -21,7 +21,7 @@ impl Args {
         raw.next(&mut cursor);
         let mut config_path = None;
         loop {
-            let Some(arg) = raw.next(&mut cursor) else{
+            let Some(arg) = raw.next(&mut cursor) else {
                 break;
             };
             if let Some((long, value)) = arg.to_long() {

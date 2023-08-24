@@ -20,7 +20,7 @@ fn main() -> Result<(), TokenGeneratorError> {
                     &Header::new(Algorithm::default()),
                     &client,
                     &EncodingKey::from_secret(&config.secret),
-                )else{
+                ) else {
                     return Err(TokenGeneratorError::TokenGenerationError); // unreachable
                 };
                 println!("{}:{}\r\n{}", client.uid, client.name, ct);
@@ -32,7 +32,7 @@ fn main() -> Result<(), TokenGeneratorError> {
                     &EncodingKey::from_secret(
                         &config.secret.clone().into_iter().rev().collect::<Vec<u8>>(),
                     ),
-                )else{
+                ) else {
                     return Err(TokenGeneratorError::TokenGenerationError); // unreachable
                 };
                 println!("{}:{}\r\n{}", agent.uid, agent.name, at);
@@ -44,7 +44,7 @@ fn main() -> Result<(), TokenGeneratorError> {
                     &EncodingKey::from_secret(
                         &config.secret.clone().into_iter().rev().collect::<Vec<u8>>(),
                     ),
-                )else{
+                ) else {
                     return Err(TokenGeneratorError::TokenGenerationError); // unreachable
                 };
                 println!("{}:{}\r\n{}", publish_token.uid, publish_token.name, pt);

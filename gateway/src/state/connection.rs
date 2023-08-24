@@ -99,7 +99,9 @@ impl ConnectionData {
     }
     #[tracing::instrument(name = "connection_serve", skip(self))]
     pub async fn serve(&mut self) -> Result<(), GatewayError> {
-        let (Some(client_connection),Some(agent_connection)) = (self.client_socket.take(),self.agent_socket.take())else{
+        let (Some(client_connection), Some(agent_connection)) =
+            (self.client_socket.take(), self.agent_socket.take())
+        else {
             return Err(GatewayError::Other("No client or agent socket found"));
         };
         let AgentConnection::Agent(agent_response, agent_socket_receiver) = agent_connection;
