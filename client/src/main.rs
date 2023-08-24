@@ -269,7 +269,10 @@ async fn main() -> Result<(), ClientError> {
                                         .map(|(n, s)| n ^ s)
                                         .collect::<Vec<u8>>(),
                                 );
-                                let mut mac = generic::HmacSha256::new_from_slice(&k).unwrap();
+                                let Ok(mut mac) = generic::HmacSha256::new_from_slice(&k) else {
+                                    error!("Unable to create hmac"); // unreachable
+                                    return;
+                                };
                                 mac.update(
                                     &[
                                         format!(
@@ -291,11 +294,13 @@ async fn main() -> Result<(), ClientError> {
                     trace!("Connect: {:?}", connect);
                     let gateway_address = conf.gateway.clone();
 
-                    let cmd = serde_json::to_string(&ClientDataOutBound::Connect(
+                    let Ok(cmd) = serde_json::to_string(&ClientDataOutBound::Connect(
                         agent_name,
                         connect.clone(),
-                    ))
-                    .unwrap();
+                    )) else {
+                        error!("Unable to serialize connect command"); // unreachable
+                        return;
+                    };
                     let (mut data_stream, connection_id): (
                         Box<dyn UniversalStream<Vec<u8>, NetworkError>>,
                         Option<String>,
@@ -342,7 +347,7 @@ async fn main() -> Result<(), ClientError> {
                 }
             });
             if let ArgCommands::Connect(_) = arg_commands.as_ref() {
-                task.await.unwrap();
+                let _ = task.await;
                 return Ok(());
             }
         } else {
