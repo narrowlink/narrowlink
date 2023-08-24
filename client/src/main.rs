@@ -248,7 +248,7 @@ async fn main() -> Result<(), ClientError> {
                                     )
                                 }
                                 Err(e) => {
-                                    warn!("{}", e.to_string());
+                                    debug!("Proxy error: {}", e.to_string());
                                     return;
                                 }
                             };
@@ -337,7 +337,7 @@ async fn main() -> Result<(), ClientError> {
                                 return;
                             }
                         }
-                        warn!("{}", e);
+                        debug!("connection closed {}:{} {}", connect.host, connect.port, e);
                     };
                 }
             });
@@ -346,6 +346,7 @@ async fn main() -> Result<(), ClientError> {
                 return Ok(());
             }
         } else {
+            info!("Connecting to gateway: {}", conf.gateway);
             let event_stream = match WsConnection::new(
                 &conf.gateway,
                 HashMap::from([("NL-TOKEN", token.clone())]),
@@ -354,6 +355,7 @@ async fn main() -> Result<(), ClientError> {
             .await
             {
                 Ok(es) => {
+                    info!("Connection successful");
                     sleep_time = 0;
                     es
                 }
