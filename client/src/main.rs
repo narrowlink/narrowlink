@@ -43,7 +43,7 @@ use env_logger::Env;
 
 #[tokio::main]
 async fn main() -> Result<(), ClientError> {
-    env_logger::Builder::from_env(Env::default().default_filter_or("warn")).init();
+    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
     let args = Args::parse(env::args())?;
     let conf = Arc::new(config::Config::load(args.config_path)?);
 
@@ -346,7 +346,10 @@ async fn main() -> Result<(), ClientError> {
                 return Ok(());
             }
         } else {
-            info!("Connecting to gateway: {}", conf.gateway);
+            if let ArgCommands::List(_) = arg_commands.as_ref() {
+            } else {
+                info!("Connecting to gateway: {}", conf.gateway);
+            }
             let event_stream = match WsConnection::new(
                 &conf.gateway,
                 HashMap::from([("NL-TOKEN", token.clone())]),
@@ -355,7 +358,11 @@ async fn main() -> Result<(), ClientError> {
             .await
             {
                 Ok(es) => {
-                    info!("Connection successful");
+                    if let ArgCommands::List(_) = arg_commands.as_ref() {
+                    } else {
+                        info!("Connection successful");
+                    }
+
                     sleep_time = 0;
                     es
                 }
