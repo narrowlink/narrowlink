@@ -1,6 +1,6 @@
 [workspace]
-
 members = ["gateway", "network", "client", "agent", "types","token-generator"]
+resolver = "2"
 
 #[patch.crates-io]
 #narrowlink-types = { path = "types" }
