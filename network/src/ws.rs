@@ -94,8 +94,11 @@ impl WsConnection {
                 tungstenite::handshake::client::generate_key(),
             );
         for (key, value) in headers.iter() {
-            let headers = request.headers_mut().unwrap();
-            headers.insert(*key, HeaderValue::from_str(value).unwrap());
+            if let Ok(header_value) = HeaderValue::from_str(value) {
+                request
+                    .headers_mut()
+                    .and_then(|headers| headers.insert(*key, header_value));
+            }
         }
         let request = request.method("GET").body(Body::from(""))?;
         let response = request_sender.send_request(request).await?;
@@ -375,8 +378,11 @@ impl WsConnectionBinary {
                 tungstenite::handshake::client::generate_key(),
             );
         for (key, value) in headers.iter() {
-            let headers = request.headers_mut().unwrap();
-            headers.insert(*key, HeaderValue::from_str(value).unwrap());
+            if let Ok(header_value) = HeaderValue::from_str(value) {
+                request
+                    .headers_mut()
+                    .and_then(|headers| headers.insert(*key, header_value));
+            }
         }
         let request = request.method("GET").body(Body::from(""))?;
         let response = request_sender.send_request(request).await?;
