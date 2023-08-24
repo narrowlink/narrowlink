@@ -75,8 +75,7 @@ impl UnifiedSocket {
                     #[cfg(feature = "native-tls")]
                     {
                         debug!("using native-ls to connect to {}", peer_addr.to_string());
-                        use native_tls::TlsConnector;
-                        let cx = TlsConnector::builder()
+                        let cx = tokio_native_tls::native_tls::TlsConnector::builder()
                             .build()
                             .or(Err(NetworkError::TlsError))?;
                         let cx = tokio_native_tls::TlsConnector::from(cx);

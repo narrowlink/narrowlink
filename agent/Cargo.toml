@@ -10,7 +10,13 @@ keywords = ["narrowlink"]
 authors = ['Narrowlink <opensource@narrowlink.com>']
 edition = "2021"
 
-include = ["Cargo.toml", "LICENSE", "sample_agent.yaml", "src/**/*", "*help.arg"]
+include = [
+  "Cargo.toml",
+  "LICENSE",
+  "sample_agent.yaml",
+  "src/**/*",
+  "*help.arg",
+]
 
 [dependencies]
 tokio = { version = "1.31.0", default-features = false, features = [
@@ -30,10 +36,6 @@ futures-channel = { version = "0.3.28", features = ["sink"] }
 udp-stream = { version = "0.0.9", default-features = false }
 sha3 = { version = "0.10.8", default-features = false }
 hmac = { version = "0.12.1", default-features = false }
-native-tls = { version = "0.2.11", optional = true, default-features = false }
-webpki-roots = { version = "0.25.2", optional = true, default-features = false }
-tokio-rustls = { version = "0.24.1", optional = true, default-features = false }
-tokio-native-tls = { version = "0.3.1", optional = true, default-features = false }
 dirs = { version = "5.0.1", default-features = false }
 log = { version = "0.4.20" }
 env_logger = { version = "0.10.0" }
@@ -44,9 +46,6 @@ narrowlink-network = { version = "0.1.2" }
 
 [features]
 default = ["rustls"]
-rustls = ["dep:tokio-rustls", "dep:webpki-roots", "narrowlink-network/rustls"]
-native-tls = [
-  "dep:tokio-native-tls",
-  "dep:native-tls",
-  "narrowlink-network/native-tls",
-]
+rustls = ["narrowlink-network/rustls"]
+native-tls = ["narrowlink-network/native-tls"]
+native-tls-vendored = ["narrowlink-network/native-tls-vendored"]

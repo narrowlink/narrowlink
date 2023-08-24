@@ -10,11 +10,11 @@ use hyper::{
     service::Service as HyperService,
     upgrade, Body, Request, Response, StatusCode,
 };
-use log::debug;
 use tokio::{
     net::TcpListener,
     sync::{mpsc::UnboundedSender, oneshot},
 };
+use tracing::{debug, span, trace, warn, Instrument};
 
 use crate::{
     error::GatewayError,
@@ -54,18 +54,23 @@ impl Ws {
 #[async_trait]
 impl Service for Ws {
     async fn run(self) -> Result<(), GatewayError> {
+        let span = span!(tracing::Level::TRACE, "ws", listen_addr = %self.listen_addr, domains = ?self.domains);
         let tcp_listener: TcpListener = TcpListener::bind(&self.listen_addr).await?;
+        span.in_scope(|| trace!("tcp listener successfully bound"));
         loop {
             let listen_addr = self.listen_addr;
-            let Ok((tcp_stream, _addr)) = tcp_listener.accept().await else{
+            let Ok((tcp_stream, peer_addr)) = tcp_listener.accept().await else{
+                span.in_scope(|| {warn!("failed to accept tcp connection")});
                 continue;
             };
-            let Ok(peer_addr) = tcp_stream.peer_addr() else{
-                continue;
-            };
+            let span_connection = span
+                .in_scope(|| span!(tracing::Level::TRACE, "connection", peer_addr = %peer_addr));
+
+            span_connection.in_scope(|| debug!("new connection from {}", peer_addr));
             let ws = self.clone();
+            let span_connection = span_connection.clone();
             tokio::spawn(async move {
-                if let Err(_http_err) = Http::new()
+                if let Err(http_err) = Http::new()
                     .serve_connection(
                         tcp_stream,
                         WsService {
@@ -78,9 +83,10 @@ impl Service for Ws {
                         },
                     )
                     .with_upgrades()
+                    .instrument(span_connection.clone())
                     .await
                 {
-                    debug!("{}", _http_err);
+                    span_connection.in_scope(|| warn!("{}", http_err));
                 };
                 Ok::<(), ()>(())
             });
@@ -110,23 +116,31 @@ impl HyperService<Request<Body>> for WsService {
     }
 
     fn call(&mut self, req: Request<Body>) -> Self::Future {
+        let span = span!(tracing::Level::INFO, "service", peer_addr = %self.peer_addr);
+        span.in_scope(|| debug!("request: {:?}", req));
         let Some(host) = req.uri().host().or(req.headers().get(HOST).and_then(|h|h.to_str().ok())).map(|h|h.to_owned()) else{ //inconsistency:port number
             return Box::pin(async { Ok(crate::service::http_templates::response_error(crate::service::http_templates::ErrorFormat::Html,
                 crate::service::http_templates::HttpErrors::BadRequest))
              });
         };
+
+        span.record("host", &host);
+        span.in_scope(|| trace!("host: {}", host));
         let tunnel_permit =
             self.domains.iter().any(|domain| domain == &host) || self.domains.is_empty();
+        span.in_scope(|| debug!("tunnel permission: {}", tunnel_permit));
         let cm = self.cm.clone().filter(|_| self.sni.is_none());
         let status_sender = self.status_sender.clone();
         let peer_addr = self.peer_addr;
         let listen_addr = self.listen_addr;
-        Box::pin(async move {
+
+        let handler = async move {
             let req_version = req.version();
             if let Some(acme) = cm.as_ref() {
                 if req.uri().path().starts_with("/.well-known/acme-challenge/") {
+                    trace!("acme challenge");
                     if let Ok((token, key_authorization)) =
-                        acme.get_acme_http_challenge(&host).await
+                        acme.get_acme_http_challenge(&host).in_current_span().await
                     {
                         if req.uri().path() == format!("/.well-known/acme-challenge/{}", token) {
                             return Response::builder()
@@ -134,6 +148,8 @@ impl HyperService<Request<Body>> for WsService {
                                 .status(StatusCode::OK)
                                 .body::<Body>(key_authorization.into());
                         }
+                    } else {
+                        trace!("acme challenge not found for {}", host);
                     }
                 }
                 // return Response::builder()
@@ -159,6 +175,19 @@ impl HyperService<Request<Body>> for WsService {
                 .and_then(|t| t.to_str().ok())
                 .map(|t| t.to_owned())
             {
+                debug!("narrowlink token found: {}", token);
+                let Some(derived_key) = req
+                .headers()
+                .get(header::SEC_WEBSOCKET_KEY)
+                .map(|t| {
+                    narrowlink_network::ws::WsConnection::drive_key(
+                        t.as_bytes(),
+                    )
+                }) else {
+                    trace!("invalid websocket key or key header not found");
+                    use crate::service::http_templates::{ErrorFormat, HttpErrors,response_error};
+                    return Ok(response_error(ErrorFormat::Html,HttpErrors::BadRequest));
+                };
                 let publish = req
                     .headers()
                     .get("NL-PUBLISH")
@@ -195,19 +224,9 @@ impl HyperService<Request<Body>> for WsService {
                     .and_then(|t| t.to_str().ok())
                     .map(|t| t.to_owned());
 
-                let Some(derived_key) = req
-                    .headers()
-                    .get(header::SEC_WEBSOCKET_KEY)
-                    .map(|t| {
-                        narrowlink_network::ws::WsConnection::drive_key(
-                            t.as_bytes(),
-                        )
-                    }) else {
-                        return Ok(crate::service::http_templates::response_error(crate::service::http_templates::ErrorFormat::Html,crate::service::http_templates::HttpErrors::BadRequest));
-                    };
-
                 let (response_sender, response_receiver) = oneshot::channel();
                 let (request, sender) = if command.is_some() ^ connection.is_some() {
+                    trace!("data request found");
                     let (socket_sender, socket_receiver) = oneshot::channel();
                     (
                         InBound::DataRequest(
@@ -220,11 +239,13 @@ impl HyperService<Request<Body>> for WsService {
                             },
                             socket_receiver,
                             peer_addr,
+                            forward_address,
                             response_sender,
                         ),
                         Left(socket_sender),
                     )
                 } else {
+                    trace!("event request found");
                     let (stream_sender, stream_receiver) = oneshot::channel();
                     (
                         InBound::EventRequest(
@@ -239,37 +260,43 @@ impl HyperService<Request<Body>> for WsService {
                 };
 
                 let _ = status_sender.send(request);
-
+                trace!("request sent and waiting for response");
                 match response_receiver.await {
                     Ok(Ok(response_headers)) => {
-                        tokio::spawn(async move {
-                            //any change to control
-
-                            match sender {
-                                Left(s) => {
-                                    if let Ok(upgraded) = upgrade::on(req).await {
-                                        let ws_connection = Box::new(
-                                            narrowlink_network::ws::WsConnectionBinary::from(
-                                                upgraded,
-                                            )
-                                            .await
-                                            .unwrap(),
-                                        );
-                                        let _ = s.send(ws_connection);
+                        trace!("response received");
+                        tokio::spawn(
+                            async move {
+                                //any change to control
+                                match sender {
+                                    Left(s) => {
+                                        trace!("upgrading to websocket data channel");
+                                        if let Ok(upgraded) = upgrade::on(req).await {
+                                            let ws_connection = Box::new(
+                                                narrowlink_network::ws::WsConnectionBinary::from(
+                                                    upgraded,
+                                                )
+                                                .await,
+                                            );
+                                            let _ = s.send(ws_connection);
+                                        }
                                     }
-                                }
-                                Right(s) => {
-                                    if let Ok(upgraded) = upgrade::on(req).await {
-                                        let ws_connection = Box::new(
-                                            narrowlink_network::ws::WsConnection::from(upgraded)
-                                                .await
-                                                .unwrap(),
-                                        );
-                                        let _ = s.send(ws_connection);
+                                    Right(s) => {
+                                        trace!("upgrading to websocket event channel");
+                                        if let Ok(upgraded) = upgrade::on(req).await {
+                                            let ws_connection = Box::new(
+                                                narrowlink_network::ws::WsConnection::from(
+                                                    upgraded,
+                                                )
+                                                .await,
+                                            );
+                                            let _ = s.send(ws_connection);
+                                        }
                                     }
-                                }
-                            };
-                        });
+                                };
+                            }
+                            .in_current_span(),
+                        );
+                        trace!("websocket connection established");
                         Response::builder()
                             .version(req_version)
                             .status(StatusCode::SWITCHING_PROTOCOLS)
@@ -285,14 +312,20 @@ impl HyperService<Request<Body>> for WsService {
                                 r
                             })
                     }
-                    Ok(Err(error)) => Ok(crate::service::http_templates::response_error(
-                        crate::service::http_templates::ErrorFormat::Json,
-                        error.into(),
-                    )),
-                    Err(_) => Ok(crate::service::http_templates::response_error(
-                        crate::service::http_templates::ErrorFormat::Html,
-                        super::http_templates::HttpErrors::InternalServerError,
-                    )),
+                    Ok(Err(error)) => {
+                        debug!("an expected response error received: {:?}", error);
+                        Ok(crate::service::http_templates::response_error(
+                            crate::service::http_templates::ErrorFormat::Json,
+                            error.into(),
+                        ))
+                    }
+                    Err(e) => {
+                        debug!("unexpected response error: {}", e);
+                        Ok(crate::service::http_templates::response_error(
+                            crate::service::http_templates::ErrorFormat::Html,
+                            super::http_templates::HttpErrors::InternalServerError,
+                        ))
+                    }
                 }
             } else {
                 let (response_sender, response_receiver) = oneshot::channel();
@@ -303,19 +336,31 @@ impl HyperService<Request<Body>> for WsService {
                     response_sender,
                     listen_addr.port(),
                 ));
+                trace!("http transparent request found and sent and waiting for response");
                 match response_receiver.await {
-                    Ok(Ok(res)) => Ok(res),
-                    Ok(Err(e)) => Ok(crate::service::http_templates::response_error(
-                        crate::service::http_templates::ErrorFormat::Html,
-                        e.into(),
-                    )),
-                    Err(_e) => Ok(crate::service::http_templates::response_error(
-                        crate::service::http_templates::ErrorFormat::Html,
-                        super::http_templates::HttpErrors::ServiceUnavailable,
-                    )),
+                    Ok(Ok(res)) => {
+                        trace!("response received");
+                        Ok(res)
+                    }
+                    Ok(Err(e)) => {
+                        debug!("an expected response error received: {:?}", e);
+                        Ok(crate::service::http_templates::response_error(
+                            crate::service::http_templates::ErrorFormat::Html,
+                            e.into(),
+                        ))
+                    }
+                    Err(e) => {
+                        trace!("unexpected response error: {:?}", e);
+                        Ok(crate::service::http_templates::response_error(
+                            crate::service::http_templates::ErrorFormat::Html,
+                            super::http_templates::HttpErrors::ServiceUnavailable,
+                        ))
+                    }
                 }
             }
-        })
+        }
+        .instrument(span);
+        Box::pin(handler)
     }
 }
 
