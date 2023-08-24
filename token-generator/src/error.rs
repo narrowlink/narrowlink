@@ -8,6 +8,7 @@ pub enum TokenGeneratorError {
     CommandNotFound,
     RequiredValue(&'static str),
     Encoding,
+    TokenGenerationError,
     IoError(std::io::Error),
 }
 
@@ -31,6 +32,7 @@ impl Display for TokenGeneratorError {
             TokenGeneratorError::CommandNotFound => write!(f, "Command Not Found"),
             TokenGeneratorError::RequiredValue(v) => write!(f, "Required Value: {}", v),
             TokenGeneratorError::Encoding => write!(f, "Encoding Error"),
+            TokenGeneratorError::TokenGenerationError => write!(f, "Token Generation Error"),
             TokenGeneratorError::IoError(e) => write!(f, "IO Error: {}", e),
         }
     }

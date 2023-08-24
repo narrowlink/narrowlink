@@ -16,34 +16,37 @@ fn main() -> Result<(), TokenGeneratorError> {
         }
         match token {
             TokenType::Client(client) => {
-                let ct = jsonwebtoken::encode(
+                let Ok(ct) = jsonwebtoken::encode(
                     &Header::new(Algorithm::default()),
                     &client,
                     &EncodingKey::from_secret(&config.secret),
-                )
-                .unwrap();
+                )else{
+                    return Err(TokenGeneratorError::TokenGenerationError); // unreachable
+                };
                 println!("{}:{}\r\n{}", client.uid, client.name, ct);
             }
             TokenType::Agent(agent) => {
-                let at = jsonwebtoken::encode(
+                let Ok(at) = jsonwebtoken::encode(
                     &Header::new(Algorithm::default()),
                     &agent,
                     &EncodingKey::from_secret(
                         &config.secret.clone().into_iter().rev().collect::<Vec<u8>>(),
                     ),
-                )
-                .unwrap();
+                )else{
+                    return Err(TokenGeneratorError::TokenGenerationError); // unreachable
+                };
                 println!("{}:{}\r\n{}", agent.uid, agent.name, at);
             }
             TokenType::AgentPublish(publish_token) => {
-                let pt = jsonwebtoken::encode(
+                let Ok(pt) = jsonwebtoken::encode(
                     &Header::new(Algorithm::default()),
                     &publish_token,
                     &EncodingKey::from_secret(
                         &config.secret.clone().into_iter().rev().collect::<Vec<u8>>(),
                     ),
-                )
-                .unwrap();
+                )else{
+                    return Err(TokenGeneratorError::TokenGenerationError); // unreachable
+                };
                 println!("{}:{}\r\n{}", publish_token.uid, publish_token.name, pt);
             }
         }
