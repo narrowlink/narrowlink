@@ -25,17 +25,12 @@ use narrowlink_network::{
     AsyncSocket, AsyncToStream, StreamCrypt, UniversalStream,
 };
 use narrowlink_types::{
-    client::DataOutBound as ClientDataOutBound,
-    client::EventInBound as ClientEventInBound,
-    client::EventOutBound as ClientEventOutBound,
-    client::EventRequest as ClientEventRequest,
-    generic::{self, Protocol},
-    GetResponse,
+    client::DataOutBound as ClientDataOutBound, client::EventInBound as ClientEventInBound,
+    client::EventOutBound as ClientEventOutBound, client::EventRequest as ClientEventRequest,
+    generic, GetResponse,
 };
+use proxy_stream::ProxyStream;
 use sha3::{Digest, Sha3_256};
-use socks5_protocol::{
-    AuthMethod, AuthRequest, AuthResponse, Command, CommandRequest, CommandResponse, Version,
-};
 use tokio::{net::TcpListener, sync::Mutex, time};
 use udp_stream::UdpListener;
 
@@ -235,28 +230,37 @@ async fn main() -> Result<(), ClientError> {
                             sign: None,
                         },
                         ArgCommands::Proxy(_) => {
-                            let (socks_socket, connect) = match self::from(socket, false).await {
-                                Ok((socket, addr, protocol)) => {
-                                    // connect.addr = addr;
-
-                                    (
-                                        socket,
-                                        generic::Connect {
-                                            host: addr.0,
-                                            port: addr.1,
-                                            protocol,
-                                            cryptography: None,
-                                            sign: None,
-                                        },
-                                    )
-                                }
+                            let proxy_stream = ProxyStream::new(proxy_stream::ProxyType::SOCKS5);
+                            let interrupted_stream = match proxy_stream.accept(socket).await {
+                                Ok(interrupted_stream) => interrupted_stream,
                                 Err(e) => {
                                     debug!("Proxy error: {}", e.to_string());
                                     return;
                                 }
                             };
-                            socket = socks_socket;
-                            connect
+                            let addr: (String, u16) = interrupted_stream.addr().into();
+                            let protocol = if interrupted_stream.command()
+                                == proxy_stream::Command::UdpAssociate
+                            {
+                                generic::Protocol::UDP
+                            } else {
+                                generic::Protocol::TCP
+                            };
+                            socket = match interrupted_stream.connect().await {
+                                Ok(s) => Box::new(s),
+                                Err(e) => {
+                                    debug!("Proxy error: {}", e.to_string());
+                                    return;
+                                }
+                            };
+
+                            generic::Connect {
+                                host: addr.0,
+                                port: addr.1,
+                                protocol,
+                                cryptography: None,
+                                sign: None,
+                            }
                         }
                     };
 
@@ -493,36 +497,4 @@ impl TAsyncWrite for InputStream {
     ) -> Poll<Result<(), std::io::Error>> {
         Pin::new(&mut self.stdout).poll_shutdown(ctx)
     }
-}
-
-pub async fn from<S: 'static>(
-    stream: S,
-    _client: bool,
-) -> Result<(Box<dyn AsyncSocket>, (String, u16), Protocol), socks5_protocol::Error>
-where
-    S: TAsyncRead + TAsyncWrite + std::marker::Unpin + std::marker::Send,
-{
-    let mut stream = stream;
-    let version = Version::read(&mut stream).await?;
-    let _ = AuthRequest::read(&mut stream).await?;
-    version.write(&mut stream).await?;
-    let respond = AuthResponse::new(AuthMethod::Noauth);
-    respond.write(&mut stream).await?;
-    let request = CommandRequest::read(&mut stream).await?;
-    let protocol = if let Command::UdpAssociate = request.command {
-        generic::Protocol::UDP
-    } else {
-        generic::Protocol::TCP
-    };
-    // dbg!(request.command);
-    let addr = match &request.address {
-        socks5_protocol::Address::SocketAddr(addr) => (addr.ip().to_string(), addr.port()),
-        socks5_protocol::Address::Domain(addr, port) => (addr.clone(), *port),
-    };
-
-    CommandResponse::success(request.address)
-        .write(&mut stream)
-        .await?;
-
-    Ok((Box::new(stream), addr, protocol))
 }
