@@ -1,7 +1,8 @@
-use std::{collections::HashMap, env, net::SocketAddr, str::FromStr, time::Duration};
+use std::{collections::HashMap, env, fs, net::SocketAddr, str::FromStr, time::Duration};
 mod args;
 use args::Args;
 use config::KeyPolicy;
+use daemonize::Daemonize;
 use error::AgentError;
 use futures_util::{SinkExt, StreamExt};
 use hmac::Mac;
@@ -35,11 +36,32 @@ use uuid::Uuid;
 mod config;
 mod error;
 
-#[tokio::main]
-async fn main() -> Result<(), AgentError> {
+fn main() -> Result<(), AgentError> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let args = Args::parse(env::args())?;
+    if cfg!(windows) || !args.daemon {
+        return start(args);
+    }
+    let stdout = fs::File::create("/tmp/narrowlink-agent.out")?;
+    let stderr = fs::File::create("/tmp/narrowlink-agent.err")?;
+    let daemonize = Daemonize::new()
+        .pid_file("/tmp/narrowlink-agent.pid")
+        .working_directory("/tmp/")
+        .umask(0o777)
+        .stdout(stdout)
+        .stderr(stderr);
+    if let Err(e) = daemonize.start() {
+        error!("Unable to daemonize: {}", e.to_string());
+    } else {
+        start(args)?;
+    }
+    Ok(())
+}
+
+#[tokio::main]
+async fn start(args: Args) -> Result<(), AgentError> {
     let conf = config::Config::load(args.config_path)?;
+
     let service_type = conf.service_type;
     let token = conf.token;
     let mut event_headers = HashMap::from([("NL-TOKEN", token.clone())]);

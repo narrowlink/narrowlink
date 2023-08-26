@@ -40,6 +40,7 @@ dirs = { version = "5.0.1", default-features = false }
 log = { version = "0.4.20" }
 env_logger = { version = "0.10.0" }
 clap_lex = { version = "0.5.0", default-features = false }
+daemonize = { version = "0.5.0", default-features = false }
 
 narrowlink-types = { version = "0.1.4" }
 narrowlink-network = { version = "0.1.4" }
