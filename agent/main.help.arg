@@ -6,5 +6,6 @@ Usage:
 Options:
   -c, --config=    Specify a config file
   -h, --help       Print help information
+  -d, --daemon     Run as a daemon (Unix/Linux only)
       --version    Print version information
 

@@ -6,6 +6,7 @@ static HELP: &str = include_str!("../main.help.arg");
 
 pub struct Args {
     pub config_path: Option<String>,
+    pub daemon: bool,
 }
 
 impl Args {
@@ -16,6 +17,7 @@ impl Args {
         let mut cursor = raw.cursor();
         raw.next(&mut cursor);
         let mut config_path = None;
+        let mut daemon = false;
         loop {
             let Some(arg) = raw.next(&mut cursor) else {
                 break;
@@ -30,6 +32,10 @@ impl Args {
                                 .ok_or(AgentError::Encoding)?
                                 .to_owned(),
                         );
+                        continue;
+                    }
+                    Ok("daemon") => {
+                        daemon = true;
                         continue;
                     }
                     Ok("help") => {
@@ -58,6 +64,9 @@ impl Args {
                                 return Err(AgentError::RequiredValue("config"));
                             };
                         }
+                        Ok('d') => {
+                            daemon = true;
+                        }
                         Ok('h') => {
                             print!("{}", HELP);
                             process::exit(0x0);
@@ -71,6 +80,9 @@ impl Args {
             break;
         }
 
-        Ok(Self { config_path })
+        Ok(Self {
+            config_path,
+            daemon,
+        })
     }
 }
