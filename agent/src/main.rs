@@ -47,7 +47,6 @@ fn main() -> Result<(), AgentError> {
     let daemonize = Daemonize::new()
         .pid_file("/tmp/narrowlink-agent.pid")
         .working_directory("/tmp/")
-        .umask(0o777)
         .stdout(stdout)
         .stderr(stderr);
     if let Err(e) = daemonize.start() {
