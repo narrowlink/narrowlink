@@ -1,144 +1,212 @@
 name: Nightly Build
-
-on:
+'on':
   schedule:
-    - cron: "0 0 * * *"
-  workflow_dispatch:
-
+    - cron: 0 0 * * *
+  workflow_dispatch: null
 env:
   CARGO_TERM_COLOR: always
-
 jobs:
   check_date:
     runs-on: ubuntu-latest
     name: Check latest commit
     outputs:
-      should_run: ${{ steps.should_run.outputs.should_run }}
+      should_run: '${{ steps.should_run.outputs.should_run }}'
     steps:
       - uses: actions/checkout@v2
       - name: print latest_commit
-        run: echo ${{ github.sha }}
-
+        run: 'echo ${{ github.sha }}'
       - id: should_run
         continue-on-error: true
         name: check latest commit is less than a day
-        if: ${{ github.event_name == 'schedule' }}
-        run: if [[ ! $(git rev-list  --after="24 hours"  ${{ github.sha }}) ]]; then echo "should_run=false" >> $GITHUB_OUTPUT;fi
+        if: '${{ github.event_name == ''schedule'' }}'
+        run: >-
+          if [[ ! $(git rev-list  --after="24 hours"  ${{ github.sha }}) ]];
+          then echo "should_run=false" >> $GITHUB_OUTPUT;fi
   build-windows:
-    needs: ["check_date"]
+    needs:
+      - check_date
     strategy:
       matrix:
-        platform: [x86_64-pc-windows-msvc, i686-pc-windows-msvc] # aarch64-pc-windows-msvc
-        package: [narrowlink, narrowlink-gateway, narrowlink-agent, narrowlink-token-generator]
-
-    if: ${{ needs.check_date.outputs.should_run != 'false' }}
+        platform:
+          - x86_64-pc-windows-msvc
+          - i686-pc-windows-msvc
+        package:
+          - pkg: narrowlink-client
+            bin: narrowlink
+          - pkg: narrowlink-gateway
+            bin: narrowlink-gateway
+          - pkg: narrowlink-agent
+            bin: narrowlink-agent
+          - pkg: narrowlink-token-generator
+            bin: narrowlink-token-generator
+    if: '${{ needs.check_date.outputs.should_run != ''false'' }}'
     runs-on: windows-2019
     env:
       RUSTFLAGS: '-C target-feature=+crt-static'
-    permissions: 
+    permissions:
       deployments: write
       contents: read
     steps:
-    - uses: actions/checkout@v3
-    - name: install target
-      run: rustup target add ${{ matrix.platform }}
-    - name: Build
-      run: cargo build --config net.git-fetch-with-cli=true --release --verbose --target ${{ matrix.platform }} --bin ${{ matrix.package }}
-    - name: Rename
-      run: mv target\${{ matrix.platform }}\release\${{ matrix.package }}.exe target\${{ matrix.platform }}\release\${{ matrix.package }}-${{ matrix.platform }}.exe
-    - uses: actions/upload-artifact@v3
-      with:
-#         name: ${{ matrix.platform }}
-        name: binaries
-        path: target/${{ matrix.platform }}/release/${{ matrix.package }}-${{ matrix.platform }}.exe
+      - uses: actions/checkout@v3
+      - name: install target
+        run: 'rustup target add ${{ matrix.platform }}'
+      - name: Build
+        run: >-
+          cargo build --config net.git-fetch-with-cli=true --release --verbose
+          --target ${{ matrix.platform }} --package ${{ matrix.package.pkg }}
+      - name: Rename
+        run: >-
+          mv target\${{ matrix.platform }}\release\${{ matrix.package.bin }}.exe
+          target\${{ matrix.platform }}\release\${{ matrix.package.bin }}-${{
+          matrix.platform }}.exe
+      - uses: actions/upload-artifact@v3
+        with:
+          name: binaries
+          path: >-
+            target/${{ matrix.platform }}/release/${{ matrix.package.bin }}-${{
+            matrix.platform }}.exe
   build-macos:
-    needs: ["check_date"]
+    needs:
+      - check_date
     strategy:
       matrix:
-        platform: [x86_64-apple-darwin, aarch64-apple-darwin]
-        package: [narrowlink, narrowlink-gateway, narrowlink-agent, narrowlink-token-generator]
-    if: ${{ needs.check_date.outputs.should_run != 'false' }}
+        platform:
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
+        package:
+          - pkg: narrowlink-client
+            bin: narrowlink
+          - pkg: narrowlink-gateway
+            bin: narrowlink-gateway
+          - pkg: narrowlink-agent
+            bin: narrowlink-agent
+          - pkg: narrowlink-token-generator
+            bin: narrowlink-token-generator
+    if: '${{ needs.check_date.outputs.should_run != ''false'' }}'
     runs-on: macos-latest
-    permissions: 
+    permissions:
       deployments: write
       contents: read
     steps:
-    - uses: actions/checkout@v3
-    - name: install target
-      run: rustup target add ${{ matrix.platform }}
-    - name: Build
-      run: cargo build --config net.git-fetch-with-cli=true --release --verbose --target ${{ matrix.platform }} --bin ${{ matrix.package }}
-    - name: Rename
-      run: mv target/${{ matrix.platform }}/release/${{ matrix.package }} target/${{ matrix.platform }}/release/${{ matrix.package }}-${{ matrix.platform }}
-    - uses: actions/upload-artifact@v3
-      with:
-#         name: ${{ matrix.platform }}
-        name: binaries
-        path: target/${{ matrix.platform }}/release/${{ matrix.package }}-${{ matrix.platform }}
+      - uses: actions/checkout@v3
+      - name: install target
+        run: 'rustup target add ${{ matrix.platform }}'
+      - name: Build
+        run: >-
+          cargo build --config net.git-fetch-with-cli=true --release --verbose
+          --target ${{ matrix.platform }} --package ${{ matrix.package.pkg }}
+      - name: Rename
+        run: >-
+          mv target/${{ matrix.platform }}/release/${{ matrix.package.bin }}
+          target/${{ matrix.platform }}/release/${{ matrix.package.bin }}-${{
+          matrix.platform }}
+      - uses: actions/upload-artifact@v3
+        with:
+          name: binaries
+          path: >-
+            target/${{ matrix.platform }}/release/${{ matrix.package.bin }}-${{
+            matrix.platform }}
   build-linux:
-    needs: ["check_date"]
+    needs:
+      - check_date
     strategy:
       matrix:
-        platform: [aarch64-unknown-linux-musl, i686-unknown-linux-musl,x86_64-unknown-linux-musl, arm-unknown-linux-musleabi]
-        package: [narrowlink, narrowlink-gateway, narrowlink-agent, narrowlink-token-generator]
-    if: ${{ needs.check_date.outputs.should_run != 'false' }}
+        platform:
+          - aarch64-unknown-linux-musl
+          - i686-unknown-linux-musl
+          - x86_64-unknown-linux-musl
+          - arm-unknown-linux-musleabi
+        package:
+          - pkg: narrowlink-client
+            bin: narrowlink
+          - pkg: narrowlink-gateway
+            bin: narrowlink-gateway
+          - pkg: narrowlink-agent
+            bin: narrowlink-agent
+          - pkg: narrowlink-token-generator
+            bin: narrowlink-token-generator
+    if: '${{ needs.check_date.outputs.should_run != ''false'' }}'
     runs-on: ubuntu-latest
-    permissions: 
+    permissions:
       deployments: write
       contents: read
     steps:
-    - uses: actions/checkout@v3
-    - name: Cross installation
-      run: cargo install cross --git https://github.com/cross-rs/cross
-    - name: Build ${{ matrix.platform }}
-      run: cross build --config net.git-fetch-with-cli=true --release --verbose --target ${{ matrix.platform }} --bin ${{ matrix.package }}
-    - name: Rename
-      run: mv target/${{ matrix.platform }}/release/${{ matrix.package }} target/${{ matrix.platform }}/release/${{ matrix.package }}-${{ matrix.platform }}
-    - uses: actions/upload-artifact@v3
-      with:
-#         name: ${{ matrix.platform }}
-        name: binaries
-        path: target/${{ matrix.platform }}/release/${{ matrix.package }}-${{ matrix.platform }}
+      - uses: actions/checkout@v3
+      - name: Cross installation
+        run: 'cargo install cross --git https://github.com/cross-rs/cross'
+      - name: 'Build ${{ matrix.platform }}'
+        run: >-
+          cross build --config net.git-fetch-with-cli=true --release --verbose
+          --target ${{ matrix.platform }} --package ${{ matrix.package.pkg }}
+      - name: Rename
+        run: >-
+          mv target/${{ matrix.platform }}/release/${{ matrix.package.bin }}
+          target/${{ matrix.platform }}/release/${{ matrix.package.bin }}-${{
+          matrix.platform }}
+      - uses: actions/upload-artifact@v3
+        with:
+          name: binaries
+          path: >-
+            target/${{ matrix.platform }}/release/${{ matrix.package.bin }}-${{
+            matrix.platform }}
   build-misc:
-    needs: ["check_date"]
+    needs:
+      - check_date
     strategy:
       matrix:
-        platform: [x86_64-unknown-freebsd]
-        package: [narrowlink, narrowlink-gateway, narrowlink-agent, narrowlink-token-generator]
-    if: ${{ needs.check_date.outputs.should_run != 'false' }}
+        platform:
+          - x86_64-unknown-freebsd
+        package:
+          - pkg: narrowlink-client
+            bin: narrowlink
+          - pkg: narrowlink-gateway
+            bin: narrowlink-gateway
+          - pkg: narrowlink-agent
+            bin: narrowlink-agent
+          - pkg: narrowlink-token-generator
+            bin: narrowlink-token-generator
+    if: '${{ needs.check_date.outputs.should_run != ''false'' }}'
     runs-on: ubuntu-latest
-    permissions: 
+    permissions:
       deployments: write
       contents: read
     steps:
-    - uses: actions/checkout@v3
-    - name: Cross installation
-      run: cargo install cross --git https://github.com/cross-rs/cross
-    - name: Build ${{ matrix.platform }}
-      run: cross build --config net.git-fetch-with-cli=true --release --verbose --target ${{ matrix.platform }} --bin ${{ matrix.package }}
-    - name: Rename
-      run: mv target/${{ matrix.platform }}/release/${{ matrix.package }} target/${{ matrix.platform }}/release/${{ matrix.package }}-${{ matrix.platform }}
-    - uses: actions/upload-artifact@v3
-      with:
-#         name: ${{ matrix.platform }}
-        name: binaries
-        path: target/${{ matrix.platform }}/release/${{ matrix.package }}-${{ matrix.platform }}
-                
+      - uses: actions/checkout@v3
+      - name: Cross installation
+        run: 'cargo install cross --git https://github.com/cross-rs/cross'
+      - name: 'Build ${{ matrix.platform }}'
+        run: >-
+          cross build --config net.git-fetch-with-cli=true --release --verbose
+          --target ${{ matrix.platform }} --package ${{ matrix.package.pkg }}
+      - name: Rename
+        run: >-
+          mv target/${{ matrix.platform }}/release/${{ matrix.package.bin }}
+          target/${{ matrix.platform }}/release/${{ matrix.package.bin }}-${{
+          matrix.platform }}
+      - uses: actions/upload-artifact@v3
+        with:
+          name: binaries
+          path: >-
+            target/${{ matrix.platform }}/release/${{ matrix.package.bin }}-${{
+            matrix.platform }}
   publish:
-    needs: ["build-windows", "build-macos", "build-linux"]
-    if: ${{ needs.check_date.outputs.should_run != 'false' }}
+    needs:
+      - build-windows
+      - build-macos
+      - build-linux
+    if: '${{ needs.check_date.outputs.should_run != ''false'' }}'
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - uses: actions/download-artifact@v3
-      with:
-        name: binaries
-    - uses: "marvinpinto/action-automatic-releases@latest"
-      with:
-        repo_token: "${{ secrets.GITHUB_TOKEN }}"
-        automatic_release_tag: "Nightly"
-        draft: false
-        prerelease: true
-        files: narrowlink-*
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v3
+      - uses: actions/download-artifact@v3
+        with:
+          name: binaries
+      - uses: marvinpinto/action-automatic-releases@latest
+        with:
+          repo_token: '${{ secrets.GITHUB_TOKEN }}'
+          automatic_release_tag: Nightly
+          draft: false
+          prerelease: true
+          files: narrowlink-*
+        env:
+          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
