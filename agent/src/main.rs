@@ -1,8 +1,7 @@
-use std::{collections::HashMap, env, fs, net::SocketAddr, str::FromStr, time::Duration};
+use std::{collections::HashMap, env, net::SocketAddr, str::FromStr, time::Duration};
 mod args;
 use args::Args;
 use config::KeyPolicy;
-use daemonize::Daemonize;
 use error::AgentError;
 use futures_util::{SinkExt, StreamExt};
 use hmac::Mac;
@@ -39,22 +38,23 @@ mod error;
 fn main() -> Result<(), AgentError> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let args = Args::parse(env::args())?;
-    if cfg!(windows) || !args.daemon {
-        return start(args);
+
+    #[cfg(unix)]
+    if args.daemon {
+        use daemonize::Daemonize;
+        let stdout = std::fs::File::create("/tmp/narrowlink-agent.out")?;
+        let stderr = std::fs::File::create("/tmp/narrowlink-agent.err")?;
+        let daemonize = Daemonize::new()
+            .pid_file("/tmp/narrowlink-agent.pid")
+            .working_directory("/tmp/")
+            .stdout(stdout)
+            .stderr(stderr);
+        if let Err(e) = daemonize.start() {
+            error!("Unable to daemonize: {}", e.to_string());
+            return Ok(());
+        }
     }
-    let stdout = fs::File::create("/tmp/narrowlink-agent.out")?;
-    let stderr = fs::File::create("/tmp/narrowlink-agent.err")?;
-    let daemonize = Daemonize::new()
-        .pid_file("/tmp/narrowlink-agent.pid")
-        .working_directory("/tmp/")
-        .stdout(stdout)
-        .stderr(stderr);
-    if let Err(e) = daemonize.start() {
-        error!("Unable to daemonize: {}", e.to_string());
-    } else {
-        start(args)?;
-    }
-    Ok(())
+    start(args)
 }
 
 #[tokio::main]
