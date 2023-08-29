@@ -24,7 +24,10 @@ wildmatch = { version = "2.1.1" }
 validator = { version = "0.16.1", default-features = false, features = [
   "derive",
 ] }
-regex = { version = "1.9.4", default-features = false }
+# regex = { version = "1.9.4", default-features = false }
+regex-lite = { version = "0.1.0", default-features = false, features = [
+  "std","string"
+] }
 hmac = { version = "0.12.1", default-features = false }
 sha3 = { version = "0.10.8", default-features = false }
 chrono = { version = "0.4.27", default-features = false, features = ["clock"] }

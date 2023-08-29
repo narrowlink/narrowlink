@@ -8,8 +8,11 @@ use futures_util::{stream::FuturesUnordered, StreamExt};
 use state::State;
 use tracing::{debug, error, info, span, trace, Instrument, Level};
 use tracing_subscriber::{
-    filter::LevelFilter, fmt::writer::MakeWriterExt, prelude::__tracing_subscriber_SubscriberExt,
-    util::SubscriberInitExt, EnvFilter, Layer,
+    filter::{LevelFilter, Targets},
+    fmt::writer::MakeWriterExt,
+    prelude::__tracing_subscriber_SubscriberExt,
+    util::SubscriberInitExt,
+    Layer,
 };
 use validator::Validate;
 
@@ -27,23 +30,22 @@ async fn main() -> Result<(), GatewayError> {
     let (stdout, _stdout_guard) = tracing_appender::non_blocking(io::stdout());
     let (stderr, _stderr_guard) = tracing_appender::non_blocking(io::stderr());
 
-    let cmd = EnvFilter::builder()
-        .with_default_directive(LevelFilter::INFO.into())
-        .with_env_var("RUST_LOG")
-        .from_env()
-        .map(|filter| {
-            tracing_subscriber::fmt::layer()
-                .with_ansi(io::stdout().is_terminal() && io::stderr().is_terminal())
-                .compact()
-                // .with_target(false)
-                .with_writer(
-                    stdout
-                        .with_min_level(Level::WARN)
-                        .and(stderr.with_max_level(Level::ERROR)),
-                )
-                .with_filter(filter)
-        })
-        .map_err(|_| GatewayError::Invalid("Invalid Log Filter Format"))?;
+    let cmd = tracing_subscriber::fmt::layer()
+        .with_ansi(io::stdout().is_terminal() && io::stderr().is_terminal())
+        .compact()
+        // .with_target(false)
+        .with_writer(
+            stdout
+                .with_min_level(Level::WARN)
+                .and(stderr.with_max_level(Level::ERROR)),
+        )
+        .with_filter(
+            env::var("RUST_LOG")
+                .ok()
+                .and_then(|e| e.parse::<Targets>().ok())
+                .unwrap_or(Targets::new().with_default(LevelFilter::INFO)),
+        );
+
     // let debug_file =
     //     tracing_appender::rolling::minutely("log", "debug").with_min_level(Level::DEBUG);
     // let log_file =

@@ -1,6 +1,6 @@
 use std::net::IpAddr;
 
-use regex::Regex;
+use regex_lite::Regex;
 use serde::{Deserialize, Serialize};
 use validator::{Validate, ValidationError, ValidationErrors};
 use wildmatch::WildMatch;
