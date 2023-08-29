@@ -188,7 +188,7 @@ impl std::fmt::Debug for AgentInfo {
         }
         if let Some(since) = &chrono::NaiveDateTime::from_timestamp_opt(self.since as i64, 0) {
             let datetime: chrono::DateTime<chrono::Local> =
-                chrono::DateTime::from_utc(*since, *chrono::Local::now().offset());
+                chrono::DateTime::from_naive_utc_and_offset(*since, *chrono::Local::now().offset());
             debug.field("since", &datetime);
         }
         debug.field("ping", &self.ping);

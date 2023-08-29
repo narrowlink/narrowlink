@@ -133,64 +133,66 @@ async fn main() -> Result<(), ClientError> {
                 list_of_agents_refresh_required.store(false, Ordering::Relaxed);
             }
 
-            let (mut socket, agent_name) = if let ArgCommands::List(list_args) =
-                arg_commands.as_ref()
-            {
-                if agents.is_empty() {
-                    println!("Agent not found");
-                }
-                for agent in agents.iter() {
-                    println!("{}:", agent.name);
-                    println!("\tAddress: {}", agent.socket_addr);
+            let (mut socket, agent_name) =
+                if let ArgCommands::List(list_args) = arg_commands.as_ref() {
+                    if agents.is_empty() {
+                        println!("Agent not found");
+                    }
+                    for agent in agents.iter() {
+                        println!("{}:", agent.name);
+                        println!("\tAddress: {}", agent.socket_addr);
 
-                    if let Some(forward_addr) = &agent.forward_addr {
-                        println!("\tForward Address: {}", forward_addr);
-                    }
-                    if let Some(system_info) = &agent.system_info {
-                        println!("\tSystem Info:");
-                        println!("\t\tLoad Avarage: {}", system_info.loadavg);
-                        println!("\t\tCPU Cores: {}", system_info.cpus);
-                    }
-                    if list_args.verbose {
-                        if !agent.publish_info.is_empty() {
-                            println!("\tPublish Info:");
-                            for agent_publish_info in &agent.publish_info {
-                                println!("\t\t{}", agent_publish_info.to_string());
+                        if let Some(forward_addr) = &agent.forward_addr {
+                            println!("\tForward Address: {}", forward_addr);
+                        }
+                        if let Some(system_info) = &agent.system_info {
+                            println!("\tSystem Info:");
+                            println!("\t\tLoad Avarage: {}", system_info.loadavg);
+                            println!("\t\tCPU Cores: {}", system_info.cpus);
+                        }
+                        if list_args.verbose {
+                            if !agent.publish_info.is_empty() {
+                                println!("\tPublish Info:");
+                                for agent_publish_info in &agent.publish_info {
+                                    println!("\t\t{}", agent_publish_info.to_string());
+                                }
+                            }
+                            if let Some(since) =
+                                &chrono::NaiveDateTime::from_timestamp_opt(agent.since as i64, 0)
+                            {
+                                let datetime: chrono::DateTime<chrono::Local> =
+                                    chrono::DateTime::from_naive_utc_and_offset(
+                                        *since,
+                                        *chrono::Local::now().offset(),
+                                    );
+                                println!("\tConnection Time: {}", datetime);
                             }
                         }
-                        if let Some(since) =
-                            &chrono::NaiveDateTime::from_timestamp_opt(agent.since as i64, 0)
-                        {
-                            let datetime: chrono::DateTime<chrono::Local> =
-                                chrono::DateTime::from_utc(*since, *chrono::Local::now().offset());
-                            println!("\tConnection Time: {}", datetime);
-                        }
+
+                        println!("\tConnection Ping: {}ms\r\n", agent.ping);
                     }
-
-                    println!("\tConnection Ping: {}ms\r\n", agent.ping);
-                }
-                req.shutdown().await;
-                break;
-            } else {
-                let agent_name: String = arg_commands
-                    .agent_name()
-                    .clone()
-                    .filter(|name| agents.iter().any(|agent| &agent.name == name))
-                    .ok_or(ClientError::AgentNotFound)?;
-
-                if let Some(ref listener) = socket_listener {
-                    let socket: Box<dyn AsyncSocket> = match listener {
-                        Either::Left(ref udp_listen) => Box::new(udp_listen.accept().await?.0),
-                        Either::Right(ref tcp_listen) => Box::new(tcp_listen.accept().await?.0),
-                    };
-                    (socket, agent_name)
+                    req.shutdown().await;
+                    break;
                 } else {
-                    (
-                        Box::new(InputStream::new()) as Box<dyn AsyncSocket>,
-                        agent_name,
-                    )
-                }
-            };
+                    let agent_name: String = arg_commands
+                        .agent_name()
+                        .clone()
+                        .filter(|name| agents.iter().any(|agent| &agent.name == name))
+                        .ok_or(ClientError::AgentNotFound)?;
+
+                    if let Some(ref listener) = socket_listener {
+                        let socket: Box<dyn AsyncSocket> = match listener {
+                            Either::Left(ref udp_listen) => Box::new(udp_listen.accept().await?.0),
+                            Either::Right(ref tcp_listen) => Box::new(tcp_listen.accept().await?.0),
+                        };
+                        (socket, agent_name)
+                    } else {
+                        (
+                            Box::new(InputStream::new()) as Box<dyn AsyncSocket>,
+                            agent_name,
+                        )
+                    }
+                };
             // let agent_name: String = args
             //     .agent_name()
             //     .clone()

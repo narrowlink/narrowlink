@@ -12,8 +12,8 @@ authors = ['Narrowlink <opensource@narrowlink.com>']
 include = ["Cargo.toml", "LICENSE", "src/**/*"]
 
 [dependencies]
-bytes = "1.4.0"
-serde = { version = "1.0.186", features = ["derive"], default-features = false }
+bytes = { version = "1.4.0", default-features = false }
+serde = { version = "1.0.188", features = ["derive"], default-features = false }
 serde_json = { version = "1.0.105", default-features = false, features = [
     "alloc",
 ] }
@@ -33,16 +33,20 @@ hyper = { version = "0.14.27", features = [
     "tcp",
 ], default-features = false }
 tokio-tungstenite = { version = "0.20.0", default-features = false }
-tungstenite = "0.20.0"
-chacha20poly1305 = "0.10.1"
-log = { version = "0.4.20" }
-env_logger = { version = "0.10.0" }
+tungstenite = { version = "0.20.0", features = [
+    "handshake",
+], default-features = false }
+chacha20poly1305 = { version = "0.10.1", features = [
+    "alloc",
+], default-features = false }
+
+log = { version = "0.4.20", default-features = false }
 narrowlink-types = { version = "0.1.4" }
 
 [features]
 default = ["rustls"]
 rustls = ["dep:tokio-rustls", "dep:webpki-roots"]
 native-tls = ["dep:tokio-native-tls"]
-native-tls-vendored = ["dep:tokio-native-tls","tokio-native-tls/vendored"]
+native-tls-vendored = ["dep:tokio-native-tls", "tokio-native-tls/vendored"]
 agent = []
 client = []

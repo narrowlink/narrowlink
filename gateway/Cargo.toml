@@ -38,7 +38,7 @@ tracing-appender = { version = "0.2.2" }
 dirs = { version = "5.0.1" }
 serde_json = { version = "1.0.105" }
 serde_yaml = "0.9.25"
-serde = { version = "1.0.186", features = ["derive"] }
+serde = { version = "1.0.188", features = ["derive"] }
 async-trait = { version = "0.1.73" }
 futures-util = { version = "0.3.28" }
 askama = { version = "0.12.0" }
@@ -47,11 +47,11 @@ uuid = { version = "1.4.1", features = ["v4", "serde"] }
 either = { version = "1.9.0" }
 instant-acme = { version = "0.4.0" }
 tokio-rustls = { version = "0.24.1" }
-rustls = { version = "0.21.6" }
+rustls = { version = "0.21.7" }
 rustls-pemfile = { version = "1.0.3" }
 validator = { version = "0.16.1", features = ["derive"] }
 rcgen = { version = "0.11.1", features = ["pem", "x509-parser"] }
 x509-parser = { version = "0.15.1" }
-clap_lex = { version = "0.5.0" }
+clap_lex = { version = "0.5.1" }
 narrowlink-types = { version = "0.1.4" }
 narrowlink-network = { version = "0.1.4" }
