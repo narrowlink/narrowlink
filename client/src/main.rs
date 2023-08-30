@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     env,
+    io::{self, IsTerminal},
     net::{IpAddr, SocketAddr},
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -16,7 +17,6 @@ use either::Either;
 use error::ClientError;
 use futures_util::stream::StreamExt;
 use hmac::Mac;
-use log::{debug, error, info, trace, warn};
 use narrowlink_network::{
     error::NetworkError,
     event::{NarrowEvent, NarrowEventRequest},
@@ -32,13 +32,51 @@ use narrowlink_types::{
 use proxy_stream::ProxyStream;
 use sha3::{Digest, Sha3_256};
 use tokio::{net::TcpListener, sync::Mutex, time};
+use tracing::{error, trace, warn, Level, info, debug};
+use tracing_subscriber::{
+    filter::{LevelFilter, Targets},
+    fmt::writer::MakeWriterExt,
+    prelude::__tracing_subscriber_SubscriberExt,
+    util::SubscriberInitExt,
+    Layer,
+};
 use udp_stream::UdpListener;
-
-use env_logger::Env;
 
 #[tokio::main]
 async fn main() -> Result<(), ClientError> {
-    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
+    let (stdout, _stdout_guard) = tracing_appender::non_blocking(io::stdout());
+    let (stderr, _stderr_guard) = tracing_appender::non_blocking(io::stderr());
+
+    let cmd = tracing_subscriber::fmt::layer()
+        .with_ansi(io::stdout().is_terminal() && io::stderr().is_terminal())
+        .compact()
+        // .with_target(false)
+        .with_writer(
+            stdout
+                .with_min_level(Level::WARN)
+                .and(stderr.with_max_level(Level::ERROR)),
+        )
+        .with_filter(
+            env::var("RUST_LOG")
+                .ok()
+                .and_then(|e| e.parse::<Targets>().ok())
+                .unwrap_or(Targets::new().with_default(LevelFilter::INFO)),
+        );
+
+    // let debug_file =
+    //     tracing_appender::rolling::minutely("log", "debug").with_min_level(Level::DEBUG);
+    // let log_file =
+    //     tracing_appender::rolling::daily("log", "info").with_max_level(Level::INFO);
+
+    // let file = tracing_subscriber::fmt::layer()
+    //     .with_writer(log_file)
+    //     .json();
+
+    tracing_subscriber::registry()
+        .with(cmd)
+        // .with(file)
+        .init();
+
     let args = Args::parse(env::args())?;
     let conf = Arc::new(config::Config::load(args.config_path)?);
 

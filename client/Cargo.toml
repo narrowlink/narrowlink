@@ -43,11 +43,15 @@ serde_yaml = { version = "0.9.25", default-features = false }
 udp-stream = { version = "0.0.9", default-features = false }
 regex = { version = "1.9.4", features = ["std"], default-features = false }
 either = { version = "1.9.0", default-features = false }
-log = { version = "0.4.20", default-features = false }
-env_logger = { version = "0.10.0", default-features = false, features = [
-    "auto-color",
-    "humantime",
+tracing = { version = "0.1.37", default-features = false, features = [
+    "attributes",
 ] }
+tracing-subscriber = { version = "0.3.17", default-features = false, features = [
+    "fmt",
+    "ansi",
+    "json",
+] }
+tracing-appender = { version = "0.2.2" }
 proxy-stream = { version = "0.0.2", default-features = false }
 sha3 = { version = "0.10.8", default-features = false }
 hmac = { version = "0.12.1", default-features = false }
