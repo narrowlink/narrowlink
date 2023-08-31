@@ -319,9 +319,13 @@ impl State {
                                 let connection_id = Uuid::new_v4();
                                 client_data_span.record("connection_id", connection_id.to_string());
 
-                                let client_policy = users.get_client_policy(client_token.uid,session);
+                                let Some(client_policy) = users.get_client_policy(client_token.uid,session) else
+                                {
+                                    let _ = response.send(Err(ResponseErrors::NotAcceptable(Some("Event connection is lost"))));
+                                    continue
+                                };
 
-                                if client_policy.as_ref().filter(|p|p.permit(Some(&agent_name), &connect)).is_none(){
+                                if client_policy.permit(Some(&agent_name), &connect){
                                     debug!("Client {}:{} connect to {}:{:?} forbidden",client_token.uid,session,agent_name,connect);
                                     debug!("{:?}",client_policy);
                                     let _ = response.send(Err(ResponseErrors::Forbidden));
@@ -345,7 +349,7 @@ impl State {
                                 };
 
 
-                                let connection = connection::Connection::new(connection_id, Some(session), Some(connection::ClientConnection::Client(response,socket_receiver)), None,client_policy);
+                                let connection = connection::Connection::new(connection_id, Some(session), Some(connection::ClientConnection::Client(response,socket_receiver)), None,Some(client_policy));
 
                                 debug!("Connection to {}:{} with agent {} added to pool",connect.host,connect.port, agent_name);
                                 let _ = agent.send(AgentEventInBound::Connect(connection_id, connect, None)).await;
