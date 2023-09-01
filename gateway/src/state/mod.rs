@@ -325,7 +325,7 @@ impl State {
                                     continue
                                 };
 
-                                if client_policy.permit(Some(&agent_name), &connect){
+                                if !client_policy.permit(Some(&agent_name), &connect){
                                     debug!("Client {}:{} connect to {}:{:?} forbidden",client_token.uid,session,agent_name,connect);
                                     debug!("{:?}",client_policy);
                                     let _ = response.send(Err(ResponseErrors::Forbidden));
