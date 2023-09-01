@@ -187,7 +187,7 @@ async fn main() -> Result<(), ClientError> {
                 debug!("Agents: {:?}", agents);
                 list_of_agents_refresh_required.store(false, Ordering::Relaxed);
             }
-            
+
             let (mut socket, agent_name) =
                 if let ArgCommands::List(list_args) = arg_commands.as_ref() {
                     trace!("List of agents");

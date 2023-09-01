@@ -1,7 +1,6 @@
 use bytes::{BufMut, BytesMut};
 use futures_util::{Future, FutureExt, SinkExt, StreamExt};
 use hyper::{client::conn, http::HeaderValue, Body, HeaderMap, Request, StatusCode};
-use tracing::{debug, trace, warn};
 use narrowlink_types::ServiceType;
 use std::{
     collections::HashMap,
@@ -14,6 +13,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tokio_tungstenite::WebSocketStream;
+use tracing::{debug, trace, warn};
 use tungstenite::Message;
 
 use crate::{
