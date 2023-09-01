@@ -5,11 +5,11 @@ use std::{
     task::{Context, Poll},
 };
 
-use log::debug;
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
     net::TcpStream,
 };
+use tracing::debug;
 
 use crate::{error::NetworkError, AsyncSocket};
 

@@ -37,11 +37,16 @@ udp-stream = { version = "0.0.9", default-features = false }
 sha3 = { version = "0.10.8", default-features = false }
 hmac = { version = "0.12.1", default-features = false }
 dirs = { version = "5.0.1", default-features = false }
-log = { version = "0.4.20" }
-env_logger = { version = "0.10.0", default-features = false, features = [
-  "auto-color",
-  "humantime",
+tracing = { version = "0.1.37", default-features = false, features = [
+    "attributes",
 ] }
+tracing-subscriber = { version = "0.3.17", default-features = false, features = [
+    "fmt",
+    "ansi",
+    "json",
+] }
+tracing-appender = { version = "0.2.2" }
+
 clap_lex = { version = "0.5.1", default-features = false }
 
 narrowlink-types = { version = "0.1.4" }

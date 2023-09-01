@@ -1,11 +1,17 @@
-use std::{collections::HashMap, env, net::SocketAddr, str::FromStr, time::Duration};
+use std::{
+    collections::HashMap,
+    env,
+    io::{self, IsTerminal},
+    net::SocketAddr,
+    str::FromStr,
+    time::Duration,
+};
 mod args;
 use args::Args;
 use config::KeyPolicy;
 use error::AgentError;
 use futures_util::{SinkExt, StreamExt};
 use hmac::Mac;
-use log::{error, info};
 use narrowlink_network::{
     error::NetworkError,
     event::NarrowEvent,
@@ -29,6 +35,15 @@ use tokio::{
     net::{lookup_host, TcpStream},
     time,
 };
+use tracing::Level;
+use tracing::{debug, error, info, trace};
+use tracing_subscriber::{
+    filter::{LevelFilter, Targets},
+    fmt::writer::MakeWriterExt,
+    prelude::__tracing_subscriber_SubscriberExt,
+    util::SubscriberInitExt,
+    Layer,
+};
 use udp_stream::UdpStream;
 use uuid::Uuid;
 
@@ -36,7 +51,39 @@ mod config;
 mod error;
 
 fn main() -> Result<(), AgentError> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    let (stdout, _stdout_guard) = tracing_appender::non_blocking(io::stdout());
+    let (stderr, _stderr_guard) = tracing_appender::non_blocking(io::stderr());
+
+    let cmd = tracing_subscriber::fmt::layer()
+        .with_ansi(io::stdout().is_terminal() && io::stderr().is_terminal())
+        .compact()
+        // .with_target(false)
+        .with_writer(
+            stdout
+                .with_min_level(Level::WARN)
+                .and(stderr.with_max_level(Level::ERROR)),
+        )
+        .with_filter(
+            env::var("RUST_LOG")
+                .ok()
+                .and_then(|e| e.parse::<Targets>().ok())
+                .unwrap_or(Targets::new().with_default(LevelFilter::INFO)),
+        );
+
+    // let debug_file =
+    //     tracing_appender::rolling::minutely("log", "debug").with_min_level(Level::DEBUG);
+    // let log_file =
+    //     tracing_appender::rolling::daily("log", "info").with_max_level(Level::INFO);
+
+    // let file = tracing_subscriber::fmt::layer()
+    //     .with_writer(log_file)
+    //     .json();
+
+    tracing_subscriber::registry()
+        .with(cmd)
+        // .with(file)
+        .init();
+
     let args = Args::parse(env::args())?;
 
     #[cfg(unix)]
@@ -97,6 +144,7 @@ async fn start(args: Args) -> Result<(), AgentError> {
                                         }),
                                     ))
                                     .await;
+                                trace!("SysInfo Update");
                                 time::sleep(Duration::from_secs(40)).await;
                             }
                         }
@@ -138,9 +186,10 @@ async fn start(args: Args) -> Result<(), AgentError> {
         let gateway = conf.gateway.clone();
         let key = conf.key.clone().map(|k| (k, conf.key_policy));
         let service_type = service_type.clone();
-
+        trace!("Waiting for event");
         match event.next().await {
             Some(Ok(AgentEventInBound::Connect(connection, connect, ip_policies))) => {
+                debug!("Connection to {:?} received", connect);
                 tokio::spawn(async move {
                     if let Err(e) = data_connect(
                         &gateway,
@@ -212,10 +261,12 @@ async fn data_connect(
         },
     };
     if let Some(p) = ip_policies {
+        trace!("Checking IP policies");
         let mut connect = req.clone();
         connect.host = address.ip().to_string();
         connect.port = req.port;
         if !p.permit(None, &connect) {
+            trace!("IP policies denied");
             return Err(AgentError::AccessDenied);
         }
     }
@@ -223,12 +274,14 @@ async fn data_connect(
     let protocol = req.protocol.clone();
     let nonce: Option<[u8; 24]> = req.get_cryptography_nonce();
     if nonce.is_some() && key.is_none() {
+        trace!("Key not found");
         return Err(AgentError::KeyNotFound);
     } else if nonce.is_none()
         && key
             .filter(|(_, policy)| &KeyPolicy::Strict == policy)
             .is_some()
     {
+        trace!("Encryption is enforced, but request is not encrypted");
         return Err(AgentError::AccessDenied);
     }
 
@@ -242,6 +295,7 @@ async fn data_connect(
                 .collect::<Vec<u8>>(),
         );
         let Ok(mut mac) = generic::HmacSha256::new_from_slice(&k) else {
+            trace!("Unable to create HMAC");
             return Err(AgentError::AccessDenied);
         };
         mac.update(
@@ -257,7 +311,9 @@ async fn data_connect(
             ]
             .concat(),
         );
+
         if (req.get_sign().and_then(|s| mac.verify_slice(&s).ok())).is_none() {
+            trace!("Request signature verification failed");
             return Err(AgentError::AccessDenied);
         };
 
@@ -268,17 +324,20 @@ async fn data_connect(
 
     let (socket, peer_address): (Box<dyn AsyncSocket>, Option<String>) = match protocol {
         generic::Protocol::HTTP | generic::Protocol::TCP => {
+            trace!("Connecting to {} (TCP)", address);
             let stream = TcpStream::connect(address).await?;
             let peer_address = stream.peer_addr().map(|sa| format!("TCP://{}", sa)).ok();
             (Box::new(stream), peer_address)
         }
         generic::Protocol::UDP | generic::Protocol::QUIC | generic::Protocol::DTLS => {
+            trace!("Connecting to {} (UDP)", address);
             let stream = UdpStream::connect(address).await?;
 
             let peer_address = stream.peer_addr().map(|sa| format!("UDP://{}", sa)).ok();
             (Box::new(stream), peer_address)
         }
         generic::Protocol::TLS | generic::Protocol::HTTPS => {
+            trace!("Connecting to {} (TLS)", address);
             let stream = UnifiedSocket::new(
                 &addr,
                 StreamType::Tls(TlsConfiguration { sni: addr.clone() }),
@@ -297,14 +356,16 @@ async fn data_connect(
     if let Some(peer_address) = peer_address {
         headers.insert("NL-CONNECTING-ADDRESS", peer_address);
     }
+    trace!("Connecting to gateway for Data channel: {}", gateway_addr);
     let mut data_stream: Box<dyn UniversalStream<Vec<u8>, NetworkError>> =
         Box::new(WsConnectionBinary::new(gateway_addr, headers, service_type).await?);
-
+    trace!("Connected to gateway for Data channel");
     if let (Some(k), Some(n)) = (k, n) {
         data_stream = Box::new(StreamCrypt::new(k, n, data_stream));
     }
 
     if let Err(_e) = stream_forward(data_stream, AsyncToStream::new(socket)).await {
+        trace!("Data channel closed: {}", _e.to_string());
         // dbg!(e);
     };
 
@@ -312,6 +373,7 @@ async fn data_connect(
 }
 
 pub async fn is_ready(command: generic::Connect) -> Result<bool, std::io::Error> {
+    debug!("Checking if {:?} is ready", command);
     match command.protocol {
         generic::Protocol::HTTPS
         | generic::Protocol::TLS

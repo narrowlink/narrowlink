@@ -109,6 +109,7 @@ impl SubCommands {
     }
 }
 
+#[derive(Debug)]
 pub struct Args {
     pub config_path: Option<String>,
     pub arg_commands: Arc<ArgCommands>,
