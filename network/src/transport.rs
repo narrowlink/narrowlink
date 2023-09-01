@@ -5,7 +5,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use log::debug;
+use tracing::debug;
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
     net::TcpStream,

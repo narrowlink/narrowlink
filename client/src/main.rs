@@ -32,7 +32,7 @@ use narrowlink_types::{
 use proxy_stream::ProxyStream;
 use sha3::{Digest, Sha3_256};
 use tokio::{net::TcpListener, sync::Mutex, time};
-use tracing::{error, trace, warn, Level, info, debug};
+use tracing::{debug, error, info, span, trace, warn, Level};
 use tracing_subscriber::{
     filter::{LevelFilter, Targets},
     fmt::writer::MakeWriterExt,
@@ -78,7 +78,11 @@ async fn main() -> Result<(), ClientError> {
         .init();
 
     let args = Args::parse(env::args())?;
+    let span = span!(Level::TRACE, "main", args= ?args);
+
     let conf = Arc::new(config::Config::load(args.config_path)?);
+
+    span.in_scope(|| trace!("config successfully read"));
 
     let mut session: Option<(
         String,
@@ -90,7 +94,7 @@ async fn main() -> Result<(), ClientError> {
     )> = None;
     let mut socket_listener = None;
     let arg_commands = args.arg_commands.clone();
-    trace!("{:?}", arg_commands.as_ref());
+
     match arg_commands.as_ref() {
         ArgCommands::List(_) | ArgCommands::Connect(_) => {}
         ArgCommands::Forward(forward_args) => {
@@ -134,6 +138,15 @@ async fn main() -> Result<(), ClientError> {
             ));
         }
     };
+    span.in_scope(|| {
+        trace!(
+            "Listen address: {:?}",
+            socket_listener.as_ref().map(|l| match l {
+                Either::Left(l) => l.local_addr(),
+                Either::Right(l) => l.local_addr(),
+            })
+        )
+    });
 
     let mut agents = Vec::new();
     let list_of_agents_refresh_required = Arc::new(AtomicBool::new(true));
@@ -149,7 +162,9 @@ async fn main() -> Result<(), ClientError> {
             .as_ref()
             .filter(|(_, _, event_stream_task)| !event_stream_task.is_finished())
         {
+            trace!("Session: {:?}", session_id);
             if agents.is_empty() || list_of_agents_refresh_required.load(Ordering::Relaxed) {
+                trace!("List of agents refresh required");
                 let Ok(list_of_agents_request) = req
                     .request(ClientEventOutBound::Request(
                         0,
@@ -157,6 +172,7 @@ async fn main() -> Result<(), ClientError> {
                     ))
                     .await
                 else {
+                    error!("Unable to get list the agents, looks like connection lost");
                     session = None;
                     continue;
                 };
@@ -166,13 +182,15 @@ async fn main() -> Result<(), ClientError> {
                     error!("Unable to get list the agents");
                     break;
                 };
+                debug!("List of agents request: {:?}", list_of_agents_request);
                 agents = list_of_agents;
-                trace!("Agents: {:?}", agents);
+                debug!("Agents: {:?}", agents);
                 list_of_agents_refresh_required.store(false, Ordering::Relaxed);
             }
-
+            
             let (mut socket, agent_name) =
                 if let ArgCommands::List(list_args) = arg_commands.as_ref() {
+                    trace!("List of agents");
                     if agents.is_empty() {
                         println!("Agent not found");
                     }
@@ -212,6 +230,7 @@ async fn main() -> Result<(), ClientError> {
                     req.shutdown().await;
                     break;
                 } else {
+                    trace!("Network connection to agent");
                     let agent_name: String = arg_commands
                         .agent_name()
                         .clone()
@@ -219,12 +238,15 @@ async fn main() -> Result<(), ClientError> {
                         .ok_or(ClientError::AgentNotFound)?;
 
                     if let Some(ref listener) = socket_listener {
+                        trace!("Accept connection");
                         let socket: Box<dyn AsyncSocket> = match listener {
                             Either::Left(ref udp_listen) => Box::new(udp_listen.accept().await?.0),
                             Either::Right(ref tcp_listen) => Box::new(tcp_listen.accept().await?.0),
                         };
+                        debug!("Connection accepted");
                         (socket, agent_name)
                     } else {
+                        trace!("Stdin/Stdout connection");
                         (
                             Box::new(InputStream::new()) as Box<dyn AsyncSocket>,
                             agent_name,
@@ -240,6 +262,7 @@ async fn main() -> Result<(), ClientError> {
             let session_id = session_id.clone();
             let list_of_agents_refresh_required = list_of_agents_refresh_required.clone();
             let task = tokio::spawn({
+                debug!("Make a data stream to agent: {}", agent_name);
                 let arg_commands = arg_commands.clone();
                 let connections = connections.clone();
                 async move {
@@ -307,6 +330,7 @@ async fn main() -> Result<(), ClientError> {
                     let (key, nonce): (Option<[u8; 32]>, Option<[u8; 24]>) =
                         match arg_commands.cryptography() {
                             Some(ck) => {
+                                trace!("Cryptography required");
                                 let n = rand::random::<[u8; 24]>();
                                 connect.set_cryptography_nonce(n);
                                 let k = Sha3_256::digest(
@@ -338,7 +362,8 @@ async fn main() -> Result<(), ClientError> {
                             }
                             None => (None, None),
                         };
-                    trace!("Connect: {:?}", connect);
+                    debug!("Connect to: {:?}", connect);
+
                     let gateway_address = conf.gateway.clone();
 
                     let Ok(cmd) = serde_json::to_string(&ClientDataOutBound::Connect(
@@ -363,6 +388,7 @@ async fn main() -> Result<(), ClientError> {
                     .await
                     {
                         Ok(data_stream) => {
+                            trace!("Connection successful");
                             let connection_id = data_stream
                                 .get_header("NL-CONNECTION")
                                 .map(|c| c.to_string());
@@ -377,6 +403,7 @@ async fn main() -> Result<(), ClientError> {
                     };
 
                     if let (Some(k), Some(n)) = (key, nonce) {
+                        trace!("Creating cryptography stream");
                         data_stream = Box::new(StreamCrypt::new(k, n, data_stream));
                     }
 
@@ -398,6 +425,7 @@ async fn main() -> Result<(), ClientError> {
                 return Ok(());
             }
         } else {
+            trace!("Session not found, create new event stream");
             if let ArgCommands::List(_) = arg_commands.as_ref() {
             } else {
                 info!("Connecting to gateway: {}", conf.gateway);
@@ -452,6 +480,7 @@ async fn main() -> Result<(), ClientError> {
                 .get_header("NL-SESSION")
                 .ok_or(ClientError::InvalidConfig)?
                 .to_string();
+            debug!("Connection successful, Session ID: {}", session_id);
             let event: NarrowEvent<ClientEventOutBound, ClientEventInBound> =
                 NarrowEvent::new(event_stream);
             let req = event.get_request();
@@ -459,6 +488,7 @@ async fn main() -> Result<(), ClientError> {
             let connections = connections.clone();
             let event_stream_task = tokio::spawn(async move {
                 while let Some(Ok(msg)) = event_rx.next().await {
+                    debug!("Event: {:?}", msg);
                     match msg {
                         narrowlink_types::client::EventInBound::ConnectionError(
                             connection_id,

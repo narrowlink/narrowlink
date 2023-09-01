@@ -1,7 +1,7 @@
 use bytes::{BufMut, BytesMut};
 use futures_util::{Future, FutureExt, SinkExt, StreamExt};
 use hyper::{client::conn, http::HeaderValue, Body, HeaderMap, Request, StatusCode};
-use log::{debug, trace, warn};
+use tracing::{debug, trace, warn};
 use narrowlink_types::ServiceType;
 use std::{
     collections::HashMap,
