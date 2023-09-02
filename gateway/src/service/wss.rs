@@ -20,8 +20,8 @@ pub struct Wss {
 }
 #[derive(Clone)]
 pub enum TlsEngine {
-    Acme(Arc<CertificateManager>),
-    File((Vec<String>, Arc<ServerConfig>)),
+    Acme(Arc<CertificateManager>, Arc<ServerConfig>),
+    File(Vec<String>, Arc<ServerConfig>),
 }
 
 impl TlsEngine {
@@ -36,24 +36,56 @@ impl TlsEngine {
                         "./certificates",
                     ),
                 );
-                let certificate_manager = CertificateManager::new(
-                    certificate_file_storage,
-                    Some((acme.email, acme.challenge_type, acme.directory_url)),
-                )
-                .in_current_span()
-                .await?;
+                let certificate_manager = Arc::new(
+                    CertificateManager::new(
+                        certificate_file_storage,
+                        Some((acme.email, acme.challenge_type, acme.directory_url)),
+                    )
+                    .in_current_span()
+                    .await?,
+                );
                 trace!("acme tls engine successfully created");
-                Ok(Self::Acme(Arc::new(certificate_manager)))
+                let mut config = rustls::ServerConfig::builder()
+                    .with_safe_defaults()
+                    .with_no_client_auth()
+                    .with_cert_resolver(certificate_manager.clone());
+                config.alpn_protocols = vec![
+                    b"h2".to_vec(),
+                    b"http/1.1".to_vec(),
+                    b"h3".to_vec(),
+                    b"h3-29".to_vec(),
+                    b"h3-30".to_vec(),
+                    b"h3-31".to_vec(),
+                    b"h3-32".to_vec(),
+                    b"h3-33".to_vec(),
+                    crate::service::certificate::ACME_TLS_ALPN_NAME.to_vec(),
+                ];
+                Ok(Self::Acme(certificate_manager, Arc::new(config)))
             }
             TlsConfig::File(file) => {
                 trace!("setting up file tls engine");
-                let cert = super::certificate::Certificate::from_pem_vec(pem::parse_many(
-                    tokio::fs::read_to_string(file.cert_path).await?,
-                )?)?
-                .get_config();
-                trace!("file tls engine successfully created");
-                Ok(Self::File((file.domains, cert)))
+                let cert = Arc::new(super::certificate::Certificate::from_pem_vec(
+                    pem::parse_many(tokio::fs::read_to_string(file.cert_path).await?)?,
+                )?);
+                let mut config = rustls::ServerConfig::builder()
+                    .with_safe_defaults()
+                    .with_no_client_auth()
+                    .with_cert_resolver(cert);
+                config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+                Ok(Self::File(file.domains, Arc::new(config)))
             }
+        }
+    }
+    pub fn get_server_config(&self) -> Arc<ServerConfig> {
+        match self {
+            TlsEngine::Acme(_, conf) => conf.clone(),
+            TlsEngine::File(_, conf) => conf.clone(),
+        }
+    }
+    pub async fn is_cert_available(&self, domain: &str, alpns: Vec<Vec<u8>>) -> bool {
+        match self {
+            Self::Acme(acme, _) => acme.is_cert_available(domain, alpns).await,
+            Self::File(domains, _) => domains.contains(&domain.to_owned()),
         }
     }
 }
@@ -112,7 +144,7 @@ impl Service for Wss {
 
         let wss = self.clone();
         let tls_engine = self.cm.clone();
-        if let TlsEngine::Acme(acme) = &tls_engine {
+        if let TlsEngine::Acme(acme, _) = &tls_engine {
             let _ = acme.clone().get_service_sender().send(
                 crate::service::certificate::manager::CertificateServiceMessage::Load(
                     "main".to_owned(),
@@ -151,36 +183,7 @@ impl Service for Wss {
                     return Err::<(), ()>(());
                 };
                 span_connection.record("sni", &sni);
-                let Some(server_config) = (match tls_engine {
-                    TlsEngine::Acme(acme) => {
-                        if acme.acme_type().is_some()
-                            && alpns.contains(&super::certificate::ACME_TLS_ALPN_NAME.to_vec())
-                        {
-                            span_connection.in_scope(|| trace!("tls alpn 01 challenge detected"));
-                            acme.get_acme_tls_challenge(&sni)
-                                .instrument(span_connection.clone())
-                                .await
-                                .ok()
-                        } else {
-                            span_connection.in_scope(|| trace!("get certificate from acme"));
-                            acme.get(&sni)
-                                .instrument(span_connection.clone())
-                                .await
-                                .ok()
-                        }
-                    }
-                    TlsEngine::File((domains, acceptor)) => {
-                        if domains.contains(&sni) {
-                            span_connection.in_scope(|| trace!("get certificate from file"));
-                            Some(acceptor)
-                        } else {
-                            span_connection.in_scope(|| {
-                                trace!("no certificate found for this domain in file")
-                            });
-                            None
-                        }
-                    }
-                }) else {
+                if !tls_engine.is_cert_available(&sni, alpns.clone()).await {
                     span_connection.in_scope(|| trace!("certificate not found, act as SNI proxy"));
                     let _ = wss.status_sender.send(InBound::TlsTransparent(
                         sni,
@@ -189,12 +192,14 @@ impl Service for Wss {
                     ));
                     return Ok::<(), ()>(());
                 };
+
                 span_connection.in_scope(|| trace!("setting up tls acceptor"));
-                let secure_stream = TlsAcceptor::from(server_config)
-                    .accept(tcp_stream)
-                    .instrument(span_connection.clone())
-                    .await
-                    .map_err(|_| ())?;
+                let secure_stream =
+                    TlsAcceptor::from(tls_engine.get_server_config())
+                        .accept(tcp_stream)
+                        .instrument(span_connection.clone())
+                        .await
+                        .map_err(|_| ())?;
                 span_connection.in_scope(|| trace!("tls acceptor successfully created"));
                 if let Err(http_err) = Http::new()
                     .serve_connection(

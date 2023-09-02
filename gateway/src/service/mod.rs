@@ -6,6 +6,7 @@ pub mod certificate;
 pub mod http_templates;
 pub mod ws;
 pub mod wss;
+pub mod quic;
 pub struct ServiceEventRequest {
     pub(crate) token: String,
     pub(crate) publish: Option<String>,

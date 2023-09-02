@@ -5,7 +5,7 @@ use instant_acme::{
     NewAccount, NewOrder, Order, OrderStatus,
 };
 use rcgen::{CertificateParams, DistinguishedName, DnType, KeyPair};
-use rustls::{PrivateKey, ServerConfig};
+use rustls::{PrivateKey, sign::{CertifiedKey, any_supported_type}};
 use serde::Deserialize;
 use tokio::time;
 use tracing::{debug, instrument, trace};
@@ -28,7 +28,6 @@ impl Clone for Acme {
     }
 }
 
-#[derive(Debug)]
 pub struct ChallengeInfo {
     pub verification_url: String,
     pub domain: String,
@@ -47,10 +46,10 @@ impl Default for ACMEChallengeType {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum ACMEChallenge {
     Http01(String, String),
-    TlsAlpn01(Arc<ServerConfig>),
+    TlsAlpn01(Arc<CertifiedKey>),
     // Dns01(String),
 }
 
@@ -205,21 +204,25 @@ impl Acme {
             params.custom_extensions = vec![rcgen::CustomExtension::new_acme_identifier(&digest)];
             let cert = rcgen::Certificate::from_params(params)?;
 
-            let mut server_config = rustls::ServerConfig::builder()
-                .with_safe_defaults()
-                .with_no_client_auth()
-                .with_single_cert(
-                    vec![rustls::Certificate(cert.serialize_der()?)],
-                    rustls::PrivateKey(cert.get_key_pair().serialize_der()),
-                )?;
-            server_config
-                .alpn_protocols
-                .push(crate::service::certificate::ACME_TLS_ALPN_NAME.to_vec());
+            // let mut server_config = rustls::ServerConfig::builder()
+            //     .with_safe_defaults()
+            //     .with_no_client_auth()
+            //     .with_single_cert(
+            //         vec![rustls::Certificate(cert.serialize_der()?)],
+            //         rustls::PrivateKey(cert.get_key_pair().serialize_der()),
+            //     )?;
+            // server_config
+            //     .alpn_protocols
+            //     .push(crate::service::certificate::ACME_TLS_ALPN_NAME.to_vec());
+            let Ok(key) = any_supported_type(&rustls::PrivateKey(cert.get_key_pair().serialize_der()))else{
+                return Err(GatewayError::Invalid("Invalid private key from rcgen"));
+            };
 
+            
             cert_tuple.push(ChallengeInfo {
                 verification_url: verification_url.to_string(),
                 domain: domain.to_string(),
-                challenge: ACMEChallenge::TlsAlpn01(Arc::new(server_config)),
+                challenge: ACMEChallenge::TlsAlpn01(Arc::new(CertifiedKey::new(vec![rustls::Certificate(cert.serialize_der()?)], key))),
             });
         }
 

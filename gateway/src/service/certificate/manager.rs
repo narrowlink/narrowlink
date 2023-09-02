@@ -5,7 +5,7 @@ use std::{
 };
 
 use instant_acme::Account;
-use rustls::{PrivateKey, ServerConfig};
+use rustls::{server::ResolvesServerCert, sign::CertifiedKey, PrivateKey};
 use tracing::{debug, error, instrument, span, trace, Instrument, Span};
 
 use tokio::{
@@ -28,8 +28,8 @@ pub enum CertificateServiceMessage {
 }
 
 pub struct CertificateStore {
-    certificates: HashMap<(String, String), Certificate>,
-    domain_map: HashMap<String, HashSet<(String, String)>>,
+    certificates: HashMap<(String, String), Certificate>, // (uid, agent_name) -> certificate
+    domain_map: HashMap<String, HashSet<(String, String)>>, // domain -> (uid, agent_name)
 }
 
 impl CertificateStore {
@@ -66,14 +66,16 @@ impl CertificateStore {
         self.domain_map.retain(|_, v| !v.is_empty());
         trace!("domain map: {:?}", self.domain_map);
     }
-    pub fn get_config(&self, domain: &str) -> Option<Arc<ServerConfig>> {
-        Some(
-            self.certificates
-                .get(self.domain_map.get(domain)?.iter().next()?)?
-                .config
-                .clone(),
-        )
+    pub fn get_certified_key(&self, domain: &str) -> Result<Arc<CertifiedKey>, GatewayError> {
+        let cert = self
+            .domain_map
+            .get(domain)
+            .and_then(|m| m.iter().next())
+            .and_then(|u| self.certificates.get(u))
+            .ok_or(GatewayError::CertificateNotFound)?;
+        Ok(cert.certified_key.clone())
     }
+    // .ok_or(GatewayError::CertificateNotFound)
     pub fn renew_needed(&self) -> Vec<(String, String, Vec<String>)> {
         let mut list_of_agents = Vec::new();
         for ((uid, agent_name), cert) in self.certificates.iter() {
@@ -339,18 +341,37 @@ impl CertificateManager {
             .remove(uid.to_owned(), agent_name.to_owned());
     }
 
-    pub async fn get(&self, domain: &str) -> Result<Arc<ServerConfig>, GatewayError> {
+    // pub async fn get(&self, domain: &str) -> Result<Arc<ServerConfig>, GatewayError> {
+    //     self.certificate_store
+    //         .read()
+    //         .await
+    //         .get_config(domain)
+    //         .ok_or(GatewayError::CertificateNotFound)
+    // }
+    pub async fn is_cert_available(&self, domain: &str, alpns: Vec<Vec<u8>>) -> bool {
+        if alpns.contains(&super::ACME_TLS_ALPN_NAME.to_vec()) {
+            return self.acme_configurations.read().await.contains_key(domain);
+        } else {
+            return self
+                .certificate_store
+                .read()
+                .await
+                .domain_map
+                .contains_key(domain);
+        }
+    }
+    pub async fn get(&self, domain: &str) -> Result<Arc<CertifiedKey>, GatewayError> {
         self.certificate_store
             .read()
             .await
-            .get_config(domain)
-            .ok_or(GatewayError::CertificateNotFound)
+            .get_certified_key(domain)
     }
+
     #[instrument(name = "get_acme_tls_challenge", skip(self))]
     pub async fn get_acme_tls_challenge(
         &self,
         domain: &str,
-    ) -> Result<Arc<ServerConfig>, GatewayError> {
+    ) -> Result<Arc<CertifiedKey>, GatewayError> {
         trace!("get acme tls challenge");
         self.acme_configurations
             .read()
@@ -396,5 +417,27 @@ impl CertificateManager {
                     Err(GatewayError::ACMEChallengeNotFound)
                 }
             })
+    }
+}
+
+impl ResolvesServerCert for CertificateManager {
+    fn resolve(
+        &self,
+        client_hello: rustls::server::ClientHello,
+    ) -> Option<Arc<rustls::sign::CertifiedKey>> {
+        tokio::task::block_in_place(move || {
+            tokio::runtime::Handle::current().block_on(async move {
+                if client_hello.alpn().is_some_and(|mut alpns| {
+                    alpns.all(|a| a == crate::service::certificate::ACME_TLS_ALPN_NAME)
+                }) {
+                    return self
+                        .get_acme_tls_challenge(client_hello.server_name()?.as_ref())
+                        .await
+                        .ok();
+                } else {
+                    self.get(client_hello.server_name()?.as_ref()).await.ok()
+                }
+            })
+        })
     }
 }

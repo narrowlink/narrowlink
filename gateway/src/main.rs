@@ -84,7 +84,7 @@ async fn main() -> Result<(), GatewayError> {
     let mut state = State::from(
         &conf,
         cm.clone().and_then(|cm| match cm {
-            service::wss::TlsEngine::Acme(cm) => Some(cm.get_service_sender()),
+            service::wss::TlsEngine::Acme(cm,_) => Some(cm.get_service_sender()),
             _ => None,
         }),
     );
@@ -114,6 +114,19 @@ async fn main() -> Result<(), GatewayError> {
                     span.in_scope(|| {
                         info!("Wss service added: {}", wss.listen_addr);
                         debug!("Wss service added: {:?}", wss)
+                    });
+                }
+            }
+            config::Service::QUIC(quic) => {
+                if let Some(cm) = &cm {
+                    services.push(
+                        service::quic::QUIC::from(quic, state.get_sender(), cm.clone())
+                            .run()
+                            .instrument(span.clone()),
+                    );
+                    span.in_scope(|| {
+                        info!("QUIC service added: {}", quic.listen_addr);
+                        debug!("QUIC service added: {:?}", quic)
                     });
                 }
             }

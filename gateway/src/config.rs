@@ -56,6 +56,13 @@ impl Config {
                         }
                     }
                 }
+                Service::QUIC(s) => {
+                    debug!("checking quic service: {:?}", s);
+                    // todo!()
+                    // if s.listen_addr.port() == 80 {
+                    //     http_port_80 = true;
+                    // }
+                }
             }
         }
         if is_http01_enabled && !http_port_80 {
@@ -179,6 +186,7 @@ impl Config {
 pub enum Service {
     Ws(WsService),
     Wss(WsSecureService),
+    QUIC(QUICService),
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -189,6 +197,14 @@ pub struct WsService {
 
 #[derive(Deserialize, Debug)]
 pub struct WsSecureService {
+    pub domains: Vec<String>,
+    pub listen_addr: SocketAddr,
+    pub tls_config: TlsConfig,
+}
+
+
+#[derive(Deserialize, Debug)]
+pub struct QUICService {
     pub domains: Vec<String>,
     pub listen_addr: SocketAddr,
     pub tls_config: TlsConfig,
