@@ -53,11 +53,6 @@ impl TlsEngine {
                     b"h2".to_vec(),
                     b"http/1.1".to_vec(),
                     b"h3".to_vec(),
-                    b"h3-29".to_vec(),
-                    b"h3-30".to_vec(),
-                    b"h3-31".to_vec(),
-                    b"h3-32".to_vec(),
-                    b"h3-33".to_vec(),
                     crate::service::certificate::ACME_TLS_ALPN_NAME.to_vec(),
                 ];
                 Ok(Self::Acme(certificate_manager, Arc::new(config)))

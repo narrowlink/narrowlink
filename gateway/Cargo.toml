@@ -54,3 +54,4 @@ narrowlink-network = { version = "0.1.4" }
 quinn = {version = "0.10.2"}
 h3 = {version = "0.0.2"}
 h3-quinn = {version = "0.0.3"}
+bytes = {version = "1"}

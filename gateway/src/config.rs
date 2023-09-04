@@ -207,7 +207,6 @@ pub struct WsSecureService {
 pub struct QUICService {
     pub domains: Vec<String>,
     pub listen_addr: SocketAddr,
-    pub tls_config: TlsConfig,
 }
 
 #[derive(Deserialize, Debug, Clone)]

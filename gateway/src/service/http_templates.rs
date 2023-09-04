@@ -85,7 +85,7 @@ pub fn response_error(error_format: ErrorFormat, err: HttpErrors) -> hyper::Resp
         .render()
         .map_err(|e| e.into()),
     };
-    let (status, msg) = if let (Ok(status), Ok(msg)) = (StatusCode::from_u16(status_code), msg) {
+    let (status, msg) = if let (Ok(status), Ok(msg)) = (StatusCode::from_u16(200), msg) {
         (status, msg)
     } else {
         (
@@ -95,6 +95,8 @@ pub fn response_error(error_format: ErrorFormat, err: HttpErrors) -> hyper::Resp
     };
     let response = hyper::Response::new(msg);
     let (mut parts, body) = response.into_parts();
+    
+    parts.headers.insert("Alt-Svc", hyper::header::HeaderValue::from_static("h3=\":443\"; ma=2592000"));
     parts.status = status;
     hyper::Response::from_parts(parts, body.into())
 }

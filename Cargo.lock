@@ -1063,6 +1063,7 @@ version = "0.1.4"
 dependencies = [
  "askama",
  "async-trait",
+ "bytes",
  "clap_lex",
  "dirs",
  "either",
