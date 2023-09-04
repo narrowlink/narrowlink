@@ -117,10 +117,10 @@ async fn main() -> Result<(), GatewayError> {
                     });
                 }
             }
-            config::Service::QUIC(quic) => {
+            config::Service::Quic(quic) => {
                 if let Some(cm) = &cm {
                     services.push(
-                        service::quic::QUIC::from(quic, state.get_sender(), cm.clone())
+                        service::quic::Quic::from(quic, state.get_sender(), cm.clone())
                             .run()
                             .instrument(span.clone()),
                     );

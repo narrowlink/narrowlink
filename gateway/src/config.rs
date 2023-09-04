@@ -56,7 +56,7 @@ impl Config {
                         }
                     }
                 }
-                Service::QUIC(s) => {
+                Service::Quic(s) => {
                     debug!("checking quic service: {:?}", s);
                     // todo!()
                     // if s.listen_addr.port() == 80 {
@@ -186,7 +186,7 @@ impl Config {
 pub enum Service {
     Ws(WsService),
     Wss(WsSecureService),
-    QUIC(QUICService),
+    Quic(QUICService),
 }
 
 #[derive(Deserialize, Serialize, Debug)]

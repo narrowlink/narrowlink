@@ -1,16 +1,9 @@
-use std::{
-    net::{SocketAddr, UdpSocket},
-    ops::DerefMut,
-    sync::Arc,
-};
+use std::net::{SocketAddr, UdpSocket};
 
 use async_trait::async_trait;
-use bytes::{Buf, Bytes};
+use bytes::Buf;
 use futures_util::Future;
-use h3::{
-    quic::{BidiStream, SendStream},
-    server::RequestStream,
-};
+use h3::{quic::BidiStream, server::RequestStream};
 use quinn::{EndpointConfig, ServerConfig};
 use tokio::{
     io::{AsyncRead, AsyncWrite, AsyncWriteExt},
@@ -23,14 +16,14 @@ use crate::{error::GatewayError, state::InBound};
 use super::{wss::TlsEngine, Service};
 
 #[derive(Clone)]
-pub struct QUIC {
+pub struct Quic {
     listen_addr: SocketAddr,
     domains: Vec<String>,
     status_sender: UnboundedSender<InBound>,
     cm: TlsEngine,
 }
 
-impl QUIC {
+impl Quic {
     pub fn from(
         quic: &crate::config::QUICService,
         status_sender: UnboundedSender<InBound>,
@@ -45,10 +38,11 @@ impl QUIC {
     }
 }
 #[async_trait]
-impl Service for QUIC {
+impl Service for Quic {
     async fn run(self) -> Result<(), GatewayError> {
         let span = span!(tracing::Level::TRACE, "quic", listen_addr = %self.listen_addr, domains = ?self.domains);
         let tls_engine = self.cm.clone();
+        let _s = self.status_sender;
         if let TlsEngine::Acme(acme, _) = &tls_engine {
             let _ = acme.clone().get_service_sender().send(
                 crate::service::certificate::manager::CertificateServiceMessage::Load(
@@ -67,27 +61,39 @@ impl Service for QUIC {
         //         .await
         //         .map_err(|_| ())?;
         let server_config = ServerConfig::with_crypto(tls_engine.get_server_config());
+        let runtime = quinn::default_runtime().ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::Other, "no async runtime found")
+        })?;
 
         let endpoint = quinn::Endpoint::new(
             EndpointConfig::default(),
             Some(server_config),
             UdpSocket::bind(self.listen_addr)?,
-            quinn::default_runtime().unwrap(),
-        )
-        .unwrap();
-        dbg!(2);
-        while let Some(mut new_conn) = endpoint.accept().await {
-            let x:Box<quinn::crypto::rustls::HandshakeData> = new_conn.handshake_data().await.unwrap().downcast().unwrap();
-            dbg!(x.server_name);
+            runtime,
+        )?;
+        while let Some(new_conn) = endpoint.accept().await {
             trace!("New connection being attempted");
             tokio::spawn(async move {
                 match new_conn.await {
                     Ok(conn) => {
+                        let Some(_handshake_data) = conn.handshake_data().and_then(|c| {
+                            c.downcast::<quinn::crypto::rustls::HandshakeData>().ok()
+                        }) else {
+                            trace!("Connection failed: {:?}", "handshake data not found");
+                            return;
+                        };
                         trace!("Connection established");
-                        let mut h3_conn =
-                            h3::server::Connection::new(h3_quinn::Connection::new(conn))
-                                .await
-                                .unwrap();
+                        let mut h3_conn = match h3::server::Connection::new(h3_quinn::Connection::new(conn))
+                        .await{
+                            Ok(c) => {
+                                c
+                            }
+                            Err(e) => {
+                                trace!("H3 connection failed: {:?}", e);
+                                return;
+                            }
+                        };
+
                         loop {
                             match h3_conn.accept().await {
                                 Ok(Some((req, mut stream))) => {
@@ -101,9 +107,9 @@ impl Service for QUIC {
                                             .unwrap();
                                         // let x = stream.as_mut();
                                         // send the response to the wire
-                                        if stream.send_response(response).await.is_err(){
+                                        if stream.send_response(response).await.is_err() {
                                             dbg!(22);
-                                            return ;
+                                            return;
                                         }
                                         // // send some date
                                         // stream.send_data(bytes::Bytes::from("test")).await.unwrap();
@@ -112,7 +118,7 @@ impl Service for QUIC {
                                         // stream.send_data(bytes::Bytes::from("test")).await.unwrap();
                                         // stream.finish().await.unwrap();
                                         let mut s = RequestStreamWrapper::new(stream);
-                                        s.write("src".as_bytes()).await.unwrap();
+                                        s.write_all("Hello".as_bytes()).await.unwrap();
                                         s.shutdown().await.unwrap();
                                     });
                                 }

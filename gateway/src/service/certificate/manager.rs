@@ -213,9 +213,9 @@ impl CertificateManager {
     pub fn is_acme_enabled(&self) -> bool {
         self.acme_type.is_some()
     }
-    pub fn acme_type(&self) -> Option<ACMEChallengeType> {
-        self.acme_type.clone()
-    }
+    // pub fn acme_type(&self) -> Option<ACMEChallengeType> {
+    //     self.acme_type.clone()
+    // }
     pub fn get_service_sender(&self) -> UnboundedSender<CertificateServiceMessage> {
         self.sender.clone()
     }
@@ -350,14 +350,14 @@ impl CertificateManager {
     // }
     pub async fn is_cert_available(&self, domain: &str, alpns: Vec<Vec<u8>>) -> bool {
         if alpns.contains(&super::ACME_TLS_ALPN_NAME.to_vec()) {
-            return self.acme_configurations.read().await.contains_key(domain);
+            self.acme_configurations.read().await.contains_key(domain)
         } else {
-            return self
+            self
                 .certificate_store
                 .read()
                 .await
                 .domain_map
-                .contains_key(domain);
+                .contains_key(domain)
         }
     }
     pub async fn get(&self, domain: &str) -> Result<Arc<CertifiedKey>, GatewayError> {
@@ -430,10 +430,10 @@ impl ResolvesServerCert for CertificateManager {
                 if client_hello.alpn().is_some_and(|mut alpns| {
                     alpns.all(|a| a == crate::service::certificate::ACME_TLS_ALPN_NAME)
                 }) {
-                    return self
+                    self
                         .get_acme_tls_challenge(client_hello.server_name()?.as_ref())
                         .await
-                        .ok();
+                        .ok()
                 } else {
                     self.get(client_hello.server_name()?.as_ref()).await.ok()
                 }
