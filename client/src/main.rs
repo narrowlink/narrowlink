@@ -488,14 +488,6 @@ async fn main() -> Result<(), ClientError> {
             let (_event_tx, mut event_rx) = event.split();
             let connections = connections.clone();
             let event_stream_task = tokio::spawn(async move {
-                let _ = sys_req
-                    .request(ClientEventOutBound::Request(
-                        0,
-                        ClientEventRequest::UpdateConstantSysInfo(
-                            narrowlink_types::client::ConstSystemInfo { local_addr },
-                        ),
-                    ))
-                    .await;
                 while let Some(Ok(msg)) = event_rx.next().await {
                     debug!("Event: {:?}", msg);
                     match msg {
@@ -515,7 +507,14 @@ async fn main() -> Result<(), ClientError> {
                     }
                 }
             });
-
+            let _ = sys_req
+                .request(ClientEventOutBound::Request(
+                    0,
+                    ClientEventRequest::UpdateConstantSysInfo(
+                        narrowlink_types::client::ConstSystemInfo { local_addr },
+                    ),
+                ))
+                .await;
             session = Some((session_id, req, event_stream_task));
         }
     }

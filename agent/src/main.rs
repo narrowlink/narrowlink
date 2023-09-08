@@ -129,8 +129,7 @@ async fn start(args: Args) -> Result<(), AgentError> {
                     let req = event.get_request();
                     event_connection = Some(event);
                     info!("Connection successful");
-                    tokio::spawn({
-                        // let req = req.clone();
+                    tokio::spawn(async move {
                         let mut s = sysinfo::System::new_all();
                         let _ = req
                             .request(AgentEventOutBound::Request(
@@ -141,20 +140,18 @@ async fn start(args: Args) -> Result<(), AgentError> {
                                 }),
                             ))
                             .await;
-                        async move {
-                            loop {
-                                s.refresh_all();
-                                let _ = req
-                                    .request(AgentEventOutBound::Request(
-                                        0,
-                                        AgentEventRequest::UpdateDynamicSysInfo(DynSystemInfo {
-                                            loadavg: s.load_average().one,
-                                        }),
-                                    ))
-                                    .await;
-                                trace!("SysInfo Update");
-                                time::sleep(Duration::from_secs(40)).await;
-                            }
+                        loop {
+                            s.refresh_all();
+                            let _ = req
+                                .request(AgentEventOutBound::Request(
+                                    0,
+                                    AgentEventRequest::UpdateDynamicSysInfo(DynSystemInfo {
+                                        loadavg: s.load_average().one,
+                                    }),
+                                ))
+                                .await;
+                            trace!("SysInfo Update");
+                            time::sleep(Duration::from_secs(40)).await;
                         }
                     });
                 }
