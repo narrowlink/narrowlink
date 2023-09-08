@@ -3,12 +3,9 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{
-    error::MessageError,
-    generic::{Connect, SystemInfo},
-    policy::Policies,
-    GetResponse,
-};
+use crate::{error::MessageError, generic::Connect, policy::Policies, GetResponse};
+
+use super::{ConstSystemInfo, DynSystemInfo};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum InBound {
@@ -30,7 +27,8 @@ pub enum OutBound {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum Request {
-    SysInfo(SystemInfo),
+    UpdateDynamicSysInfo(DynSystemInfo),
+    UpdateConstantSysInfo(ConstSystemInfo),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

@@ -5,6 +5,7 @@ use narrowlink_types::ServiceType;
 use std::{
     collections::HashMap,
     io::{self, Error, ErrorKind},
+    net::SocketAddr,
     pin::Pin,
     task::{Context, Poll},
 };
@@ -57,7 +58,7 @@ impl WsConnection {
         host: &str,
         headers: HashMap<&'static str, String>,
         service_type: ServiceType,
-    ) -> Result<Self, NetworkError> {
+    ) -> Result<(Self, SocketAddr), NetworkError> {
         let sni = if let Some(sni) = host.split(':').next() {
             sni
         } else {
@@ -71,7 +72,7 @@ impl WsConnection {
             StreamType::Tcp
         };
         let stream = UnifiedSocket::new(host, transport_type).await?;
-
+        let local_addr = stream.local_addr();
         let (mut request_sender, connection) = conn::handshake(stream).await?;
         let conn_handler = tokio::spawn(async move {
             if let Err(e) = connection.await {
@@ -123,11 +124,14 @@ impl WsConnection {
             None,
         )
         .await;
-        Ok(Self {
-            ws_stream,
-            remaining_bytes: None,
-            mode: WsMode::Client(response_headers, conn_handler),
-        })
+        Ok((
+            Self {
+                ws_stream,
+                remaining_bytes: None,
+                mode: WsMode::Client(response_headers, conn_handler),
+            },
+            local_addr,
+        ))
     }
     pub fn get_header(&self, key: &str) -> Option<&str> {
         if let WsMode::Client(response_headers, _) = &self.mode {

@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use narrowlink_types::{
-    generic::{AgentInfo, AgentPublishInfo, Connect},
+    agent::AgentPublishInfo,
+    generic::{AgentInfo, Connect},
     policy::Policies,
 };
 use uuid::Uuid;
@@ -75,8 +76,8 @@ impl User {
             .filter(|agent| agent.domain(domain_name, port).is_some())
             .min_by(|x, y| {
                 if let (Some(l), Some(r)) = (x.system_info.as_ref(), y.system_info.as_ref()) {
-                    (l.loadavg / l.cpus as f64)
-                        .partial_cmp(&(r.loadavg / r.cpus as f64))
+                    (l.dynamic.loadavg / l.constant.cpus as f64)
+                        .partial_cmp(&(r.dynamic.loadavg / r.constant.cpus as f64))
                         .unwrap_or(std::cmp::Ordering::Equal)
                 } else {
                     std::cmp::Ordering::Equal

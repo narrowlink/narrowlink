@@ -1,6 +1,6 @@
 use futures_util::{stream::SplitSink, SinkExt};
 use narrowlink_types::{
-    client::{EventInBound, EventOutBound},
+    client::{ConstSystemInfo, EventInBound, EventOutBound, SystemInfo},
     policy::Policies,
 };
 
@@ -11,6 +11,7 @@ pub struct Client {
     pub name: String,
     session_id: Uuid,
     policies: Policies,
+    system_info: Option<SystemInfo>,
     sender: SplitSink<NarrowEvent<EventInBound, EventOutBound>, EventInBound>,
 }
 
@@ -25,6 +26,7 @@ impl Client {
             name,
             session_id,
             policies,
+            system_info: None,
             sender,
         }
     }
@@ -34,6 +36,9 @@ impl Client {
     }
     pub async fn send(&mut self, msg: EventInBound) -> Result<(), NetworkError> {
         self.sender.send(msg).await
+    }
+    pub fn const_sys_update(&mut self, sys_info: ConstSystemInfo) {
+        self.system_info = Some(SystemInfo { constant: sys_info });
     }
     pub fn get_session_id(&self) -> Uuid {
         self.session_id

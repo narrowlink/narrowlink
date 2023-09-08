@@ -3,8 +3,8 @@ use std::{collections::HashMap, net::SocketAddr};
 use futures_util::{stream::SplitSink, SinkExt};
 use narrowlink_network::{error::NetworkError, event::NarrowEvent};
 use narrowlink_types::{
-    agent::{EventInBound, EventOutBound},
-    generic::{Connect, SystemInfo},
+    agent::{ConstSystemInfo, DynSystemInfo, EventInBound, EventOutBound, SystemInfo},
+    generic::Connect,
     publish::PublishHost,
 };
 
@@ -62,8 +62,16 @@ impl Agent {
             .and_then(|map| map.get(&port))
             .cloned()
     }
-    pub fn sysupdate(&mut self, sys_info: SystemInfo) {
-        self.system_info = Some(sys_info);
+    pub fn dyn_sys_update(&mut self, dyn_sys_info: DynSystemInfo) {
+        if let Some(sys_info) = &mut self.system_info {
+            sys_info.dynamic = dyn_sys_info;
+        }
+    }
+    pub fn const_sys_update(&mut self, sys_info: ConstSystemInfo) {
+        self.system_info = Some(SystemInfo {
+            constant: sys_info,
+            dynamic: Default::default(),
+        });
     }
     pub fn pingupdate(&mut self, ping: u16) {
         self.ping = ping;

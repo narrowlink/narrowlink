@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 use sha3::Sha3_256;
 use std::{fmt::Debug, net::SocketAddr, str::FromStr};
 
+use crate::agent::{AgentPublishInfo, SystemInfo};
+
 pub type HmacSha256 = Hmac<Sha3_256>;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -119,51 +121,6 @@ impl FromStr for Protocol {
         serde_json::from_str(s)
     }
 }
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct SystemInfo {
-    pub loadavg: f64,
-    pub cpus: u8,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct AgentPublishInfo {
-    src_host: String,
-    src_port: u16,
-    dst_host: String,
-    dst_port: u16,
-    protocol: Protocol,
-}
-
-impl ToString for AgentPublishInfo {
-    fn to_string(&self) -> String {
-        format!(
-            "{}:{}->{}://{}:{}",
-            self.src_host,
-            if self.src_port == 0 {
-                "any".to_owned()
-            } else {
-                self.src_port.to_string()
-            },
-            self.protocol.to_string(),
-            self.dst_host,
-            self.dst_port
-        )
-    }
-}
-
-impl AgentPublishInfo {
-    pub fn from_connect(host: String, src_port: u16, connect: &Connect) -> Self {
-        Self {
-            src_host: host,
-            src_port,
-            dst_host: connect.host.clone(),
-            dst_port: connect.port,
-            protocol: connect.protocol.clone(),
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, Clone)]
 pub struct AgentInfo {
     pub name: String,

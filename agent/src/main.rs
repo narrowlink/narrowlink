@@ -22,10 +22,10 @@ use narrowlink_network::{
 };
 use narrowlink_types::{
     agent::{
-        EventInBound as AgentEventInBound, EventOutBound as AgentEventOutBound,
-        EventRequest as AgentEventRequest,
+        ConstSystemInfo, DynSystemInfo, EventInBound as AgentEventInBound,
+        EventOutBound as AgentEventOutBound, EventRequest as AgentEventRequest,
     },
-    generic::{self, SystemInfo},
+    generic,
     policy::Policies,
     ServiceType,
 };
@@ -122,7 +122,7 @@ async fn start(args: Args) -> Result<(), AgentError> {
             match WsConnection::new(&conf.gateway, event_headers.clone(), service_type.clone())
                 .await
             {
-                Ok(event_stream) => {
+                Ok((event_stream, local_addr)) => {
                     sleep_time = 0;
                     let event: NarrowEvent<AgentEventOutBound, AgentEventInBound> =
                         NarrowEvent::new(event_stream);
@@ -132,15 +132,23 @@ async fn start(args: Args) -> Result<(), AgentError> {
                     tokio::spawn({
                         // let req = req.clone();
                         let mut s = sysinfo::System::new_all();
+                        let _ = req
+                            .request(AgentEventOutBound::Request(
+                                0,
+                                AgentEventRequest::UpdateConstantSysInfo(ConstSystemInfo {
+                                    cpus: s.cpus().len() as u8,
+                                    local_addr,
+                                }),
+                            ))
+                            .await;
                         async move {
                             loop {
                                 s.refresh_all();
                                 let _ = req
                                     .request(AgentEventOutBound::Request(
                                         0,
-                                        AgentEventRequest::SysInfo(SystemInfo {
+                                        AgentEventRequest::UpdateDynamicSysInfo(DynSystemInfo {
                                             loadavg: s.load_average().one,
-                                            cpus: s.cpus().len() as u8,
                                         }),
                                     ))
                                     .await;

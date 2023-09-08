@@ -203,8 +203,8 @@ async fn main() -> Result<(), ClientError> {
                         }
                         if let Some(system_info) = &agent.system_info {
                             println!("\tSystem Info:");
-                            println!("\t\tLoad Avarage: {}", system_info.loadavg);
-                            println!("\t\tCPU Cores: {}", system_info.cpus);
+                            println!("\t\tLoad Avarage: {}", system_info.dynamic.loadavg);
+                            println!("\t\tCPU Cores: {}", system_info.constant.cpus);
                         }
                         if list_args.verbose {
                             if !agent.publish_info.is_empty() {
@@ -430,7 +430,7 @@ async fn main() -> Result<(), ClientError> {
             } else {
                 info!("Connecting to gateway: {}", conf.gateway);
             }
-            let event_stream = match WsConnection::new(
+            let (event_stream, local_addr) = match WsConnection::new(
                 &conf.gateway,
                 HashMap::from([("NL-TOKEN", token.clone())]),
                 conf.service_type.clone(),
@@ -484,9 +484,18 @@ async fn main() -> Result<(), ClientError> {
             let event: NarrowEvent<ClientEventOutBound, ClientEventInBound> =
                 NarrowEvent::new(event_stream);
             let req = event.get_request();
+            let sys_req = event.get_request();
             let (_event_tx, mut event_rx) = event.split();
             let connections = connections.clone();
             let event_stream_task = tokio::spawn(async move {
+                let _ = sys_req
+                    .request(ClientEventOutBound::Request(
+                        0,
+                        ClientEventRequest::UpdateConstantSysInfo(
+                            narrowlink_types::client::ConstSystemInfo { local_addr },
+                        ),
+                    ))
+                    .await;
                 while let Some(Ok(msg)) = event_rx.next().await {
                     debug!("Event: {:?}", msg);
                     match msg {

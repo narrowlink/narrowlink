@@ -5,6 +5,8 @@ use uuid::Uuid;
 
 use crate::{error::MessageError, generic::AgentInfo, GetResponse};
 
+use super::ConstSystemInfo;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum OutBound {
     Request(usize, Request),
@@ -19,11 +21,13 @@ pub enum InBound {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Request {
     ListOfAgents(bool), // verbose
+    UpdateConstantSysInfo(ConstSystemInfo),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Response {
     ActiveAgents(Vec<AgentInfo>),
+    Ok,
 }
 
 impl FromStr for OutBound {

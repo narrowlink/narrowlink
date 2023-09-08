@@ -112,6 +112,13 @@ impl State {
                                         let _ = client.send(ClientEventInBound::Response(request_id,ClientEventResponse::ActiveAgents(agents))).await;
                                     }
                                 }
+                                ClientEventRequest::UpdateConstantSysInfo(load)=>{
+                                    if let Some(client) = users.get_mut_client(uid,session){
+                                        client.const_sys_update(load);
+                                        let _ = client.send(ClientEventInBound::Response(request_id,ClientEventResponse::Ok)).await;
+                                        continue
+                                    }
+                                }
                             }
                         }
                         Err(_e)=>{
@@ -137,11 +144,16 @@ impl State {
                         Ok(AgentEventOutBound::Request(request_id, request))=>{
                             if let Some(agent) = users.get_mut_agent(uid,name){
                                 match request{
-                                    AgentEventRequest::SysInfo(load)=>{
+                                    AgentEventRequest::UpdateDynamicSysInfo(load)=>{
                                         if let Ok(ts) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH){
                                             let _ = agent.send(AgentEventInBound::Ping(ts.as_millis() as u64)).await;
                                         }
-                                        agent.sysupdate(load);
+                                        agent.dyn_sys_update(load);
+                                        let _ = agent.send(AgentEventInBound::Response(request_id,AgentEventResponse::Ok)).await;
+                                        continue
+                                    }
+                                    AgentEventRequest::UpdateConstantSysInfo(load)=>{
+                                        agent.const_sys_update(load);
                                         let _ = agent.send(AgentEventInBound::Response(request_id,AgentEventResponse::Ok)).await;
                                         continue
                                     }
