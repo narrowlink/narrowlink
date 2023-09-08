@@ -203,6 +203,7 @@ async fn main() -> Result<(), ClientError> {
                         }
                         if let Some(system_info) = &agent.system_info {
                             println!("\tSystem Info:");
+                            println!("\t\tLocal Address: {}", system_info.constant.local_addr);
                             println!("\t\tLoad Avarage: {}", system_info.dynamic.loadavg);
                             println!("\t\tCPU Cores: {}", system_info.constant.cpus);
                         }
