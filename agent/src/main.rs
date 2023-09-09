@@ -2,15 +2,16 @@ use std::{
     collections::HashMap,
     env,
     io::{self, IsTerminal},
-    net::SocketAddr,
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
     str::FromStr,
     time::Duration,
+    vec,
 };
 mod args;
 use args::Args;
 use config::KeyPolicy;
 use error::AgentError;
-use futures_util::{SinkExt, StreamExt};
+use futures_util::{future::select_all, SinkExt, StreamExt};
 use hmac::Mac;
 use narrowlink_network::{
     error::NetworkError,
@@ -32,7 +33,7 @@ use narrowlink_types::{
 use sha3::{Digest, Sha3_256};
 use sysinfo::SystemExt;
 use tokio::{
-    net::{lookup_host, TcpStream},
+    net::{lookup_host, TcpStream, UdpSocket},
     time,
 };
 use tracing::Level;
@@ -215,8 +216,34 @@ async fn start(args: Args) -> Result<(), AgentError> {
                 continue;
             }
             Some(Ok(AgentEventInBound::Peer2Peer(peer_ip, seed_port, seq))) => {
-                todo!("Peer2Peer");
-            },
+                // let mut sockets_status = Vec::new();
+                dbg!("Peer2Peer: {}:{}:{}", peer_ip, seed_port, seq);
+                let mut sockets = Vec::new();
+                let unspecified_ip = if peer_ip.is_ipv4() {
+                    IpAddr::V4(Ipv4Addr::UNSPECIFIED)
+                } else {
+                    IpAddr::V6(Ipv6Addr::UNSPECIFIED)
+                };
+
+                for seq in 1..seq + 1 {
+                    let client_port = seed_port - seq as u16;
+                    let agent_port = seed_port + seq as u16;
+                    let socket = UdpSocket::bind(SocketAddr::new(unspecified_ip, agent_port))
+                        .await
+                        .unwrap();
+                    socket
+                        .send_to(b"buf", SocketAddr::new(peer_ip, client_port))
+                        .await
+                        .unwrap();
+
+                    sockets.push(Box::pin(async { socket.readable().await.map(|_| socket) }));
+                }
+                let (x, _y, _z) = select_all(sockets).await;
+                let s = x.unwrap();
+                let mut buf = vec![0u8; 10];
+                let (_n, peer) = s.recv_from(&mut buf).await.unwrap();
+                dbg!("{}", peer);
+            }
             Some(Ok(AgentEventInBound::IsReachable(connection, connect))) => {
                 let res = match is_ready(connect).await {
                     Ok(true) => AgentEventOutBound::Ready(connection),

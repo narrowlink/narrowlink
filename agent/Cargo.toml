@@ -46,7 +46,6 @@ tracing-subscriber = { version = "0.3.17", default-features = false, features = 
     "json",
 ] }
 tracing-appender = { version = "0.2.2" }
-
 clap_lex = { version = "0.5.1", default-features = false }
 
 narrowlink-types = { version = "0.1.4" }

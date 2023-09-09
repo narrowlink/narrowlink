@@ -29,6 +29,7 @@ tokio = { version = "1.32.0", features = [
     "rt",
     "io-std",
     "rt-multi-thread",
+    "time",
 ], default-features = false }
 futures-util = { version = "0.3.28", default-features = false }
 futures-sink = { version = "0.3.28", features = [

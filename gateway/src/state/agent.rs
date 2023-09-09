@@ -94,7 +94,7 @@ impl Agent {
         }
     }
     pub fn get_local_addr(&self) -> Option<SocketAddr> {
-        self.system_info.as_ref().map(|i|i.constant.local_addr)
+        self.system_info.as_ref().map(|i| i.constant.local_addr)
     }
     pub fn nat_type(&self) -> NatType {
         if self

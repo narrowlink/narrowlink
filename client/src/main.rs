@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     env,
     io::{self, IsTerminal},
-    net::{IpAddr, SocketAddr},
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -15,7 +15,7 @@ use args::{ArgCommands, Args};
 mod config;
 use either::Either;
 use error::ClientError;
-use futures_util::stream::StreamExt;
+use futures_util::{future::select_all, stream::StreamExt};
 use hmac::Mac;
 use narrowlink_network::{
     error::NetworkError,
@@ -31,7 +31,11 @@ use narrowlink_types::{
 };
 use proxy_stream::ProxyStream;
 use sha3::{Digest, Sha3_256};
-use tokio::{net::TcpListener, sync::Mutex, time};
+use tokio::{
+    net::{TcpListener, UdpSocket},
+    sync::Mutex,
+    time,
+};
 use tracing::{debug, error, info, span, trace, warn, Level};
 use tracing_subscriber::{
     filter::{LevelFilter, Targets},
@@ -502,8 +506,40 @@ async fn main() -> Result<(), ClientError> {
                                 .await
                                 .insert(connection_id.to_string(), msg);
                         }
-                        narrowlink_types::client::EventInBound::Peer2Peer(peer_ip, seed_port, seq) =>{
-                            todo!("")
+                        narrowlink_types::client::EventInBound::Peer2Peer(
+                            peer_ip,
+                            seed_port,
+                            seq,
+                        ) => {
+                            dbg!("Peer2Peer: {}:{}:{}", peer_ip, seed_port, seq);
+                            let unspecified_ip = if peer_ip.is_ipv4() {
+                                IpAddr::V4(Ipv4Addr::UNSPECIFIED)
+                            } else {
+                                IpAddr::V6(Ipv6Addr::UNSPECIFIED)
+                            };
+                            let mut sockets = Vec::new();
+                            // sleep(Duration::from_millis(1000)).await;
+                            for seq in 1..seq + 1 {
+                                let client_port = seed_port - seq as u16;
+                                let agent_port = seed_port + seq as u16;
+                                let socket =
+                                    UdpSocket::bind(SocketAddr::new(unspecified_ip, client_port))
+                                        .await
+                                        .unwrap();
+                                socket
+                                    .send_to(b"buf", SocketAddr::new(peer_ip, agent_port))
+                                    .await
+                                    .unwrap();
+
+                                sockets.push(Box::pin(async {
+                                    socket.readable().await.map(|_| socket)
+                                }));
+                            }
+                            let (x, _y, _z) = select_all(sockets).await;
+                            let s = x.unwrap();
+                            let mut buf = vec![0u8; 10];
+                            let (_n, peer) = s.recv_from(&mut buf).await.unwrap();
+                            dbg!("{}", peer);
                         }
                         _ => {
                             continue;
@@ -517,6 +553,12 @@ async fn main() -> Result<(), ClientError> {
                     ClientEventRequest::UpdateConstantSysInfo(
                         narrowlink_types::client::ConstSystemInfo { local_addr },
                     ),
+                ))
+                .await;
+            let _ = sys_req
+                .request(ClientEventOutBound::Request(
+                    0,
+                    ClientEventRequest::Peer2Peer("MBP".to_string()),
                 ))
                 .await;
             session = Some((session_id, req, event_stream_task));
