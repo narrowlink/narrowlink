@@ -131,7 +131,7 @@ impl State {
                                             }
                                             continue
                                         };
-                                        let seq = if (c == NatType::UnSupported || a == NatType::UnSupported) || (c == NatType::Hard || a == NatType::Hard) {
+                                        let seq = if /*(c == NatType::UnSupported || a == NatType::UnSupported) ||*/ (c == NatType::Hard || a == NatType::Hard) {
                                             let _ = client.send(ClientEventInBound::Response(request_id,ClientEventResponse::Failed)).await;
                                             continue
                                         } else if c == NatType::Easy && a == NatType::Easy{
