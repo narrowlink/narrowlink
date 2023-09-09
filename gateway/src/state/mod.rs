@@ -1,4 +1,5 @@
 use futures_util::StreamExt;
+use rand::Rng;
 use std::{net::SocketAddr, str::FromStr};
 use uuid::Uuid;
 mod agent;
@@ -7,7 +8,7 @@ mod connection;
 mod users;
 use crate::{
     service::{ServiceDataRequest, ServiceEventRequest},
-    state::connection::AgentConnection,
+    state::{connection::AgentConnection, users::NatType},
     CONNECTION_ORIANTED,
 };
 use narrowlink_network::{error::NetworkError, event::NarrowEvent, UniversalStream};
@@ -119,6 +120,31 @@ impl State {
                                         continue
                                     }
                                 }
+                                ClientEventRequest::Peer2Peer(agent_name) =>{
+                                    let Some(user) = users.get_mut_user(uid) else {
+                                        continue
+                                    };
+                                     if let (Some(c),Some(a)) = (user.client_nat_type(session),user.agent_nat_type(&agent_name)){
+                                        let Some((client,agent)) = user.get_mut_pair(session,&agent_name) else {
+                                            if let Some(c) = user.get_mut_client(session){
+                                                c.send(ClientEventInBound::Response(request_id,ClientEventResponse::Failed)).await.ok();
+                                            }
+                                            continue
+                                        };
+                                        let seq = if (c == NatType::UnSupported || a == NatType::UnSupported) || (c == NatType::Hard || a == NatType::Hard) {
+                                            let _ = client.send(ClientEventInBound::Response(request_id,ClientEventResponse::Failed)).await;
+                                            continue
+                                        } else if c == NatType::Easy && a == NatType::Easy{
+                                            2
+                                        } else {
+                                            255
+                                        };
+                                        let port = rand::thread_rng().gen_range(49152..65535);
+                                        let _ = agent.send(AgentEventInBound::Peer2Peer(client.get_real_ip(),port,seq)).await;
+                                        let _ = client.send(ClientEventInBound::Peer2Peer(agent.get_real_ip(),port,seq)).await;
+                                    }
+
+                                }
                             }
                         }
                         Err(_e)=>{
@@ -226,7 +252,7 @@ impl State {
 
                                 //policy todo
                                 info!("Client {}:{}:{} ({}) added", client_token.uid, client_token.name, session,peer_socket_addr);
-                                users.add_client(client_token.uid,client::Client::new(client_token.name, session,policies, sender));
+                                users.add_client(client_token.uid,client::Client::new(client_token.name, session,policies,peer_socket_addr,peer_forward_addr, sender));
                                 client_types.push(receiver.map(move |f| (client_token.uid, session, f)));
 
                             } else {

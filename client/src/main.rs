@@ -502,6 +502,9 @@ async fn main() -> Result<(), ClientError> {
                                 .await
                                 .insert(connection_id.to_string(), msg);
                         }
+                        narrowlink_types::client::EventInBound::Peer2Peer(peer_ip, seed_port, seq) =>{
+                            todo!("")
+                        }
                         _ => {
                             continue;
                         }

@@ -214,6 +214,9 @@ async fn start(args: Args) -> Result<(), AgentError> {
                 });
                 continue;
             }
+            Some(Ok(AgentEventInBound::Peer2Peer(peer_ip, seed_port, seq))) => {
+                todo!("Peer2Peer");
+            },
             Some(Ok(AgentEventInBound::IsReachable(connection, connect))) => {
                 let res = match is_ready(connect).await {
                     Ok(true) => AgentEventOutBound::Ready(connection),

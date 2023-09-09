@@ -991,6 +991,7 @@ dependencies = [
  "narrowlink-network",
  "narrowlink-types",
  "pem 3.0.2",
+ "rand",
  "rcgen",
  "rustls",
  "rustls-pemfile",

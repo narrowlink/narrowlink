@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{net::IpAddr, str::FromStr};
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -13,6 +13,7 @@ pub enum InBound {
     IsReachable(Uuid, Connect),
     Response(usize, Response),
     Ping(u64),
+    Peer2Peer(IpAddr, u16, u8), // peer ip, seed port, sequences
     Shutdown,
 }
 

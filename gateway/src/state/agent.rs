@@ -1,4 +1,8 @@
-use std::{collections::HashMap, net::SocketAddr};
+use std::{
+    collections::HashMap,
+    net::{IpAddr, SocketAddr},
+    str::FromStr,
+};
 
 use futures_util::{stream::SplitSink, SinkExt};
 use narrowlink_network::{error::NetworkError, event::NarrowEvent};
@@ -7,6 +11,8 @@ use narrowlink_types::{
     generic::Connect,
     publish::PublishHost,
 };
+
+use super::users::NatType;
 
 pub struct Agent {
     pub name: String,
@@ -75,6 +81,47 @@ impl Agent {
     }
     pub fn pingupdate(&mut self, ping: u16) {
         self.ping = ping;
+    }
+    pub fn get_real_ip(&self) -> IpAddr {
+        if let Some(addr) = self
+            .forward_addr
+            .as_ref()
+            .and_then(|a| IpAddr::from_str(a).ok())
+        {
+            addr
+        } else {
+            self.socket_addr.ip()
+        }
+    }
+
+    pub fn nat_type(&self) -> NatType {
+        if let Some(addr) = self
+            .forward_addr
+            .as_ref()
+            .and_then(|a| IpAddr::from_str(a).ok())
+        {
+            if match addr {
+                IpAddr::V4(ip) => ip.is_private() || ip.is_multicast(),
+                IpAddr::V6(ip) => ip.is_multicast() || ip.is_loopback() || ip.is_unspecified(), // todo add other
+            } {
+                NatType::UnSupported
+            } else {
+                NatType::Unknown
+            }
+        } else if match self.socket_addr.ip() {
+            IpAddr::V4(ip) => ip.is_private() || ip.is_multicast(),
+            IpAddr::V6(ip) => ip.is_multicast() || ip.is_loopback() || ip.is_unspecified(), // todo add other
+        } {
+            NatType::UnSupported
+        } else if let Some(system_info) = self.system_info.as_ref() {
+            if system_info.constant.local_addr.port() == self.socket_addr.port() {
+                NatType::Easy
+            } else {
+                NatType::Hard
+            }
+        } else {
+            NatType::Unknown
+        }
     }
 }
 
