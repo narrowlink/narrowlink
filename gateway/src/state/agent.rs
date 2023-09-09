@@ -93,26 +93,17 @@ impl Agent {
             self.socket_addr.ip()
         }
     }
-
+    pub fn get_local_addr(&self) -> Option<SocketAddr> {
+        self.system_info.as_ref().map(|i|i.constant.local_addr)
+    }
     pub fn nat_type(&self) -> NatType {
-        if let Some(addr) = self
+        if self
             .forward_addr
             .as_ref()
             .and_then(|a| IpAddr::from_str(a).ok())
+            .is_some()
         {
-            if match addr {
-                IpAddr::V4(ip) => ip.is_private() || ip.is_multicast(),
-                IpAddr::V6(ip) => ip.is_multicast() || ip.is_loopback() || ip.is_unspecified(), // todo add other
-            } {
-                NatType::UnSupported
-            } else {
-                NatType::Unknown
-            }
-        } else if match self.socket_addr.ip() {
-            IpAddr::V4(ip) => ip.is_private() || ip.is_multicast(),
-            IpAddr::V6(ip) => ip.is_multicast() || ip.is_loopback() || ip.is_unspecified(), // todo add other
-        } {
-            NatType::UnSupported
+            NatType::Unknown
         } else if let Some(system_info) = self.system_info.as_ref() {
             if system_info.constant.local_addr.port() == self.socket_addr.port() {
                 NatType::Easy

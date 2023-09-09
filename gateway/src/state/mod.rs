@@ -131,7 +131,9 @@ impl State {
                                             }
                                             continue
                                         };
-                                        let seq = if /*(c == NatType::UnSupported || a == NatType::UnSupported) ||*/ (c == NatType::Hard || a == NatType::Hard) {
+                                        let mut client_ip = client.get_real_ip();
+                                        let mut agent_ip = agent.get_real_ip();
+                                        let mut seq : u8 = if (c == NatType::Hard || a == NatType::Hard) && client_ip != agent_ip {
                                             let _ = client.send(ClientEventInBound::Response(request_id,ClientEventResponse::Failed)).await;
                                             continue
                                         } else if c == NatType::Easy && a == NatType::Easy{
@@ -139,9 +141,20 @@ impl State {
                                         } else {
                                             255
                                         };
+
+                                        if client_ip == agent_ip{
+                                            let (Some(cip),Some(aip)) = (client.get_local_addr(),agent.get_local_addr()) else{
+                                                let _ = client.send(ClientEventInBound::Response(request_id,ClientEventResponse::Failed)).await;
+                                                continue
+                                            };
+                                            client_ip = cip.ip();
+                                            agent_ip = aip.ip();
+                                            seq = 2;
+                                        }
+                                        let _ = client.send(ClientEventInBound::Response(request_id,ClientEventResponse::Ok)).await;
                                         let port = rand::thread_rng().gen_range(49152..65535);
-                                        let _ = agent.send(AgentEventInBound::Peer2Peer(client.get_real_ip(),port,seq)).await;
-                                        let _ = client.send(ClientEventInBound::Peer2Peer(agent.get_real_ip(),port,seq)).await;
+                                        let _ = agent.send(AgentEventInBound::Peer2Peer(client_ip,port,seq)).await;
+                                        let _ = client.send(ClientEventInBound::Peer2Peer(agent_ip,port,seq)).await;
                                     }
 
                                 }

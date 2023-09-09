@@ -50,7 +50,11 @@ impl User {
     pub fn get_client(&self, client_id: Uuid) -> Option<&Client> {
         self.clients.get(&client_id)
     }
-    pub fn get_mut_pair(&mut self, client_id: Uuid, agent_name: &str) -> Option<(&mut Client, &mut Agent)> {
+    pub fn get_mut_pair(
+        &mut self,
+        client_id: Uuid,
+        agent_name: &str,
+    ) -> Option<(&mut Client, &mut Agent)> {
         let client = self.clients.get_mut(&client_id)?;
         let agent = self.agents.get_mut(agent_name)?;
         Some((client, agent))
@@ -318,5 +322,4 @@ pub enum NatType {
     Easy,
     Hard,
     Unknown,
-    UnSupported,
 }
