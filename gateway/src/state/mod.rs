@@ -151,10 +151,14 @@ impl State {
                                             agent_ip = aip.ip();
                                             seq = 2;
                                         }
+                                        /* generate a certificate by using rcgen */
+                                        let cert = rcgen::generate_simple_self_signed(vec![]).unwrap();
+                                        let key = cert.serialize_private_key_der();
+                                        let cert = cert.serialize_der().unwrap();
                                         let _ = client.send(ClientEventInBound::Response(request_id,ClientEventResponse::Ok)).await;
                                         let port = rand::thread_rng().gen_range(49152..65535);
-                                        let _ = agent.send(AgentEventInBound::Peer2Peer(client_ip,port,seq,c == NatType::Hard, a == NatType::Hard)).await;
-                                        let _ = client.send(ClientEventInBound::Peer2Peer(agent_ip,port,seq, c == NatType::Hard, a == NatType::Hard)).await;
+                                        let _ = agent.send(AgentEventInBound::Peer2Peer(client_ip,port,seq,c == NatType::Hard, a == NatType::Hard,cert.clone(),key.clone())).await;
+                                        let _ = client.send(ClientEventInBound::Peer2Peer(agent_ip,port,seq, c == NatType::Hard, a == NatType::Hard,cert,key)).await;
                                     }
 
                                 }

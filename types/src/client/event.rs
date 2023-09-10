@@ -16,7 +16,7 @@ pub enum OutBound {
 pub enum InBound {
     Response(usize, Response),
     ConnectionError(Uuid, String),
-    Peer2Peer(IpAddr, u16, u8, bool, bool), // peer ip, seed port, sequences, client_hard, agent_hard
+    Peer2Peer(IpAddr, u16, u8, bool, bool,Vec<u8>,Vec<u8>), // peer ip, seed port, sequences, client_hard, agent_hard, cert, key
 }
 
 #[derive(Debug, Serialize, Deserialize)]

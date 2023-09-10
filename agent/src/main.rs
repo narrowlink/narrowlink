@@ -215,7 +215,15 @@ async fn start(args: Args) -> Result<(), AgentError> {
                 });
                 continue;
             }
-            Some(Ok(AgentEventInBound::Peer2Peer(peer_ip, seed_port, seq, chard, ahard))) => {
+            Some(Ok(AgentEventInBound::Peer2Peer(
+                peer_ip,
+                seed_port,
+                seq,
+                chard,
+                ahard,
+                cert,
+                key,
+            ))) => {
                 // let mut sockets_status = Vec::new();
                 dbg!("Peer2Peer: {}:{}:{}", peer_ip, seed_port, seq);
                 let mut sockets = Vec::new();
@@ -228,21 +236,24 @@ async fn start(args: Args) -> Result<(), AgentError> {
                 for s in 1..(seq as u16) + 1 {
                     let client_port = seed_port - if chard || ahard == chard { s } else { 0 };
                     let agent_port = seed_port + if ahard || ahard == chard { s } else { 0 };
-                    if socket.is_none() || ahard{
-                        socket = Some(UdpSocket::bind(SocketAddr::new(unspecified_ip, agent_port))
-                        .await
-                        .unwrap());
+                    if socket.is_none() || ahard {
+                        socket = Some(
+                            UdpSocket::bind(SocketAddr::new(unspecified_ip, agent_port))
+                                .await
+                                .unwrap(),
+                        );
                     }
                     if let Some(socket) = socket.as_ref() {
                         socket
-                            .send_to(b"buf", SocketAddr::new(peer_ip, client_port))
+                            .send_to(b".", SocketAddr::new(peer_ip, client_port))
                             .await
                             .unwrap();
                     }
 
                     if s == (seq as u16) || ahard {
                         if let Some(socket) = socket.take() {
-                            sockets.push(Box::pin(async { socket.readable().await.map(|_| socket) }));
+                            sockets
+                                .push(Box::pin(async { socket.readable().await.map(|_| socket) }));
                         }
                     }
                     // socket
@@ -253,8 +264,16 @@ async fn start(args: Args) -> Result<(), AgentError> {
                 }
                 let (x, _y, _z) = select_all(sockets).await;
                 let s = x.unwrap();
-                let mut buf = vec![0u8; 10];
+                let mut buf = vec![0u8; 3];
                 let (_n, peer) = s.recv_from(&mut buf).await.unwrap();
+                let cert_hash = Sha3_256::digest(cert);
+                if cert_hash[..3] == buf[0..3] {
+                    s.send_to(&cert_hash[3..6], peer).await.unwrap();
+                    
+                }else{
+                    dbg!("Cert hash mismatch");
+                }
+
                 dbg!("{}", peer);
             }
             Some(Ok(AgentEventInBound::IsReachable(connection, connect))) => {

@@ -512,6 +512,8 @@ async fn main() -> Result<(), ClientError> {
                             seq,
                             chard,
                             ahard,
+                            cert,
+                            key,
                         ) => {
                             dbg!("Peer2Peer: {}:{}:{}", peer_ip, seed_port, seq);
                             let unspecified_ip = if peer_ip.is_ipv4() {
@@ -520,6 +522,8 @@ async fn main() -> Result<(), ClientError> {
                                 IpAddr::V6(Ipv6Addr::UNSPECIFIED)
                             };
                             let mut sockets = Vec::new();
+                            let cert_hash = Sha3_256::digest(cert);
+
                             // sleep(Duration::from_millis(1000)).await;
                             let mut socket: Option<UdpSocket> = None;
                             for s in 1..(seq as u16) + 1 {
@@ -540,7 +544,7 @@ async fn main() -> Result<(), ClientError> {
                                 };
                                 if let Some(socket) = socket.as_ref() {
                                     socket
-                                        .send_to(b"buf", SocketAddr::new(peer_ip, agent_port))
+                                        .send_to(&cert_hash[0..3], SocketAddr::new(peer_ip, agent_port))
                                         .await
                                         .unwrap();
                                 }
@@ -563,8 +567,14 @@ async fn main() -> Result<(), ClientError> {
                             }
                             let (x, _y, _z) = select_all(sockets).await;
                             let s = x.unwrap();
-                            let mut buf = vec![0u8; 10];
+                            let mut buf = vec![0u8; 3];
                             let (_n, peer) = s.recv_from(&mut buf).await.unwrap();
+                            if cert_hash[3..6] == buf[0..3] {
+                                s.send_to(&cert_hash[3..6], peer).await.unwrap();
+                            }else{
+                                dbg!("Invalid cert");
+                            }
+
                             dbg!("{}", peer);
                         }
                         _ => {
@@ -581,12 +591,12 @@ async fn main() -> Result<(), ClientError> {
                     ),
                 ))
                 .await;
-            let _ = sys_req
-                .request(ClientEventOutBound::Request(
-                    0,
-                    ClientEventRequest::Peer2Peer("MBP".to_string()),
-                ))
-                .await;
+            // let _ = sys_req
+            //     .request(ClientEventOutBound::Request(
+            //         0,
+            //         ClientEventRequest::Peer2Peer("MBP".to_string()),
+            //     ))
+            //     .await;
             session = Some((session_id, req, event_stream_task));
         }
     }
