@@ -13,7 +13,7 @@ pub enum InBound {
     IsReachable(Uuid, Connect),
     Response(usize, Response),
     Ping(u64),
-    Peer2Peer(IpAddr, u16, u8), // peer ip, seed port, sequences
+    Peer2Peer(IpAddr, u16, u8, bool, bool), // peer ip, seed port, sequences, client_hard, agent_hard
     Shutdown,
 }
 

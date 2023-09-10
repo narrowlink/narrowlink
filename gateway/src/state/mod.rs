@@ -133,7 +133,7 @@ impl State {
                                         };
                                         let mut client_ip = client.get_real_ip();
                                         let mut agent_ip = agent.get_real_ip();
-                                        let mut seq : u8 = if (c == NatType::Hard || a == NatType::Hard) && client_ip != agent_ip {
+                                        let mut seq : u8 = if (c == NatType::Hard && a == NatType::Hard) && client_ip != agent_ip {
                                             let _ = client.send(ClientEventInBound::Response(request_id,ClientEventResponse::Failed)).await;
                                             continue
                                         } else if c == NatType::Easy && a == NatType::Easy{
@@ -153,8 +153,8 @@ impl State {
                                         }
                                         let _ = client.send(ClientEventInBound::Response(request_id,ClientEventResponse::Ok)).await;
                                         let port = rand::thread_rng().gen_range(49152..65535);
-                                        let _ = agent.send(AgentEventInBound::Peer2Peer(client_ip,port,seq)).await;
-                                        let _ = client.send(ClientEventInBound::Peer2Peer(agent_ip,port,seq)).await;
+                                        let _ = agent.send(AgentEventInBound::Peer2Peer(client_ip,port,seq,c == NatType::Hard, a == NatType::Hard)).await;
+                                        let _ = client.send(ClientEventInBound::Peer2Peer(agent_ip,port,seq, c == NatType::Hard, a == NatType::Hard)).await;
                                     }
 
                                 }

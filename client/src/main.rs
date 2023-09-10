@@ -510,6 +510,8 @@ async fn main() -> Result<(), ClientError> {
                             peer_ip,
                             seed_port,
                             seq,
+                            chard,
+                            ahard,
                         ) => {
                             dbg!("Peer2Peer: {}:{}:{}", peer_ip, seed_port, seq);
                             let unspecified_ip = if peer_ip.is_ipv4() {
@@ -519,21 +521,35 @@ async fn main() -> Result<(), ClientError> {
                             };
                             let mut sockets = Vec::new();
                             // sleep(Duration::from_millis(1000)).await;
-                            for seq in 1..seq + 1 {
-                                let client_port = seed_port - seq as u16;
-                                let agent_port = seed_port + seq as u16;
-                                let socket =
-                                    UdpSocket::bind(SocketAddr::new(unspecified_ip, client_port))
+                            let mut socket: Option<UdpSocket> = None;
+                            for s in 1..(seq as u16) + 1 {
+                                let client_port = seed_port - if chard { s } else { 0 };
+                                let agent_port = seed_port + if ahard { s } else { 0 };
+                                if socket.is_none() || chard {
+                                socket = Some(UdpSocket::bind(SocketAddr::new(unspecified_ip, client_port))
+                                        .await
+                                        .unwrap());
+                                };
+                                if let Some(socket) = socket.as_ref() {
+                                    socket
+                                        .send_to(b"buf", SocketAddr::new(peer_ip, agent_port))
                                         .await
                                         .unwrap();
-                                socket
-                                    .send_to(b"buf", SocketAddr::new(peer_ip, agent_port))
-                                    .await
-                                    .unwrap();
+                                }
+                                if s == 1+(seq as u16) || chard {
+                                    if let Some(socket) = socket.take() {
+                                        sockets.push(Box::pin(async { socket.readable().await.map(|_| socket) }));
+                                    }
+                                }
+            
+                                // socket
+                                //     .send_to(b"buf", SocketAddr::new(peer_ip, agent_port))
+                                //     .await
+                                //     .unwrap();
 
-                                sockets.push(Box::pin(async {
-                                    socket.readable().await.map(|_| socket)
-                                }));
+                                // sockets.push(Box::pin(async {
+                                //     socket.readable().await.map(|_| socket)
+                                // }));
                             }
                             let (x, _y, _z) = select_all(sockets).await;
                             let s = x.unwrap();
