@@ -536,7 +536,7 @@ async fn main() -> Result<(), ClientError> {
                                         .await
                                         .unwrap();
                                 }
-                                if s == 1+(seq as u16) || chard {
+                                if s == (seq as u16) || chard {
                                     if let Some(socket) = socket.take() {
                                         sockets.push(Box::pin(async { socket.readable().await.map(|_| socket) }));
                                     }

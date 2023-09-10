@@ -240,7 +240,7 @@ async fn start(args: Args) -> Result<(), AgentError> {
                             .unwrap();
                     }
 
-                    if s == 1+(seq as u16) || ahard {
+                    if s == (seq as u16) || ahard {
                         if let Some(socket) = socket.take() {
                             sockets.push(Box::pin(async { socket.readable().await.map(|_| socket) }));
                         }
