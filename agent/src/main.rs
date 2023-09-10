@@ -226,8 +226,8 @@ async fn start(args: Args) -> Result<(), AgentError> {
                 };
                 let mut socket: Option<UdpSocket> = None;
                 for s in 1..(seq as u16) + 1 {
-                    let client_port = seed_port - if chard { s } else { 0 };
-                    let agent_port = seed_port + if ahard { s } else { 0 };
+                    let client_port = seed_port - if chard || ahard == chard { s } else { 0 };
+                    let agent_port = seed_port + if ahard || ahard == chard { s } else { 0 };
                     if socket.is_none() || ahard{
                         socket = Some(UdpSocket::bind(SocketAddr::new(unspecified_ip, agent_port))
                         .await

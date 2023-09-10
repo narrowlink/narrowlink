@@ -523,12 +523,20 @@ async fn main() -> Result<(), ClientError> {
                             // sleep(Duration::from_millis(1000)).await;
                             let mut socket: Option<UdpSocket> = None;
                             for s in 1..(seq as u16) + 1 {
-                                let client_port = seed_port - if chard { s } else { 0 };
-                                let agent_port = seed_port + if ahard { s } else { 0 };
+                                let client_port =
+                                    seed_port - if chard || ahard == chard { s } else { 0 };
+                                let agent_port =
+                                    seed_port + if ahard || ahard == chard { s } else { 0 };
+
                                 if socket.is_none() || chard {
-                                socket = Some(UdpSocket::bind(SocketAddr::new(unspecified_ip, client_port))
+                                    socket = Some(
+                                        UdpSocket::bind(SocketAddr::new(
+                                            unspecified_ip,
+                                            client_port,
+                                        ))
                                         .await
-                                        .unwrap());
+                                        .unwrap(),
+                                    );
                                 };
                                 if let Some(socket) = socket.as_ref() {
                                     socket
@@ -538,10 +546,12 @@ async fn main() -> Result<(), ClientError> {
                                 }
                                 if s == (seq as u16) || chard {
                                     if let Some(socket) = socket.take() {
-                                        sockets.push(Box::pin(async { socket.readable().await.map(|_| socket) }));
+                                        sockets.push(Box::pin(async {
+                                            socket.readable().await.map(|_| socket)
+                                        }));
                                     }
                                 }
-            
+
                                 // socket
                                 //     .send_to(b"buf", SocketAddr::new(peer_ip, agent_port))
                                 //     .await
