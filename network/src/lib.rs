@@ -6,6 +6,7 @@ pub mod error;
 pub mod event;
 pub mod transport;
 pub mod ws;
+pub mod p2p;
 use error::NetworkError;
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use tokio::io::{AsyncRead, AsyncWrite};
