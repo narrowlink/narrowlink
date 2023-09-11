@@ -274,18 +274,18 @@ pub async fn udp_punched_socket(
 
     let (puncher, dyn_my_port, dyn_peer_port) = match (p2p.nat, p2p.peer_nat) {
         (NatType::Easy, NatType::Easy) => (left, true, true),
-        (NatType::Easy, NatType::Hard) => (true, true, false),
-        (NatType::Easy, NatType::Unknown) => (true, true, false),
-        (NatType::Hard, NatType::Easy) => (false, false, true),
+        (NatType::Easy, NatType::Hard) => (true, false, true),
+        (NatType::Easy, NatType::Unknown) => (true, false, true),
+        (NatType::Hard, NatType::Easy) => (false, true, false),
         (NatType::Hard, NatType::Hard) => (left, left, !left),
-        (NatType::Hard, NatType::Unknown) => (false, false, true),
-        (NatType::Unknown, NatType::Easy) => (false, false, true),
-        (NatType::Unknown, NatType::Hard) => (true, true, false),
+        (NatType::Hard, NatType::Unknown) => (false, true, false),
+        (NatType::Unknown, NatType::Easy) => (false, true, false),
+        (NatType::Unknown, NatType::Hard) => (true, false, true),
         (NatType::Unknown, NatType::Unknown) => (left, left, !left),
     };
 
     if !puncher {
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep(Duration::from_millis(1000)).await;
     }
 
     let mut sockets = Vec::new();
@@ -311,6 +311,7 @@ pub async fn udp_punched_socket(
             p2p.seed_port
         };
         dbg!(my_port);
+        dbg!(peer_port);
         if socket.is_none() || dyn_my_port {
             match UdpSocket::bind(SocketAddr::new(unspecified_ip, my_port)).await {
                 Ok(s) => socket.replace(s),
