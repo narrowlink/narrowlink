@@ -1,8 +1,19 @@
-use std::net::{IpAddr, SocketAddr};
+use std::{
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
+    time::Duration,
+};
 
-use narrowlink_types::generic::{Connect, Protocol};
+use async_recursion::async_recursion;
+use narrowlink_types::{
+    generic::{Connect, Protocol},
+    NatType, Peer2PeerRequest,
+};
 use quinn::{Connection, RecvStream, SendStream};
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::{
+    io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
+    net::UdpSocket,
+};
+use tracing::warn;
 
 use crate::error::NetworkError;
 #[derive(PartialEq)]
@@ -28,7 +39,8 @@ impl Command {
         }
     }
 }
-pub enum Request { // Todo: Add signature and salt
+pub enum Request {
+    // Todo: Add signature and salt
     Ip(SocketAddr, bool),   // bool is UDP
     Dns(String, u16, bool), // bool is UDP
 }
@@ -118,7 +130,7 @@ impl Request {
     }
 }
 
-#[derive(Clone, Copy,Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum Response {
     Success = 0x00,
     InvalidRequest = 0x01,
@@ -151,7 +163,11 @@ impl From<&Request> for Connect {
         Connect {
             host,
             port,
-            protocol: if *is_udp { Protocol::UDP } else { Protocol::TCP },
+            protocol: if *is_udp {
+                Protocol::UDP
+            } else {
+                Protocol::TCP
+            },
             cryptography: None,
             sign: None,
         }
@@ -185,10 +201,8 @@ pub struct QuicBiSocket {
 impl QuicBiSocket {
     pub async fn open(stream: &Connection) -> Result<Self, NetworkError> {
         let remote_addr = stream.remote_address();
-        let (send, recv) = stream
-            .open_bi()
-            .await.unwrap();
-            // .map_err(|_| NetworkError::QuicError)?;
+        let (send, recv) = stream.open_bi().await.unwrap();
+        // .map_err(|_| NetworkError::QuicError)?;
         Ok(Self {
             send,
             recv,
@@ -243,5 +257,132 @@ impl AsyncWrite for QuicBiSocket {
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<(), std::io::Error>> {
         std::pin::Pin::new(&mut self.send).poll_shutdown(cx)
+    }
+}
+#[async_recursion]
+pub async fn udp_punched_socket(
+    p2p: &Peer2PeerRequest,
+    handshake_key: &[u8],
+    left: bool,
+    inner: bool,
+) -> Result<(UdpSocket, SocketAddr), NetworkError> {
+    let unspecified_ip = if p2p.peer_ip.is_ipv4() {
+        IpAddr::V4(Ipv4Addr::UNSPECIFIED)
+    } else {
+        IpAddr::V6(Ipv6Addr::UNSPECIFIED)
+    };
+
+    let (puncher, dyn_my_port, dyn_peer_port) = match (p2p.nat, p2p.peer_nat) {
+        (NatType::Easy, NatType::Easy) => (left, true, true),
+        (NatType::Easy, NatType::Hard) => (true, true, false),
+        (NatType::Easy, NatType::Unknown) => (true, true, false),
+        (NatType::Hard, NatType::Easy) => (false, false, true),
+        (NatType::Hard, NatType::Hard) => (left, left, !left),
+        (NatType::Hard, NatType::Unknown) => (false, false, true),
+        (NatType::Unknown, NatType::Easy) => (false, false, true),
+        (NatType::Unknown, NatType::Hard) => (true, true, false),
+        (NatType::Unknown, NatType::Unknown) => (left, left, !left),
+    };
+
+    if !puncher {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+
+    let mut sockets = Vec::new();
+    let mut socket: Option<UdpSocket> = None;
+    for s in 1..p2p.seq + 1 {
+        let my_port = if dyn_my_port {
+            if left {
+                p2p.seed_port - s
+            } else {
+                p2p.seed_port + s
+            }
+        } else {
+            0
+        };
+        let peer_port = if dyn_peer_port {
+            if left {
+                p2p.seed_port + s
+            } else {
+                p2p.seed_port - s
+            }
+        } else {
+            0
+        };
+        dbg!(my_port);
+        if socket.is_none() || dyn_my_port {
+            match UdpSocket::bind(SocketAddr::new(unspecified_ip, my_port)).await {
+                Ok(s) => socket.replace(s),
+                Err(e) => {
+                    warn!("Error binding socket on {}, {}", my_port, e.to_string());
+                    continue;
+                }
+            };
+        }
+
+        if let Some(socket) = socket.as_ref() {
+            let buf = if puncher {
+                vec![0]
+            } else {
+                handshake_key[0..3].to_vec()
+            };
+            if let Err(e) = socket
+                .send_to(&buf, SocketAddr::new(p2p.peer_ip, peer_port))
+                .await
+            {
+                warn!("Error sending to peer: {}", e);
+            };
+        }
+        if s == p2p.seq && dyn_my_port {
+            if let Some(socket) = socket.take() {
+                sockets.push(Box::pin(async { socket.readable().await.map(|_| socket) }));
+            }
+        }
+    }
+    loop {
+        let Ok((socket, _size, remaining_sockets)) = tokio::time::timeout(
+            Duration::from_secs(15),
+            futures_util::future::select_all(sockets),
+        )
+        .await
+        else {
+            warn!("Timeout waiting for response from peer");
+            if !inner && p2p.nat == p2p.peer_nat && p2p.nat == NatType::Unknown {
+                return udp_punched_socket(p2p, handshake_key, !left, true).await;
+            }
+            return Err(NetworkError::P2PTimeout);
+        };
+        let socket = match socket {
+            Ok(socket) => socket,
+            Err(e) => {
+                warn!("Error reading from socket: {}", e);
+                sockets = remaining_sockets;
+                continue;
+            }
+        };
+
+        let mut buf = vec![0u8; 3];
+        let peer = match socket.recv_from(&mut buf).await {
+            Ok((_, peer)) => peer,
+            Err(e) => {
+                warn!("Error receiving from socket: {}", e);
+                sockets = remaining_sockets;
+                continue;
+            }
+        };
+
+        if puncher && handshake_key[0..3] == buf[0..3] {
+            if let Err(e) = socket.send_to(&handshake_key[3..6], peer).await {
+                warn!("Error sending to peer: {}", e);
+                sockets = remaining_sockets;
+                continue;
+            }
+        } else if handshake_key[3..6] == buf[0..3] {
+        } else {
+            warn!("Invalid response from peer");
+            sockets = remaining_sockets;
+            continue;
+        };
+        return Ok((socket, peer));
     }
 }

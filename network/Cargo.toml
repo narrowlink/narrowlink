@@ -39,7 +39,7 @@ chacha20poly1305 = { version = "0.10.1", features = [
     "alloc",
 ], default-features = false }
 quinn = { version = "0.10.0", default-features = false }
-
+async-recursion = "1.0.5"
 tracing = { version = "0.1.37", default-features = false }
 
 narrowlink-types = { version = "0.1.4" }

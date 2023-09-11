@@ -3,7 +3,9 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{error::MessageError, generic::Connect, policy::Policies, GetResponse, Peer2Peer};
+use crate::{
+    error::MessageError, generic::Connect, policy::Policies, GetResponse, Peer2PeerRequest,
+};
 
 use super::{ConstSystemInfo, DynSystemInfo};
 
@@ -13,7 +15,7 @@ pub enum InBound {
     IsReachable(Uuid, Connect),
     Response(usize, Response),
     Ping(u64),
-    Peer2Peer(Peer2Peer),
+    Peer2Peer(Peer2PeerRequest),
     Shutdown,
 }
 

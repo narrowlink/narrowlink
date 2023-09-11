@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     env,
     io::{self, IsTerminal},
-    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
+    net::{IpAddr, SocketAddr},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -15,7 +15,7 @@ use args::{ArgCommands, Args};
 mod config;
 use either::Either;
 use error::ClientError;
-use futures_util::{future::select_all, stream::StreamExt};
+use futures_util::stream::StreamExt;
 use hmac::Mac;
 use narrowlink_network::{
     error::NetworkError,
@@ -28,15 +28,15 @@ use narrowlink_network::{
 use narrowlink_types::{
     client::DataOutBound as ClientDataOutBound, client::EventInBound as ClientEventInBound,
     client::EventOutBound as ClientEventOutBound, client::EventRequest as ClientEventRequest,
-    generic, GetResponse, NatType,
+    generic, GetResponse,
 };
 use proxy_stream::ProxyStream;
 use quinn::{default_runtime, ClientConfig, Endpoint, EndpointConfig};
 use sha3::{Digest, Sha3_256};
 use tokio::{
-    net::{TcpListener, UdpSocket},
+    net::TcpListener,
     sync::{Mutex, RwLock},
-    time, io::AsyncWriteExt,
+    time,
 };
 use tracing::{debug, error, info, span, trace, warn, Level};
 use tracing_subscriber::{
@@ -377,16 +377,21 @@ async fn main() -> Result<(), ClientError> {
 
                     dbg!("before");
                     dbg!(&p2p_stream);
-                    
+
                     if let Some(stream) = p2p_stream.read().await.as_ref() {
                         let mut quic_socket = QuicBiSocket::open(stream).await.unwrap();
                         let r = narrowlink_network::p2p::Request::from(&connect);
                         r.write(&mut quic_socket).await.unwrap();
-                        let res = narrowlink_network::p2p::Response::read(&mut quic_socket).await.unwrap();
+                        let res = narrowlink_network::p2p::Response::read(&mut quic_socket)
+                            .await
+                            .unwrap();
                         dbg!(res);
-                        if let Err(e) = stream_forward(AsyncToStream::new(quic_socket), AsyncToStream::new(socket)).await {
-
-                        }
+                        if let Err(_e) = stream_forward(
+                            AsyncToStream::new(quic_socket),
+                            AsyncToStream::new(socket),
+                        )
+                        .await
+                        {}
                         return;
                         // let mut _quic_socket = QuicBiSocket::open(connect).await.unwrap();
                     }
@@ -527,77 +532,14 @@ async fn main() -> Result<(), ClientError> {
                                 .insert(connection_id.to_string(), msg);
                         }
                         narrowlink_types::client::EventInBound::Peer2Peer(p2p) => {
-                            // dbg!("Peer2Peer: {}:{}:{}", peer_ip, seed_port, seq);
-                            let unspecified_ip = if p2p.peer_ip.is_ipv4() {
-                                IpAddr::V4(Ipv4Addr::UNSPECIFIED)
-                            } else {
-                                IpAddr::V6(Ipv6Addr::UNSPECIFIED)
-                            };
-                            let mut sockets = Vec::new();
-                            let cert_hash = Sha3_256::digest(&p2p.cert);
-                            dbg!(cert_hash);
-                            tokio::time::sleep(Duration::from_millis(1000)).await;
-                            let mut socket: Option<UdpSocket> = None;
-                            for s in 1..p2p.seq + 1 {
-                                let client_port = p2p.seed_port
-                                    - if p2p.nat == NatType::Hard || p2p.nat == p2p.peer_nat {
-                                        s
-                                    } else {
-                                        0
-                                    };
-                                let agent_port = p2p.seed_port
-                                    + if p2p.peer_nat == NatType::Hard || p2p.nat == p2p.peer_nat {
-                                        s
-                                    } else {
-                                        0
-                                    };
-
-                                if socket.is_none() || p2p.nat == NatType::Hard {
-                                    socket = Some(
-                                        UdpSocket::bind(SocketAddr::new(
-                                            unspecified_ip,
-                                            client_port,
-                                        ))
-                                        .await
-                                        .unwrap(),
-                                    );
-                                };
-                                if let Some(socket) = socket.as_ref() {
-                                    socket
-                                        .send_to(
-                                            &cert_hash[0..3],
-                                            SocketAddr::new(p2p.peer_ip, agent_port),
-                                        )
-                                        .await
-                                        .unwrap();
-                                }
-                                if s == p2p.seq || p2p.nat == NatType::Hard {
-                                    if let Some(socket) = socket.take() {
-                                        sockets.push(Box::pin(async {
-                                            socket.readable().await.map(|_| socket)
-                                        }));
-                                    }
-                                }
-
-                                // socket
-                                //     .send_to(b"buf", SocketAddr::new(peer_ip, agent_port))
-                                //     .await
-                                //     .unwrap();
-
-                                // sockets.push(Box::pin(async {
-                                //     socket.readable().await.map(|_| socket)
-                                // }));
-                            }
-                            let (x, _y, _z) = select_all(sockets).await;
-                            let s = x.unwrap();
-                            let mut buf = vec![0u8; 3];
-                            let (_n, peer) = s.recv_from(&mut buf).await.unwrap();
-                            if cert_hash[3..6] == buf[0..3] {
-                                s.send_to(&cert_hash[3..6], peer).await.unwrap();
-                            } else {
-                                dbg!("Invalid cert");
-                            }
-                            // let (server_config, _) = configure_server(cert,key).unwrap();
+                            let (s, peer) = narrowlink_network::p2p::udp_punched_socket(
+                                &p2p,
+                                &Sha3_256::digest(&p2p.cert)[0..6],
+                                true,
+                                false,
+                            )
+                            .await
+                            .unwrap();
                             let runtime = default_runtime().unwrap();
                             let mut end = Endpoint::new(
                                 EndpointConfig::default(),
@@ -616,7 +558,7 @@ async fn main() -> Result<(), ClientError> {
                             end.set_default_client_config(ClientConfig::new(Arc::new(config)));
                             dbg!(11);
                             let connect = end
-                                .connect(peer, &p2p.peer_ip.to_string())
+                                .connect(peer, &peer.ip().to_string())
                                 .unwrap()
                                 .await
                                 .unwrap();
@@ -629,7 +571,7 @@ async fn main() -> Result<(), ClientError> {
                             // quic_socket.read(&mut buf).await.unwrap();
                             // dbg!(connect.remote_address());
 
-                            dbg!("{}", peer);
+                            // dbg!("{}", peer);
                         }
                         _ => {
                             continue;
@@ -645,12 +587,13 @@ async fn main() -> Result<(), ClientError> {
                     ),
                 ))
                 .await;
-            let _ = sys_req
+            let x = sys_req
                 .request(ClientEventOutBound::Request(
                     0,
                     ClientEventRequest::Peer2Peer("MBP".to_string()),
                 ))
                 .await;
+            let _ = dbg!(x);
             session = Some((session_id, req, event_stream_task));
         }
     }

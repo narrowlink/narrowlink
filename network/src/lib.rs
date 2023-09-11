@@ -38,7 +38,6 @@ pub async fn stream_forward(
                     None=>{
                         let _ = left_tx.close().await;
                         let _ = right_tx.close().await;
-                        dbg!("left close");
                         return Ok(())
                     }
                 };
@@ -49,7 +48,6 @@ pub async fn stream_forward(
                     None=>{
                         let _ = left_tx.close().await;
                         let _ = right_tx.close().await;
-                        dbg!("right close");
                         return Ok(())
                     }
                 };

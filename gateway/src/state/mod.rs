@@ -26,7 +26,7 @@ use narrowlink_types::{
 };
 use narrowlink_types::{
     token::{AgentPublishToken, AgentToken, ClientToken},
-    NatType, Peer2Peer,
+    NatType, Peer2PeerRequest,
 };
 use tokio::{
     io::AsyncWriteExt,
@@ -165,7 +165,7 @@ impl State {
                                         let _ = client.send(ClientEventInBound::Response(request_id,ClientEventResponse::Ok)).await;
 
                                         let port = rand::thread_rng().gen_range(49152..65535);
-                                        let _ = agent.send(AgentEventInBound::Peer2Peer(Peer2Peer {
+                                        let _ = agent.send(AgentEventInBound::Peer2Peer(Peer2PeerRequest {
                                             peer_ip: client_ip,
                                             seed_port: port,
                                             seq,
@@ -174,7 +174,7 @@ impl State {
                                             cert:cert.clone(),
                                             key,
                                         })).await;
-                                        let _ = client.send(ClientEventInBound::Peer2Peer(Peer2Peer {
+                                        let _ = client.send(ClientEventInBound::Peer2Peer(Peer2PeerRequest {
                                             peer_ip: agent_ip,
                                             seed_port: port,
                                             seq,
