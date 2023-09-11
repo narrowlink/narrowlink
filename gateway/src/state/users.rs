@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use narrowlink_types::{
     agent::AgentPublishInfo,
     generic::{AgentInfo, Connect},
-    policy::Policies,
+    policy::Policies, NatType,
 };
 use uuid::Uuid;
 
@@ -317,9 +317,3 @@ impl Users {
     // }
 }
 
-#[derive(PartialEq)]
-pub enum NatType {
-    Easy,
-    Hard,
-    Unknown,
-}

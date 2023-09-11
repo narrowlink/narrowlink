@@ -1,9 +1,9 @@
-use std::{net::IpAddr, str::FromStr};
+use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{error::MessageError, generic::AgentInfo, GetResponse};
+use crate::{error::MessageError, generic::AgentInfo, GetResponse, Peer2Peer};
 
 use super::ConstSystemInfo;
 
@@ -16,7 +16,7 @@ pub enum OutBound {
 pub enum InBound {
     Response(usize, Response),
     ConnectionError(Uuid, String),
-    Peer2Peer(IpAddr, u16, u8, bool, bool,Vec<u8>,Vec<u8>), // peer ip, seed port, sequences, client_hard, agent_hard, cert, key
+    Peer2Peer(Peer2Peer),
 }
 
 #[derive(Debug, Serialize, Deserialize)]

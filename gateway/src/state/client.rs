@@ -6,13 +6,11 @@ use std::{
 use futures_util::{stream::SplitSink, SinkExt};
 use narrowlink_types::{
     client::{ConstSystemInfo, EventInBound, EventOutBound, SystemInfo},
-    policy::Policies,
+    policy::Policies, NatType,
 };
 
 use narrowlink_network::{error::NetworkError, event::NarrowEvent};
 use uuid::Uuid;
-
-use super::users::NatType;
 
 pub struct Client {
     pub name: String,
@@ -73,7 +71,7 @@ impl Client {
     pub fn get_local_addr(&self) -> Option<SocketAddr> {
         self.system_info.as_ref().map(|i| i.constant.local_addr)
     }
-    pub fn nat_type(&self) -> NatType {
+    pub fn nat_type(&self) -> NatType { // refactor needed
         if self
             .forward_addr
             .as_ref()

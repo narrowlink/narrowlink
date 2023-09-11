@@ -9,10 +9,8 @@ use narrowlink_network::{error::NetworkError, event::NarrowEvent};
 use narrowlink_types::{
     agent::{ConstSystemInfo, DynSystemInfo, EventInBound, EventOutBound, SystemInfo},
     generic::Connect,
-    publish::PublishHost,
+    publish::PublishHost, NatType,
 };
-
-use super::users::NatType;
 
 pub struct Agent {
     pub name: String,

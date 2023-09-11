@@ -1,5 +1,6 @@
 use futures_util::StreamExt;
 use rand::Rng;
+use rcgen::{CertificateParams, DistinguishedName};
 use std::{net::SocketAddr, str::FromStr};
 use uuid::Uuid;
 mod agent;
@@ -8,11 +9,10 @@ mod connection;
 mod users;
 use crate::{
     service::{ServiceDataRequest, ServiceEventRequest},
-    state::{connection::AgentConnection, users::NatType},
+    state::connection::AgentConnection,
     CONNECTION_ORIANTED,
 };
 use narrowlink_network::{error::NetworkError, event::NarrowEvent, UniversalStream};
-use narrowlink_types::token::{AgentPublishToken, AgentToken, ClientToken};
 use narrowlink_types::{
     agent::{
         EventInBound as AgentEventInBound, EventOutBound as AgentEventOutBound,
@@ -23,6 +23,10 @@ use narrowlink_types::{
         EventOutBound as ClientEventOutBound, EventRequest as ClientEventRequest,
         EventResponse as ClientEventResponse,
     },
+};
+use narrowlink_types::{
+    token::{AgentPublishToken, AgentToken, ClientToken},
+    NatType, Peer2Peer,
 };
 use tokio::{
     io::AsyncWriteExt,
@@ -102,7 +106,6 @@ impl State {
                     let (uid, session, msg): (Uuid,Uuid,Result<ClientEventOutBound, NetworkError>) = client_types;
                     let client_event_message_span = tracing::span!(tracing::Level::TRACE, "client_message", user_id = uid.to_string(), client_session = session.to_string());
                     let _agent_data_gaurd = client_event_message_span.enter();
-
                     match msg{
                         Ok(ClientEventOutBound::Request(request_id,req))=>{
                             debug!("Client Message {}: {:?}", request_id, req);
@@ -133,7 +136,7 @@ impl State {
                                         };
                                         let mut client_ip = client.get_real_ip();
                                         let mut agent_ip = agent.get_real_ip();
-                                        let mut seq : u8 = if (c == NatType::Hard && a == NatType::Hard) && client_ip != agent_ip {
+                                        let mut seq = if (c == NatType::Hard && a == NatType::Hard) && client_ip != agent_ip {
                                             let _ = client.send(ClientEventInBound::Response(request_id,ClientEventResponse::Failed)).await;
                                             continue
                                         } else if c == NatType::Easy && a == NatType::Easy{
@@ -151,14 +154,36 @@ impl State {
                                             agent_ip = aip.ip();
                                             seq = 2;
                                         }
-                                        /* generate a certificate by using rcgen */
-                                        let cert = rcgen::generate_simple_self_signed(vec![]).unwrap();
-                                        let key = cert.serialize_private_key_der();
-                                        let cert = cert.serialize_der().unwrap();
+
+                                        let mut params = CertificateParams::new(vec![agent_ip.to_string()]);
+                                        params.distinguished_name = DistinguishedName::new();
+                                        params.distinguished_name.push(rcgen::DnType::OrganizationName, "Narrowlink");
+                                        let Ok((cert,key)) = rcgen::Certificate::from_params(params).and_then(|cert|cert.serialize_der().map(|c|(c,cert.serialize_private_key_der()))) else {
+                                            let _ = client.send(ClientEventInBound::Response(request_id,ClientEventResponse::Failed)).await;
+                                            continue
+                                        };
                                         let _ = client.send(ClientEventInBound::Response(request_id,ClientEventResponse::Ok)).await;
+
                                         let port = rand::thread_rng().gen_range(49152..65535);
-                                        let _ = agent.send(AgentEventInBound::Peer2Peer(client_ip,port,seq,c == NatType::Hard, a == NatType::Hard,cert.clone(),key.clone())).await;
-                                        let _ = client.send(ClientEventInBound::Peer2Peer(agent_ip,port,seq, c == NatType::Hard, a == NatType::Hard,cert,key)).await;
+                                        let _ = agent.send(AgentEventInBound::Peer2Peer(Peer2Peer {
+                                            peer_ip: client_ip,
+                                            peer_port: port,
+                                            sequences: seq,
+                                            peer_nat_type: c,
+                                            nat_type: a,
+                                            cert:cert.clone(),
+                                            key,
+                                        })).await;
+                                        let _ = client.send(ClientEventInBound::Peer2Peer(Peer2Peer {
+                                            peer_ip: agent_ip,
+                                            peer_port: port,
+                                            sequences: seq,
+                                            peer_nat_type: a,
+                                            nat_type: c,
+                                            cert,
+                                            key: Vec::new(),
+                                        })).await;
+
                                     }
 
                                 }
