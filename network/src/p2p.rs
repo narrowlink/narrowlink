@@ -289,6 +289,7 @@ pub async fn udp_punched_socket(
     }
 
     let mut sockets = Vec::new();
+    dbg!(p2p.seed_port);
     let mut socket: Option<UdpSocket> = None;
     for s in 1..p2p.seq + 1 {
         let my_port = if dyn_my_port {
@@ -298,7 +299,7 @@ pub async fn udp_punched_socket(
                 p2p.seed_port + s
             }
         } else {
-            0
+            p2p.seed_port
         };
         let peer_port = if dyn_peer_port {
             if left {
@@ -307,7 +308,7 @@ pub async fn udp_punched_socket(
                 p2p.seed_port - s
             }
         } else {
-            0
+            p2p.seed_port
         };
         dbg!(my_port);
         if socket.is_none() || dyn_my_port {
