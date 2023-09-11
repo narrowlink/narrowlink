@@ -1,5 +1,6 @@
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 
+use narrowlink_types::generic::{Connect, Protocol};
 use quinn::{Connection, RecvStream, SendStream};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
@@ -141,6 +142,40 @@ impl Response {
     }
 }
 
+impl From<Request> for Connect {
+    fn from(r: Request) -> Self {
+        let (host, port, is_udp) = match r {
+            Request::Ip(ip, udp) => (ip.ip().to_string(), ip.port(), udp),
+            Request::Dns(domain, port, udp) => (domain, port, udp),
+        };
+        Connect {
+            host,
+            port,
+            protocol: if is_udp { Protocol::UDP } else { Protocol::TCP },
+            cryptography: None,
+            sign: None,
+        }
+    }
+}
+
+impl From<Connect> for Request {
+    fn from(connect: Connect) -> Self {
+        match connect.protocol {
+            Protocol::TCP | Protocol::HTTP | Protocol::HTTPS | Protocol::TLS => {
+                match connect.host.parse::<IpAddr>() {
+                    Ok(ip) => Request::Ip(SocketAddr::new(ip, connect.port), false),
+                    Err(_) => Request::Dns(connect.host, connect.port, false),
+                }
+            }
+            Protocol::UDP | Protocol::DTLS | Protocol::QUIC => match connect.host.parse::<IpAddr>()
+            {
+                Ok(ip) => Request::Ip(SocketAddr::new(ip, connect.port), true),
+                Err(_) => Request::Dns(connect.host, connect.port, true),
+            },
+        }
+    }
+}
+
 pub struct QuicBiSocket {
     send: SendStream,
     recv: RecvStream,
@@ -172,7 +207,6 @@ impl QuicBiSocket {
             remote_addr,
         })
     }
-
     pub fn remote_addr(&self) -> SocketAddr {
         self.remote_addr
     }
