@@ -289,7 +289,12 @@ async fn start(args: Args) -> Result<(), AgentError> {
                 )
                 .unwrap();
                 let con = end.accept().await.unwrap().await.unwrap();
-                let mut s = QuicBiSocket::accept(con).await.unwrap();
+                loop{
+                let Ok(mut s) = QuicBiSocket::accept(&con).await else {
+                    dbg!("accept failed");
+                    continue;;
+                };
+                tokio::spawn(async{
                 // let mut buf = vec![0u8; 5];
                 // s.read(&mut buf).await.unwrap();
                 let r = narrowlink_network::p2p::Request::read(&mut s).await.unwrap();
@@ -305,7 +310,10 @@ async fn start(args: Args) -> Result<(), AgentError> {
                 if let Err(_e) = stream_forward(AsyncToStream::new(stream), AsyncToStream::new(s)).await {
                     dbg!(_e);
                 }
-                
+                });
+
+
+            }
                 // s.write(&buf).await.unwrap();
                 // let _c = con.accept_bi().await.unwrap();
 

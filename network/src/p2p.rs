@@ -195,7 +195,7 @@ impl QuicBiSocket {
             remote_addr,
         })
     }
-    pub async fn accept(stream: Connection) -> Result<Self, NetworkError> {
+    pub async fn accept(stream: &Connection) -> Result<Self, NetworkError> {
         let remote_addr = stream.remote_address();
         let (send, recv) = stream
             .accept_bi()

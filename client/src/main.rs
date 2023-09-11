@@ -35,7 +35,7 @@ use quinn::{default_runtime, ClientConfig, Endpoint, EndpointConfig};
 use sha3::{Digest, Sha3_256};
 use tokio::{
     net::{TcpListener, UdpSocket},
-    sync::Mutex,
+    sync::{Mutex, RwLock},
     time, io::AsyncWriteExt,
 };
 use tracing::{debug, error, info, span, trace, warn, Level};
@@ -159,7 +159,7 @@ async fn main() -> Result<(), ClientError> {
     let mut sleep_time = 0;
     let arg_commands = args.arg_commands.clone();
     let connections = Arc::new(Mutex::new(HashMap::new()));
-    let p2p_stream = Arc::new(Mutex::new(None));
+    let p2p_stream = Arc::new(RwLock::new(None));
     loop {
         let arg_commands = arg_commands.clone();
         let conf = conf.clone();
@@ -377,7 +377,8 @@ async fn main() -> Result<(), ClientError> {
 
                     dbg!("before");
                     dbg!(&p2p_stream);
-                    if let Some(stream) = p2p_stream.lock().await.as_ref() {
+                    
+                    if let Some(stream) = p2p_stream.read().await.as_ref() {
                         let mut quic_socket = QuicBiSocket::open(stream).await.unwrap();
                         let r = narrowlink_network::p2p::Request::from(&connect);
                         r.write(&mut quic_socket).await.unwrap();
@@ -620,7 +621,7 @@ async fn main() -> Result<(), ClientError> {
                                 .await
                                 .unwrap();
                             dbg!(connect.remote_address());
-                            p2p_stream.lock().await.replace(connect);
+                            p2p_stream.write().await.replace(connect);
                             // dbg!(&p2p_stream);
                             // let mut _quic_socket = QuicBiSocket::open(connect).await.unwrap();
                             // quic_socket.write(b"hello").await.unwrap();
