@@ -84,12 +84,10 @@ impl Request {
                     } else {
                         Command::IPv4TCP
                     }
+                } else if *udp {
+                    Command::IPv6UDP
                 } else {
-                    if *udp {
-                        Command::IPv6UDP
-                    } else {
-                        Command::IPv6TCP
-                    }
+                    Command::IPv6TCP
                 };
                 writer.write_u8(cmd as u8).await?;
                 match ip {
