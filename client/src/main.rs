@@ -36,7 +36,7 @@ use sha3::{Digest, Sha3_256};
 use tokio::{
     net::{TcpListener, UdpSocket},
     sync::Mutex,
-    time,
+    time, io::AsyncWriteExt,
 };
 use tracing::{debug, error, info, span, trace, warn, Level};
 use tracing_subscriber::{
@@ -159,10 +159,12 @@ async fn main() -> Result<(), ClientError> {
     let mut sleep_time = 0;
     let arg_commands = args.arg_commands.clone();
     let connections = Arc::new(Mutex::new(HashMap::new()));
+    let p2p_stream = Arc::new(Mutex::new(None));
     loop {
         let arg_commands = arg_commands.clone();
         let conf = conf.clone();
         let token = conf.token.clone();
+        let p2p_stream = p2p_stream.clone();
 
         if let Some((session_id, req, _)) = session
             .as_ref()
@@ -373,6 +375,21 @@ async fn main() -> Result<(), ClientError> {
 
                     let gateway_address = conf.gateway.clone();
 
+                    dbg!("before");
+                    dbg!(&p2p_stream);
+                    if let Some(stream) = p2p_stream.lock().await.as_ref() {
+                        let mut quic_socket = QuicBiSocket::open(stream).await.unwrap();
+                        let r = narrowlink_network::p2p::Request::from(&connect);
+                        r.write(&mut quic_socket).await.unwrap();
+                        let res = narrowlink_network::p2p::Response::read(&mut quic_socket).await.unwrap();
+                        dbg!(res);
+                        if let Err(e) = stream_forward(AsyncToStream::new(quic_socket), AsyncToStream::new(socket)).await {
+
+                        }
+                        return;
+                        // let mut _quic_socket = QuicBiSocket::open(connect).await.unwrap();
+                    }
+                    dbg!("after");
                     let Ok(cmd) = serde_json::to_string(&ClientDataOutBound::Connect(
                         agent_name,
                         connect.clone(),
@@ -602,7 +619,10 @@ async fn main() -> Result<(), ClientError> {
                                 .unwrap()
                                 .await
                                 .unwrap();
-                            let mut _quic_socket = QuicBiSocket::open(connect).await.unwrap();
+                            dbg!(connect.remote_address());
+                            p2p_stream.lock().await.replace(connect);
+                            // dbg!(&p2p_stream);
+                            // let mut _quic_socket = QuicBiSocket::open(connect).await.unwrap();
                             // quic_socket.write(b"hello").await.unwrap();
                             // let mut buf = vec![0u8; 5];
                             // quic_socket.read(&mut buf).await.unwrap();

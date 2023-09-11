@@ -27,7 +27,8 @@ use narrowlink_types::{
         ConstSystemInfo, DynSystemInfo, EventInBound as AgentEventInBound,
         EventOutBound as AgentEventOutBound, EventRequest as AgentEventRequest,
     },
-    generic,
+    client::EventRequest,
+    generic::{self, Connect},
     policy::Policies,
     NatType, ServiceType,
 };
@@ -35,6 +36,7 @@ use quinn::{default_runtime, Endpoint, EndpointConfig};
 use sha3::{Digest, Sha3_256};
 use sysinfo::SystemExt;
 use tokio::{
+    io::AsyncReadExt,
     net::{lookup_host, TcpStream, UdpSocket},
     time,
 };
@@ -287,11 +289,24 @@ async fn start(args: Args) -> Result<(), AgentError> {
                 )
                 .unwrap();
                 let con = end.accept().await.unwrap().await.unwrap();
-                let mut _s = QuicBiSocket::accept(con).await.unwrap();
+                let mut s = QuicBiSocket::accept(con).await.unwrap();
                 // let mut buf = vec![0u8; 5];
                 // s.read(&mut buf).await.unwrap();
+                let r = narrowlink_network::p2p::Request::read(&mut s).await.unwrap();
+                let con = Into::<Connect>::into(&r);
+                narrowlink_network::p2p::Response::write(
+                    &narrowlink_network::p2p::Response::Success,
+                    &mut s,
+                )
+                .await
+                .unwrap();
+                dbg!(&con);
+                let stream = TcpStream::connect((con.host,con.port)).await.unwrap();
+                if let Err(_e) = stream_forward(AsyncToStream::new(stream), AsyncToStream::new(s)).await {
+                    dbg!(_e);
+                }
+                
                 // s.write(&buf).await.unwrap();
-                // dbg!(buf);
                 // let _c = con.accept_bi().await.unwrap();
 
                 // c.1.read(buf);

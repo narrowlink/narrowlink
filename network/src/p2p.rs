@@ -28,7 +28,7 @@ impl Command {
         }
     }
 }
-pub enum Request {
+pub enum Request { // Todo: Add signature and salt
     Ip(SocketAddr, bool),   // bool is UDP
     Dns(String, u16, bool), // bool is UDP
 }
@@ -118,7 +118,7 @@ impl Request {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy,Debug)]
 pub enum Response {
     Success = 0x00,
     InvalidRequest = 0x01,
@@ -142,35 +142,35 @@ impl Response {
     }
 }
 
-impl From<Request> for Connect {
-    fn from(r: Request) -> Self {
+impl From<&Request> for Connect {
+    fn from(r: &Request) -> Self {
         let (host, port, is_udp) = match r {
             Request::Ip(ip, udp) => (ip.ip().to_string(), ip.port(), udp),
-            Request::Dns(domain, port, udp) => (domain, port, udp),
+            Request::Dns(domain, port, udp) => (domain.to_owned(), *port, udp),
         };
         Connect {
             host,
             port,
-            protocol: if is_udp { Protocol::UDP } else { Protocol::TCP },
+            protocol: if *is_udp { Protocol::UDP } else { Protocol::TCP },
             cryptography: None,
             sign: None,
         }
     }
 }
 
-impl From<Connect> for Request {
-    fn from(connect: Connect) -> Self {
+impl From<&Connect> for Request {
+    fn from(connect: &Connect) -> Self {
         match connect.protocol {
             Protocol::TCP | Protocol::HTTP | Protocol::HTTPS | Protocol::TLS => {
                 match connect.host.parse::<IpAddr>() {
                     Ok(ip) => Request::Ip(SocketAddr::new(ip, connect.port), false),
-                    Err(_) => Request::Dns(connect.host, connect.port, false),
+                    Err(_) => Request::Dns(connect.host.to_owned(), connect.port, false),
                 }
             }
             Protocol::UDP | Protocol::DTLS | Protocol::QUIC => match connect.host.parse::<IpAddr>()
             {
                 Ok(ip) => Request::Ip(SocketAddr::new(ip, connect.port), true),
-                Err(_) => Request::Dns(connect.host, connect.port, true),
+                Err(_) => Request::Dns(connect.host.to_owned(), connect.port, true),
             },
         }
     }
@@ -183,12 +183,12 @@ pub struct QuicBiSocket {
 }
 
 impl QuicBiSocket {
-    pub async fn open(stream: Connection) -> Result<Self, NetworkError> {
+    pub async fn open(stream: &Connection) -> Result<Self, NetworkError> {
         let remote_addr = stream.remote_address();
         let (send, recv) = stream
             .open_bi()
-            .await
-            .map_err(|_| NetworkError::QuicError)?;
+            .await.unwrap();
+            // .map_err(|_| NetworkError::QuicError)?;
         Ok(Self {
             send,
             recv,
