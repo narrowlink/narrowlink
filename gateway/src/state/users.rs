@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use narrowlink_types::{
     agent::AgentPublishInfo,
     generic::{AgentInfo, Connect},
-    policy::Policies, NatType,
+    policy::Policies,
+    NatType,
 };
 use uuid::Uuid;
 
@@ -316,4 +317,3 @@ impl Users {
     //     policies.permit(&Some(agent_name.to_owned()), connection)
     // }
 }
-

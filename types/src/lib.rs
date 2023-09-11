@@ -27,15 +27,15 @@ pub enum ServiceType {
 pub struct Peer2Peer {
     // Todo: policy
     pub peer_ip: IpAddr,
-    pub peer_port: u16,
-    pub sequences: u16,
-    pub peer_nat_type: NatType,
-    pub nat_type: NatType,
+    pub seed_port: u16,
+    pub seq: u16,
+    pub peer_nat: NatType, // peer nat type
+    pub nat: NatType,      // nat type
     pub cert: Vec<u8>,
     pub key: Vec<u8>,
 }
 
-#[derive(PartialEq, Debug, Serialize, Deserialize, Clone,Copy)]
+#[derive(PartialEq, Debug, Serialize, Deserialize, Clone, Copy)]
 pub enum NatType {
     Easy,
     Hard,

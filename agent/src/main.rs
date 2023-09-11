@@ -28,8 +28,9 @@ use narrowlink_types::{
     },
     generic,
     policy::Policies,
-    ServiceType,
+    NatType, ServiceType,
 };
+use quinn::{default_runtime, Endpoint, EndpointConfig};
 use sha3::{Digest, Sha3_256};
 use sysinfo::SystemExt;
 use tokio::{
@@ -215,28 +216,30 @@ async fn start(args: Args) -> Result<(), AgentError> {
                 });
                 continue;
             }
-            Some(Ok(AgentEventInBound::Peer2Peer(
-                peer_ip,
-                seed_port,
-                seq,
-                chard,
-                ahard,
-                cert,
-                key,
-            ))) => {
+            Some(Ok(AgentEventInBound::Peer2Peer(p2p))) => {
                 // let mut sockets_status = Vec::new();
-                dbg!("Peer2Peer: {}:{}:{}", peer_ip, seed_port, seq);
+                // dbg!("Peer2Peer: {}:{}:{}", peer_ip, seed_port, seq);
                 let mut sockets = Vec::new();
-                let unspecified_ip = if peer_ip.is_ipv4() {
+                let unspecified_ip = if p2p.peer_ip.is_ipv4() {
                     IpAddr::V4(Ipv4Addr::UNSPECIFIED)
                 } else {
                     IpAddr::V6(Ipv6Addr::UNSPECIFIED)
                 };
                 let mut socket: Option<UdpSocket> = None;
-                for s in 1..(seq as u16) + 1 {
-                    let client_port = seed_port - if chard || ahard == chard { s } else { 0 };
-                    let agent_port = seed_port + if ahard || ahard == chard { s } else { 0 };
-                    if socket.is_none() || ahard {
+                for s in 1..p2p.seq + 1 {
+                    let client_port = p2p.seed_port
+                        - if p2p.peer_nat == NatType::Hard || p2p.nat == p2p.peer_nat {
+                            s
+                        } else {
+                            0
+                        };
+                    let agent_port = p2p.seed_port
+                        + if p2p.nat == NatType::Hard || p2p.nat == p2p.peer_nat {
+                            s
+                        } else {
+                            0
+                        };
+                    if socket.is_none() || p2p.nat == NatType::Hard {
                         socket = Some(
                             UdpSocket::bind(SocketAddr::new(unspecified_ip, agent_port))
                                 .await
@@ -245,12 +248,12 @@ async fn start(args: Args) -> Result<(), AgentError> {
                     }
                     if let Some(socket) = socket.as_ref() {
                         socket
-                            .send_to(b".", SocketAddr::new(peer_ip, client_port))
+                            .send_to(b".", SocketAddr::new(p2p.peer_ip, client_port))
                             .await
                             .unwrap();
                     }
 
-                    if s == (seq as u16) || ahard {
+                    if s == p2p.seq || p2p.nat == NatType::Hard {
                         if let Some(socket) = socket.take() {
                             sockets
                                 .push(Box::pin(async { socket.readable().await.map(|_| socket) }));
@@ -266,14 +269,27 @@ async fn start(args: Args) -> Result<(), AgentError> {
                 let s = x.unwrap();
                 let mut buf = vec![0u8; 3];
                 let (_n, peer) = s.recv_from(&mut buf).await.unwrap();
-                let cert_hash = Sha3_256::digest(cert);
+                let cert_hash = Sha3_256::digest(&p2p.cert);
+                dbg!(cert_hash);
                 if cert_hash[..3] == buf[0..3] {
                     s.send_to(&cert_hash[3..6], peer).await.unwrap();
-                    
-                }else{
+                } else {
                     dbg!("Cert hash mismatch");
                 }
+                let (server_config, _) = configure_server(p2p.cert, p2p.key).unwrap();
+                let runtime = default_runtime().unwrap();
+                let end = Endpoint::new(
+                    EndpointConfig::default(),
+                    Some(server_config),
+                    s.into_std().unwrap(),
+                    runtime,
+                )
+                .unwrap();
+                let con = end.accept().await.unwrap().await.unwrap();
+                let _c = con.accept_bi().await.unwrap();
 
+                // c.1.read(buf);
+                dbg!(con.remote_address());
                 dbg!("{}", peer);
             }
             Some(Ok(AgentEventInBound::IsReachable(connection, connect))) => {
@@ -454,4 +470,18 @@ pub async fn is_ready(command: generic::Connect) -> Result<bool, std::io::Error>
         }
         generic::Protocol::QUIC | generic::Protocol::DTLS | generic::Protocol::UDP => Ok(false),
     }
+}
+
+fn configure_server(
+    cert: Vec<u8>,
+    key: Vec<u8>,
+) -> Result<(quinn::ServerConfig, Vec<u8>), Box<dyn std::error::Error>> {
+    let priv_key = rustls::PrivateKey(key);
+    let cert_chain = vec![rustls::Certificate(cert.clone())];
+
+    let mut server_config = quinn::ServerConfig::with_single_cert(cert_chain, priv_key)?;
+    let transport_config = std::sync::Arc::get_mut(&mut server_config.transport).unwrap();
+    transport_config.max_concurrent_uni_streams(0_u8.into());
+    // todo!()
+    Ok((server_config, cert))
 }

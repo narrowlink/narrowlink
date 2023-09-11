@@ -167,19 +167,19 @@ impl State {
                                         let port = rand::thread_rng().gen_range(49152..65535);
                                         let _ = agent.send(AgentEventInBound::Peer2Peer(Peer2Peer {
                                             peer_ip: client_ip,
-                                            peer_port: port,
-                                            sequences: seq,
-                                            peer_nat_type: c,
-                                            nat_type: a,
+                                            seed_port: port,
+                                            seq,
+                                            peer_nat: c,
+                                            nat: a,
                                             cert:cert.clone(),
                                             key,
                                         })).await;
                                         let _ = client.send(ClientEventInBound::Peer2Peer(Peer2Peer {
                                             peer_ip: agent_ip,
-                                            peer_port: port,
-                                            sequences: seq,
-                                            peer_nat_type: a,
-                                            nat_type: c,
+                                            seed_port: port,
+                                            seq,
+                                            peer_nat: a,
+                                            nat: c,
                                             cert,
                                             key: Vec::new(),
                                         })).await;

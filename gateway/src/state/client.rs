@@ -6,7 +6,8 @@ use std::{
 use futures_util::{stream::SplitSink, SinkExt};
 use narrowlink_types::{
     client::{ConstSystemInfo, EventInBound, EventOutBound, SystemInfo},
-    policy::Policies, NatType,
+    policy::Policies,
+    NatType,
 };
 
 use narrowlink_network::{error::NetworkError, event::NarrowEvent};
@@ -71,7 +72,8 @@ impl Client {
     pub fn get_local_addr(&self) -> Option<SocketAddr> {
         self.system_info.as_ref().map(|i| i.constant.local_addr)
     }
-    pub fn nat_type(&self) -> NatType { // refactor needed
+    pub fn nat_type(&self) -> NatType {
+        // refactor needed
         if self
             .forward_addr
             .as_ref()

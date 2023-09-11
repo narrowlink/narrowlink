@@ -27,9 +27,10 @@ use narrowlink_network::{
 use narrowlink_types::{
     client::DataOutBound as ClientDataOutBound, client::EventInBound as ClientEventInBound,
     client::EventOutBound as ClientEventOutBound, client::EventRequest as ClientEventRequest,
-    generic, GetResponse,
+    generic, GetResponse, NatType,
 };
 use proxy_stream::ProxyStream;
+use quinn::{default_runtime, ClientConfig, Endpoint, EndpointConfig};
 use sha3::{Digest, Sha3_256};
 use tokio::{
     net::{TcpListener, UdpSocket},
@@ -506,33 +507,33 @@ async fn main() -> Result<(), ClientError> {
                                 .await
                                 .insert(connection_id.to_string(), msg);
                         }
-                        narrowlink_types::client::EventInBound::Peer2Peer(
-                            peer_ip,
-                            seed_port,
-                            seq,
-                            chard,
-                            ahard,
-                            cert,
-                            key,
-                        ) => {
-                            dbg!("Peer2Peer: {}:{}:{}", peer_ip, seed_port, seq);
-                            let unspecified_ip = if peer_ip.is_ipv4() {
+                        narrowlink_types::client::EventInBound::Peer2Peer(p2p) => {
+                            // dbg!("Peer2Peer: {}:{}:{}", peer_ip, seed_port, seq);
+                            let unspecified_ip = if p2p.peer_ip.is_ipv4() {
                                 IpAddr::V4(Ipv4Addr::UNSPECIFIED)
                             } else {
                                 IpAddr::V6(Ipv6Addr::UNSPECIFIED)
                             };
                             let mut sockets = Vec::new();
-                            let cert_hash = Sha3_256::digest(cert);
-
-                            // sleep(Duration::from_millis(1000)).await;
+                            let cert_hash = Sha3_256::digest(&p2p.cert);
+                            dbg!(cert_hash);
+                            tokio::time::sleep(Duration::from_millis(1000)).await;
                             let mut socket: Option<UdpSocket> = None;
-                            for s in 1..(seq as u16) + 1 {
-                                let client_port =
-                                    seed_port - if chard || ahard == chard { s } else { 0 };
-                                let agent_port =
-                                    seed_port + if ahard || ahard == chard { s } else { 0 };
+                            for s in 1..p2p.seq + 1 {
+                                let client_port = p2p.seed_port
+                                    - if p2p.nat == NatType::Hard || p2p.nat == p2p.peer_nat {
+                                        s
+                                    } else {
+                                        0
+                                    };
+                                let agent_port = p2p.seed_port
+                                    + if p2p.peer_nat == NatType::Hard || p2p.nat == p2p.peer_nat {
+                                        s
+                                    } else {
+                                        0
+                                    };
 
-                                if socket.is_none() || chard {
+                                if socket.is_none() || p2p.nat == NatType::Hard {
                                     socket = Some(
                                         UdpSocket::bind(SocketAddr::new(
                                             unspecified_ip,
@@ -544,11 +545,14 @@ async fn main() -> Result<(), ClientError> {
                                 };
                                 if let Some(socket) = socket.as_ref() {
                                     socket
-                                        .send_to(&cert_hash[0..3], SocketAddr::new(peer_ip, agent_port))
+                                        .send_to(
+                                            &cert_hash[0..3],
+                                            SocketAddr::new(p2p.peer_ip, agent_port),
+                                        )
                                         .await
                                         .unwrap();
                                 }
-                                if s == (seq as u16) || chard {
+                                if s == p2p.seq || p2p.nat == NatType::Hard {
                                     if let Some(socket) = socket.take() {
                                         sockets.push(Box::pin(async {
                                             socket.readable().await.map(|_| socket)
@@ -571,9 +575,35 @@ async fn main() -> Result<(), ClientError> {
                             let (_n, peer) = s.recv_from(&mut buf).await.unwrap();
                             if cert_hash[3..6] == buf[0..3] {
                                 s.send_to(&cert_hash[3..6], peer).await.unwrap();
-                            }else{
+                            } else {
                                 dbg!("Invalid cert");
                             }
+                            // let (server_config, _) = configure_server(cert,key).unwrap();
+                            let runtime = default_runtime().unwrap();
+                            let mut end = Endpoint::new(
+                                EndpointConfig::default(),
+                                None,
+                                s.into_std().unwrap(),
+                                runtime,
+                            )
+                            .unwrap();
+                            let mut root_store = rustls::RootCertStore::empty();
+                            root_store.add(&rustls::Certificate(p2p.cert)).unwrap();
+                            let mut config = rustls::ClientConfig::builder()
+                                .with_safe_defaults()
+                                .with_root_certificates(root_store)
+                                .with_no_client_auth();
+                            config.enable_sni = false;
+                            end.set_default_client_config(ClientConfig::new(Arc::new(config)));
+                            dbg!(11);
+                            let connect = end
+                                .connect(peer, &p2p.peer_ip.to_string())
+                                .unwrap()
+                                .await
+                                .unwrap();
+                            connect.open_bi().await.unwrap();
+
+                            dbg!(connect.remote_address());
 
                             dbg!("{}", peer);
                         }
@@ -591,12 +621,12 @@ async fn main() -> Result<(), ClientError> {
                     ),
                 ))
                 .await;
-            // let _ = sys_req
-            //     .request(ClientEventOutBound::Request(
-            //         0,
-            //         ClientEventRequest::Peer2Peer("MBP".to_string()),
-            //     ))
-            //     .await;
+            let _ = sys_req
+                .request(ClientEventOutBound::Request(
+                    0,
+                    ClientEventRequest::Peer2Peer("MBP".to_string()),
+                ))
+                .await;
             session = Some((session_id, req, event_stream_task));
         }
     }
