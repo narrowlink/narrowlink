@@ -20,6 +20,7 @@ use hmac::Mac;
 use narrowlink_network::{
     error::NetworkError,
     event::{NarrowEvent, NarrowEventRequest},
+    p2p::QuicBiSocket,
     stream_forward,
     ws::{WsConnection, WsConnectionBinary},
     AsyncSocket, AsyncToStream, StreamCrypt, UniversalStream,
@@ -601,9 +602,11 @@ async fn main() -> Result<(), ClientError> {
                                 .unwrap()
                                 .await
                                 .unwrap();
-                            connect.open_bi().await.unwrap();
-
-                            dbg!(connect.remote_address());
+                            let mut _quic_socket = QuicBiSocket::open(connect).await.unwrap();
+                            // quic_socket.write(b"hello").await.unwrap();
+                            // let mut buf = vec![0u8; 5];
+                            // quic_socket.read(&mut buf).await.unwrap();
+                            // dbg!(connect.remote_address());
 
                             dbg!("{}", peer);
                         }

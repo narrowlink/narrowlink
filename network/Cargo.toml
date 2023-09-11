@@ -38,6 +38,7 @@ tungstenite = { version = "0.20.0", features = [
 chacha20poly1305 = { version = "0.10.1", features = [
     "alloc",
 ], default-features = false }
+quinn = { version = "0.10.0", default-features = false }
 
 tracing = { version = "0.1.37", default-features = false }
 

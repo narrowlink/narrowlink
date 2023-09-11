@@ -967,6 +967,7 @@ dependencies = [
  "futures-util",
  "hyper",
  "narrowlink-types",
+ "quinn",
  "serde",
  "serde_json",
  "tokio",

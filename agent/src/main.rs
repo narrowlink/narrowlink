@@ -16,6 +16,7 @@ use hmac::Mac;
 use narrowlink_network::{
     error::NetworkError,
     event::NarrowEvent,
+    p2p::QuicBiSocket,
     stream_forward,
     transport::{StreamType, TlsConfiguration, UnifiedSocket},
     ws::{WsConnection, WsConnectionBinary},
@@ -286,10 +287,15 @@ async fn start(args: Args) -> Result<(), AgentError> {
                 )
                 .unwrap();
                 let con = end.accept().await.unwrap().await.unwrap();
-                let _c = con.accept_bi().await.unwrap();
+                let mut _s = QuicBiSocket::accept(con).await.unwrap();
+                // let mut buf = vec![0u8; 5];
+                // s.read(&mut buf).await.unwrap();
+                // s.write(&buf).await.unwrap();
+                // dbg!(buf);
+                // let _c = con.accept_bi().await.unwrap();
 
                 // c.1.read(buf);
-                dbg!(con.remote_address());
+                // dbg!(con.remote_address());
                 dbg!("{}", peer);
             }
             Some(Ok(AgentEventInBound::IsReachable(connection, connect))) => {

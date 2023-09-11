@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 
+use quinn::{Connection, RecvStream, SendStream};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::error::NetworkError;
@@ -137,5 +138,76 @@ impl Response {
     pub async fn write(&self, mut writer: impl AsyncWrite + Unpin) -> Result<(), NetworkError> {
         writer.write_u8(*self as u8).await?;
         Ok(())
+    }
+}
+
+pub struct QuicBiSocket {
+    send: SendStream,
+    recv: RecvStream,
+    remote_addr: SocketAddr,
+}
+
+impl QuicBiSocket {
+    pub async fn open(stream: Connection) -> Result<Self, NetworkError> {
+        let remote_addr = stream.remote_address();
+        let (send, recv) = stream
+            .open_bi()
+            .await
+            .map_err(|_| NetworkError::QuicError)?;
+        Ok(Self {
+            send,
+            recv,
+            remote_addr,
+        })
+    }
+    pub async fn accept(stream: Connection) -> Result<Self, NetworkError> {
+        let remote_addr = stream.remote_address();
+        let (send, recv) = stream
+            .accept_bi()
+            .await
+            .map_err(|_| NetworkError::QuicError)?;
+        Ok(Self {
+            send,
+            recv,
+            remote_addr,
+        })
+    }
+
+    pub fn remote_addr(&self) -> SocketAddr {
+        self.remote_addr
+    }
+}
+
+impl AsyncRead for QuicBiSocket {
+    fn poll_read(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.recv).poll_read(cx, buf)
+    }
+}
+
+impl AsyncWrite for QuicBiSocket {
+    fn poll_write(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> std::task::Poll<Result<usize, std::io::Error>> {
+        std::pin::Pin::new(&mut self.send).poll_write(cx, buf)
+    }
+
+    fn poll_flush(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), std::io::Error>> {
+        std::pin::Pin::new(&mut self.send).poll_flush(cx)
+    }
+
+    fn poll_shutdown(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), std::io::Error>> {
+        std::pin::Pin::new(&mut self.send).poll_shutdown(cx)
     }
 }
