@@ -164,7 +164,7 @@ impl State {
                                         };
                                         let _ = client.send(ClientEventInBound::Response(request_id,ClientEventResponse::Ok)).await;
 
-                                        let port = rand::thread_rng().gen_range(49152..65535);
+                                        let port = rand::thread_rng().gen_range((49152+seq)..(65535-seq));
                                         let _ = agent.send(AgentEventInBound::Peer2Peer(Peer2PeerRequest {
                                             peer_ip: client_ip,
                                             seed_port: port,
