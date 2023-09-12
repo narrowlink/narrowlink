@@ -15,7 +15,7 @@ use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::UdpSocket,
 };
-use tracing::{debug, field::debug, warn};
+use tracing::{debug, field::debug, info, warn};
 
 use crate::error::NetworkError;
 #[derive(PartialEq)]
@@ -530,7 +530,8 @@ pub async fn udp_punched_socket(
         .await
         else {
             warn!("Timeout waiting for response from peer");
-            if !inner && p2p.nat == p2p.peer_nat && p2p.nat == NatType::Unknown {
+            if !inner && p2p.nat == p2p.peer_nat {
+                info!("Trying to punch peer from other side");
                 return udp_punched_socket(p2p, handshake_key, !left, true).await;
             }
             #[cfg(unix)]
