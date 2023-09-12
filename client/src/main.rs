@@ -249,7 +249,7 @@ async fn main() -> Result<(), ClientError> {
                     .ok_or(ClientError::AgentNotFound)?;
 
                 if let Some(ref listener) = socket_listener {
-                    if p2p_stream.read().await.is_some() && !is_p2p_failed.load(Ordering::Relaxed) {
+                    if p2p_stream.read().await.is_none() && !is_p2p_failed.load(Ordering::Relaxed) {
                         let _ = req
                             .request(ClientEventOutBound::Request(
                                 0,
@@ -563,6 +563,7 @@ async fn main() -> Result<(), ClientError> {
                         narrowlink_types::client::EventInBound::Peer2Peer(p2p) => {
                             let is_p2p_failed = is_p2p_failed.clone();
                             let p2p_stream = p2p_stream.clone();
+
                             tokio::spawn(async move {
                                 is_p2p_failed.store(true, Ordering::Relaxed);
                                 let (socket, peer) =
