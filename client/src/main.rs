@@ -4,7 +4,7 @@ use std::{
     io::{self, IsTerminal},
     net::{IpAddr, SocketAddr},
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU8, Ordering},
         Arc,
     },
     time::Duration,
@@ -47,6 +47,13 @@ use tracing_subscriber::{
     Layer,
 };
 use udp_stream::UdpListener;
+
+pub enum P2PStatus {
+    Uninitialized = 0x0,
+    Success = 0x1,
+    Pending = 0x2,
+    Failed = 0xff,
+}
 
 #[tokio::main]
 async fn main() -> Result<(), ClientError> {
@@ -103,7 +110,10 @@ async fn main() -> Result<(), ClientError> {
     let mut p2p = false;
 
     match arg_commands.as_ref() {
-        ArgCommands::List(_) | ArgCommands::Connect(_) => {}
+        ArgCommands::List(_) => {}
+        ArgCommands::Connect(connect_args) => {
+            p2p = connect_args.p2p;
+        }
         ArgCommands::Forward(forward_args) => {
             p2p = forward_args.p2p;
             let local_addr = SocketAddr::new(
@@ -163,13 +173,13 @@ async fn main() -> Result<(), ClientError> {
     let arg_commands = args.arg_commands.clone();
     let connections = Arc::new(Mutex::new(HashMap::new()));
     let p2p_stream = Arc::new(RwLock::new(None::<QuicStream>));
-    let is_p2p_failed = Arc::new(AtomicBool::new(false));
+    let p2p_status = Arc::new(AtomicU8::new(P2PStatus::Uninitialized as u8));
     loop {
         let arg_commands = arg_commands.clone();
         let conf = conf.clone();
         let token = conf.token.clone();
         let p2p_stream = p2p_stream.clone();
-        let is_p2p_failed = is_p2p_failed.clone();
+        let p2p_status = p2p_status.clone();
 
         if let Some((session_id, req, _)) = session
             .as_ref()
@@ -251,18 +261,18 @@ async fn main() -> Result<(), ClientError> {
                         .filter(|name| agents.iter().any(|agent| &agent.name == name))
                         .ok_or(ClientError::AgentNotFound)?;
 
+                    if p2p_stream.read().await.is_none()
+                        && (p2p_status.load(Ordering::Relaxed) == P2PStatus::Uninitialized as u8)
+                        && p2p
+                    {
+                        let _ = req
+                            .request(ClientEventOutBound::Request(
+                                0,
+                                ClientEventRequest::Peer2Peer(agent_name.clone()),
+                            ))
+                            .await;
+                    }
                     if let Some(ref listener) = socket_listener {
-                        if p2p_stream.read().await.is_none()
-                            && !is_p2p_failed.load(Ordering::Relaxed)
-                            && p2p
-                        {
-                            let _ = req
-                                .request(ClientEventOutBound::Request(
-                                    0,
-                                    ClientEventRequest::Peer2Peer(agent_name.clone()),
-                                ))
-                                .await;
-                        }
                         trace!("Accept connection");
                         let socket: Box<dyn AsyncSocket> = match listener {
                             Either::Left(ref udp_listen) => Box::new(udp_listen.accept().await?.0),
@@ -295,17 +305,45 @@ async fn main() -> Result<(), ClientError> {
                         ArgCommands::List(_) => {
                             unreachable!()
                         }
-                        ArgCommands::Connect(connect_args) => generic::Connect {
-                            host: connect_args.remote_addr.0.clone(),
-                            port: connect_args.remote_addr.1,
-                            protocol: if connect_args.udp {
-                                generic::Protocol::UDP
-                            } else {
-                                generic::Protocol::TCP
-                            },
-                            cryptography: None,
-                            sign: None,
-                        },
+                        ArgCommands::Connect(connect_args) => {
+                            if connect_args.p2p {
+                                for i in 0..120 {
+                                    if p2p_status.load(Ordering::Relaxed)
+                                        == P2PStatus::Success as u8
+                                    {
+                                        break;
+                                    } else {
+                                        if p2p_status.load(Ordering::Relaxed)
+                                            == P2PStatus::Failed as u8
+                                        {
+                                            warn!("P2P connection failed, try with normal mode");
+                                            break;
+                                        }
+                                        if i % 4 == 0 {
+                                            info!(
+                                                "P2P connection not established yet, please wait"
+                                            );
+                                        }
+                                        tokio::time::sleep(Duration::from_millis(500)).await;
+                                    }
+                                }
+                                // if p2p_stream.read().await.is_none()
+                                // && !is_p2p_failed.load(Ordering::Relaxed){
+
+                                // }
+                            };
+                            generic::Connect {
+                                host: connect_args.remote_addr.0.clone(),
+                                port: connect_args.remote_addr.1,
+                                protocol: if connect_args.udp {
+                                    generic::Protocol::UDP
+                                } else {
+                                    generic::Protocol::TCP
+                                },
+                                cryptography: None,
+                                sign: None,
+                            }
+                        }
                         ArgCommands::Forward(forward_args) => generic::Connect {
                             host: forward_args.remote_addr.0.clone(),
                             port: forward_args.remote_addr.1,
@@ -413,7 +451,12 @@ async fn main() -> Result<(), ClientError> {
                                         return;
                                     }
                                     Ok(status) => {
-                                        warn!("P2P connection failed: {}", status.to_string());
+                                        warn!(
+                                            "P2P connection to {}:{} failed: {}",
+                                            connect.host,
+                                            connect.port,
+                                            status.to_string()
+                                        );
                                         return;
                                     }
                                     Err(e) => {
@@ -566,11 +609,11 @@ async fn main() -> Result<(), ClientError> {
                                 .insert(connection_id.to_string(), msg);
                         }
                         narrowlink_types::client::EventInBound::Peer2Peer(p2p) => {
-                            let is_p2p_failed = is_p2p_failed.clone();
+                            let is_p2p_failed = p2p_status.clone();
                             let p2p_stream = p2p_stream.clone();
 
                             tokio::spawn(async move {
-                                is_p2p_failed.store(true, Ordering::Relaxed);
+                                is_p2p_failed.store(P2PStatus::Pending as u8, Ordering::Relaxed);
                                 let (socket, peer) =
                                     match narrowlink_network::p2p::udp_punched_socket(
                                         &p2p,
@@ -591,8 +634,10 @@ async fn main() -> Result<(), ClientError> {
                                 if let Ok(qs) = QuicStream::new_client(peer, socket, p2p.cert).await
                                 {
                                     p2p_stream.write().await.replace(qs);
-                                    is_p2p_failed.store(false, Ordering::Relaxed);
+                                    is_p2p_failed
+                                        .store(P2PStatus::Success as u8, Ordering::Relaxed);
                                 } else {
+                                    is_p2p_failed.store(P2PStatus::Failed as u8, Ordering::Relaxed);
                                     warn!("Unable to create quic stream");
                                 };
                             });

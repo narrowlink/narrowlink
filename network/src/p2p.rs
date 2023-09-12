@@ -524,7 +524,7 @@ pub async fn udp_punched_socket(
             return Err(NetworkError::P2PFailed);
         };
         let Ok((socket, _size, remaining_sockets)) = tokio::time::timeout(
-            Duration::from_secs(15),
+            Duration::from_secs(if p2p.seq > 128 { 15 } else { 5 }),
             futures_util::future::select_all(sockets),
         )
         .await
