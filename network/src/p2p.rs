@@ -7,7 +7,7 @@ use std::{
 
 use async_recursion::async_recursion;
 use narrowlink_types::{
-    generic::{Connect, Protocol},
+    generic::{Connect, CryptographicAlgorithm, Protocol, SigningAlgorithm},
     NatType, Peer2PeerRequest,
 };
 use quinn::{
@@ -43,16 +43,26 @@ impl Command {
         }
     }
 }
+
 pub enum Request {
     // Todo: Add signature and salt
-    Ip(SocketAddr, bool),   // bool is UDP
-    Dns(String, u16, bool), // bool is UDP
+    Ip(
+        SocketAddr,
+        bool,
+        Option<(CryptographicAlgorithm, SigningAlgorithm)>,
+    ), // bool is UDP
+    Dns(
+        String,
+        u16,
+        bool,
+        Option<(CryptographicAlgorithm, SigningAlgorithm)>,
+    ), // bool is UDP
 }
 
 impl Request {
     pub async fn read(mut reader: impl AsyncRead + Unpin) -> Result<Self, NetworkError> {
         let cmd = Command::from_u8(reader.read_u8().await?)?;
-        match cmd {
+        let req = match cmd {
             Command::DomainTCP | Command::DomainUDP => {
                 let len = reader.read_u8().await?;
                 let mut buf = vec![0; len as usize + 2];
@@ -60,17 +70,18 @@ impl Request {
                 let domain = String::from_utf8(buf[..buf.len() - 2].to_vec())
                     .map_err(|_| NetworkError::P2PInvalidDomain)?;
                 let port = u16::from_be_bytes([buf[buf.len() - 2], buf[buf.len() - 1]]);
-                Ok(Self::Dns(domain, port, cmd == Command::DomainUDP))
+                Self::Dns(domain, port, cmd == Command::DomainUDP, None)
             }
             Command::IPv4TCP | Command::IPv4UDP => {
                 let mut buf = vec![0; 4 + 2];
                 reader.read_exact(&mut buf).await?;
                 let ipv4 = std::net::Ipv4Addr::new(buf[0], buf[1], buf[2], buf[3]);
                 let port = u16::from_be_bytes([buf[buf.len() - 2], buf[buf.len() - 1]]);
-                Ok(Self::Ip(
+                Self::Ip(
                     SocketAddr::new(ipv4.into(), port),
                     cmd == Command::IPv4UDP,
-                ))
+                    None,
+                )
             }
             Command::IPv6TCP | Command::IPv6UDP => {
                 let mut buf = vec![0; 16 + 2];
@@ -86,16 +97,40 @@ impl Request {
                     u16::from_be_bytes([buf[14], buf[15]]),
                 );
                 let port = u16::from_be_bytes([buf[buf.len() - 2], buf[buf.len() - 1]]);
-                Ok(Self::Ip(
+                Self::Ip(
                     SocketAddr::new(ipv6.into(), port),
                     cmd == Command::IPv6UDP,
-                ))
+                    None,
+                )
             }
+        };
+        if reader.read_u8().await? == 1 {
+            let mut buf = vec![0; 24 + 32];
+            reader.read_exact(&mut buf).await?;
+            let crypto = CryptographicAlgorithm::XChaCha20Poly1305(
+                buf[..24]
+                    .try_into()
+                    .map_err(|_| NetworkError::P2PInvalidCrypto)?,
+            );
+            let sign = SigningAlgorithm::HmacSha256(
+                buf[24..]
+                    .try_into()
+                    .map_err(|_| NetworkError::P2PInvalidCrypto)?,
+            );
+            let req = match req {
+                Self::Ip(ip, udp, _) => Self::Ip(ip, udp, Some((crypto, sign))),
+                Self::Dns(domain, port, udp, _) => {
+                    Self::Dns(domain, port, udp, Some((crypto, sign)))
+                }
+            };
+            Ok(req)
+        } else {
+            Ok(req)
         }
     }
     pub async fn write(&self, mut writer: impl AsyncWrite + Unpin) -> Result<(), NetworkError> {
         match self {
-            Request::Ip(ip, udp) => {
+            Request::Ip(ip, udp, crypt) => {
                 let cmd = if ip.is_ipv4() {
                     if *udp {
                         Command::IPv4UDP
@@ -117,8 +152,22 @@ impl Request {
                     }
                 }
                 writer.write_u16(ip.port()).await?;
+                if let Some(c) = crypt {
+                    writer.write_u8(1).await?;
+                    match c {
+                        (
+                            CryptographicAlgorithm::XChaCha20Poly1305(iv),
+                            SigningAlgorithm::HmacSha256(key),
+                        ) => {
+                            writer.write_all(iv).await?;
+                            writer.write_all(key).await?;
+                        }
+                    }
+                } else {
+                    writer.write_u8(0).await?;
+                }
             }
-            Request::Dns(domain, port, udp) => {
+            Request::Dns(domain, port, udp, crypt) => {
                 let cmd = if *udp {
                     Command::DomainUDP
                 } else {
@@ -127,7 +176,21 @@ impl Request {
                 writer.write_u8(cmd as u8).await?;
                 writer.write_u8(domain.len() as u8).await?;
                 writer.write_all(domain.as_bytes()).await?;
-                writer.write_u16(*port).await?
+                writer.write_u16(*port).await?;
+                if let Some(c) = crypt {
+                    writer.write_u8(1).await?;
+                    match c {
+                        (
+                            CryptographicAlgorithm::XChaCha20Poly1305(iv),
+                            SigningAlgorithm::HmacSha256(key),
+                        ) => {
+                            writer.write_all(iv).await?;
+                            writer.write_all(key).await?;
+                        }
+                    }
+                } else {
+                    writer.write_u8(0).await?;
+                }
             }
         }
         Ok(())
@@ -171,9 +234,14 @@ impl Response {
 
 impl From<&Request> for Connect {
     fn from(r: &Request) -> Self {
-        let (host, port, is_udp) = match r {
-            Request::Ip(ip, udp) => (ip.ip().to_string(), ip.port(), udp),
-            Request::Dns(domain, port, udp) => (domain.to_owned(), *port, udp),
+        let (host, port, is_udp, crypt) = match r {
+            Request::Ip(ip, udp, crypt) => (ip.ip().to_string(), ip.port(), udp, crypt),
+            Request::Dns(domain, port, udp, crypt) => (domain.to_owned(), *port, udp, crypt),
+        };
+        let (cryptography, sign) = if let Some((c, s)) = crypt {
+            (Some(c.clone()), Some(s.clone()))
+        } else {
+            (None, None)
         };
         Connect {
             host,
@@ -183,25 +251,30 @@ impl From<&Request> for Connect {
             } else {
                 Protocol::TCP
             },
-            cryptography: None,
-            sign: None,
+            cryptography,
+            sign,
         }
     }
 }
 
 impl From<&Connect> for Request {
     fn from(connect: &Connect) -> Self {
+        let crypt = if let (Some(c), Some(s)) = (&connect.cryptography, &connect.sign) {
+            Some((c.clone(), s.clone()))
+        } else {
+            None
+        };
         match connect.protocol {
             Protocol::TCP | Protocol::HTTP | Protocol::HTTPS | Protocol::TLS => {
                 match connect.host.parse::<IpAddr>() {
-                    Ok(ip) => Request::Ip(SocketAddr::new(ip, connect.port), false),
-                    Err(_) => Request::Dns(connect.host.to_owned(), connect.port, false),
+                    Ok(ip) => Request::Ip(SocketAddr::new(ip, connect.port), false, crypt),
+                    Err(_) => Request::Dns(connect.host.to_owned(), connect.port, false, crypt),
                 }
             }
             Protocol::UDP | Protocol::DTLS | Protocol::QUIC => match connect.host.parse::<IpAddr>()
             {
-                Ok(ip) => Request::Ip(SocketAddr::new(ip, connect.port), true),
-                Err(_) => Request::Dns(connect.host.to_owned(), connect.port, true),
+                Ok(ip) => Request::Ip(SocketAddr::new(ip, connect.port), true, crypt),
+                Err(_) => Request::Dns(connect.host.to_owned(), connect.port, true, crypt),
             },
         }
     }

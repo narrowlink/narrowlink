@@ -12,6 +12,7 @@ pub enum NetworkError {
     QuicError,
     P2PInvalidCommand,
     P2PInvalidDomain,
+    P2PInvalidCrypto,
     P2PTimeout,
     P2PFailed,
     JsonSerializationError(serde_json::Error),
@@ -54,6 +55,7 @@ impl fmt::Display for NetworkError {
             NetworkError::QuicError => write!(f, "E-QuicError::Error"),
             NetworkError::P2PInvalidCommand => write!(f, "E-P2PInvalidCommand::Error"),
             NetworkError::P2PInvalidDomain => write!(f, "E-P2PInvalidDomain::Error"),
+            NetworkError::P2PInvalidCrypto => write!(f, "E-P2PInvalidCrypto::Error"),
             NetworkError::P2PTimeout => write!(f, "E-P2PTimeout::Error"),
             NetworkError::P2PFailed => write!(f, "E-P2PFailed::Error"),
             NetworkError::JsonSerializationError(e) => {
