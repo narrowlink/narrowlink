@@ -30,25 +30,35 @@ tracing-subscriber = { version = "0.3.17", default-features = false, features = 
     "ansi",
     "json",
 ] }
-tracing-appender = { version = "0.2.2" }
-dirs = { version = "5.0.1" }
-serde_json = { version = "1.0.106" }
-serde_yaml = "0.9.25"
-serde = { version = "1.0.188", features = ["derive"] }
-async-trait = { version = "0.1.73" }
-futures-util = { version = "0.3.28" }
-askama = { version = "0.12.0" }
-pem = { version = "3.0.2" }
-uuid = { version = "1.4.1", features = ["v4", "serde"] }
-either = { version = "1.9.0" }
-instant-acme = { version = "0.4.0" }
-tokio-rustls = { version = "0.24.1" }
-rustls = { version = "0.21.7" }
-rustls-pemfile = { version = "1.0.3" }
-validator = { version = "0.16.1", features = ["derive"] }
-rcgen = { version = "0.11.1", features = ["pem", "x509-parser"] }
-x509-parser = { version = "0.15.1" }
-clap_lex = { version = "0.5.1" }
-rand = { version = "0.8.5", features = ["std"] }
+tracing-appender = { version = "0.2.2" , default-features = false }
+dirs = { version = "5.0.1" , default-features = false }
+serde_json = { version = "1.0.106" , default-features = false }
+serde_yaml = { version = "0.9.25", default-features = false }
+serde = { version = "1.0.188", features = ["derive"], default-features = false }
+async-trait = { version = "0.1.73", default-features = false }
+futures-util = { version = "0.3.28", default-features = false }
+askama = { version = "0.12.0", default-features = false }
+pem = { version = "3.0.2", default-features = false, features = ["std"] }
+uuid = { version = "1.4.1", default-features = false, features = [
+    "v4",
+    "serde",
+] }
+either = { version = "1.9.0", default-features = false }
+instant-acme = { version = "0.4.0", default-features = false, features = [
+    "hyper-rustls",
+] }
+tokio-rustls = { version = "0.24.1", default-features = false }
+rustls = { version = "0.21.7", default-features = false }
+rustls-pemfile = { version = "1.0.3", default-features = false }
+validator = { version = "0.16.1", default-features = false, features = [
+    "derive",
+] }
+rcgen = { version = "0.11.1", default-features = false, features = [
+    "pem",
+    "x509-parser",
+] }
+x509-parser = { version = "0.15.1", default-features = false }
+clap_lex = { version = "0.5.1", default-features = false }
+rand = { version = "0.8.5", default-features = false, features = ["std"] }
 narrowlink-types = { version = "0.1.4" }
 narrowlink-network = { version = "0.1.4" }
