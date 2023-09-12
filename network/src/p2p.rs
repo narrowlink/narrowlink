@@ -532,6 +532,9 @@ pub async fn udp_punched_socket(
             warn!("Timeout waiting for response from peer");
             if !inner && p2p.nat == p2p.peer_nat {
                 info!("Trying to punch peer from other side");
+                if puncher {
+                    tokio::time::sleep(Duration::from_millis(1000)).await;
+                }
                 return udp_punched_socket(p2p, handshake_key, !left, true).await;
             }
             #[cfg(unix)]
