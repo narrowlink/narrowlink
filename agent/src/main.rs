@@ -221,7 +221,7 @@ async fn start(args: Args) -> Result<(), AgentError> {
                 let (s, _) = match narrowlink_network::p2p::udp_punched_socket(
                     &p2p,
                     &Sha3_256::digest(&p2p.cert)[0..6],
-                    true,
+                    false,
                     false,
                 )
                 .await
