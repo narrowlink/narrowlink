@@ -13,6 +13,7 @@ use error::AgentError;
 use futures_util::{SinkExt, StreamExt};
 use hmac::Mac;
 use narrowlink_network::{
+    async_forward,
     error::NetworkError,
     event::NarrowEvent,
     p2p::QuicStream,
@@ -282,10 +283,7 @@ async fn start(args: Args) -> Result<(), AgentError> {
                                     return;
                                 }
                             };
-                            if let Err(_e) =
-                                stream_forward(AsyncToStream::new(stream), AsyncToStream::new(s))
-                                    .await
-                            {
+                            if let Err(_e) = async_forward(s, stream).await {
                                 trace!("Data channel closed: {}", _e.to_string());
                             }
                         });

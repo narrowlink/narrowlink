@@ -18,6 +18,7 @@ use error::ClientError;
 use futures_util::stream::StreamExt;
 use hmac::Mac;
 use narrowlink_network::{
+    async_forward,
     error::NetworkError,
     event::{NarrowEvent, NarrowEventRequest},
     p2p::QuicStream,
@@ -405,12 +406,8 @@ async fn main() -> Result<(), ClientError> {
                                 {
                                     Ok(narrowlink_network::p2p::Response::Success) => {
                                         trace!("P2P connection established");
-                                        if let Err(_e) = stream_forward(
-                                            AsyncToStream::new(quic_socket),
-                                            AsyncToStream::new(socket),
-                                        )
-                                        .await
-                                        {
+
+                                        if let Err(_e) = async_forward(quic_socket, socket).await {
                                             debug!("connection closed {}", _e);
                                         }
                                         return;
