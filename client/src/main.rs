@@ -57,7 +57,13 @@ pub enum P2PStatus {
 
 #[tokio::main]
 async fn main() -> Result<(), ClientError> {
-    let (stdout, _stdout_guard) = tracing_appender::non_blocking(io::stdout());
+    let args = Args::parse(env::args())?;
+    let (stdout, _stdout_guard) = if let ArgCommands::Connect(_) = args.arg_commands.as_ref() {
+        // print all output to stderr when use connect command to avoid conflict with the socket stdout
+        tracing_appender::non_blocking(io::stderr())
+    } else {
+        tracing_appender::non_blocking(io::stdout())
+    };
     let (stderr, _stderr_guard) = tracing_appender::non_blocking(io::stderr());
 
     let cmd = tracing_subscriber::fmt::layer()
@@ -90,7 +96,6 @@ async fn main() -> Result<(), ClientError> {
         // .with(file)
         .init();
 
-    let args = Args::parse(env::args())?;
     let span = span!(Level::TRACE, "main", args= ?args);
 
     let conf = Arc::new(config::Config::load(args.config_path)?);
