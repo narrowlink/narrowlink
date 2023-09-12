@@ -67,7 +67,13 @@ async fn main() -> Result<(), ClientError> {
     let (stderr, _stderr_guard) = tracing_appender::non_blocking(io::stderr());
 
     let cmd = tracing_subscriber::fmt::layer()
-        .with_ansi(io::stdout().is_terminal() && io::stderr().is_terminal())
+        .with_ansi(
+            if let ArgCommands::Connect(_) = args.arg_commands.as_ref() {
+                true
+            } else {
+                io::stdout().is_terminal()
+            } && io::stderr().is_terminal(),
+        )
         .compact()
         // .with_target(false)
         .with_writer(
