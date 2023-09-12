@@ -13,6 +13,7 @@ pub enum NetworkError {
     P2PInvalidCommand,
     P2PInvalidDomain,
     P2PTimeout,
+    P2PFailed,
     JsonSerializationError(serde_json::Error),
     XChaCha20Poly1305(chacha20poly1305::Error),
     Invalid(&'static str),
@@ -54,6 +55,7 @@ impl fmt::Display for NetworkError {
             NetworkError::P2PInvalidCommand => write!(f, "E-P2PInvalidCommand::Error"),
             NetworkError::P2PInvalidDomain => write!(f, "E-P2PInvalidDomain::Error"),
             NetworkError::P2PTimeout => write!(f, "E-P2PTimeout::Error"),
+            NetworkError::P2PFailed => write!(f, "E-P2PFailed::Error"),
             NetworkError::JsonSerializationError(e) => {
                 write!(f, "E-JsonSerialization:{}", e)
             }

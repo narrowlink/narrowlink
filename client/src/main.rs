@@ -375,7 +375,7 @@ async fn main() -> Result<(), ClientError> {
 
                     let gateway_address = conf.gateway.clone();
 
-                    dbg!("before");
+                    // dbg!("before");
                     dbg!(&p2p_stream);
 
                     if let Some(stream) = p2p_stream.read().await.as_ref() {
@@ -532,14 +532,20 @@ async fn main() -> Result<(), ClientError> {
                                 .insert(connection_id.to_string(), msg);
                         }
                         narrowlink_types::client::EventInBound::Peer2Peer(p2p) => {
-                            let (s, peer) = narrowlink_network::p2p::udp_punched_socket(
+                            let (s, peer) = match narrowlink_network::p2p::udp_punched_socket(
                                 &p2p,
                                 &Sha3_256::digest(&p2p.cert)[0..6],
                                 true,
                                 false,
                             )
                             .await
-                            .unwrap();
+                            {
+                                Ok(s) => s,
+                                Err(e) => {
+                                    warn!("Unable to create peer to peer channel: {}", e);
+                                    continue;
+                                }
+                            };
                             let runtime = default_runtime().unwrap();
                             let mut end = Endpoint::new(
                                 EndpointConfig::default(),

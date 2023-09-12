@@ -38,8 +38,8 @@ use tokio::{
     net::{lookup_host, TcpStream},
     time,
 };
-use tracing::Level;
 use tracing::{debug, error, info, trace};
+use tracing::{warn, Level};
 use tracing_subscriber::{
     filter::{LevelFilter, Targets},
     fmt::writer::MakeWriterExt,
@@ -218,14 +218,20 @@ async fn start(args: Args) -> Result<(), AgentError> {
                 continue;
             }
             Some(Ok(AgentEventInBound::Peer2Peer(p2p))) => {
-                let (s, _) = narrowlink_network::p2p::udp_punched_socket(
+                let (s, _) = match narrowlink_network::p2p::udp_punched_socket(
                     &p2p,
-                    &Sha3_256::digest(&p2p.cert)[..6],
-                    false,
+                    &Sha3_256::digest(&p2p.cert)[0..6],
+                    true,
                     false,
                 )
                 .await
-                .unwrap();
+                {
+                    Ok(s) => s,
+                    Err(e) => {
+                        warn!("Unable to create peer to peer channel: {}", e);
+                        continue;
+                    }
+                };
                 let (server_config, _) = configure_server(p2p.cert, p2p.key).unwrap();
                 let runtime = default_runtime().unwrap();
                 let end = Endpoint::new(
