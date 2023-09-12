@@ -1,5 +1,6 @@
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
+    // sync::{atomic::AtomicU32, Arc},
     time::Duration,
 };
 
@@ -192,38 +193,53 @@ impl From<&Connect> for Request {
     }
 }
 
-pub struct QuicBiSocket {
-    send: SendStream,
-    recv: RecvStream,
-    remote_addr: SocketAddr,
+pub struct QuicStream {
+    con: Connection,
+    // number_of_streams: Arc<AtomicU32>,
 }
 
-impl QuicBiSocket {
-    pub async fn open(stream: &Connection) -> Result<Self, NetworkError> {
-        let remote_addr = stream.remote_address();
-        let (send, recv) = stream.open_bi().await.unwrap();
-        // .map_err(|_| NetworkError::QuicError)?;
-        Ok(Self {
+impl QuicStream {
+    pub fn new(con: Connection) -> Self {
+        Self {
+            con,
+            // number_of_streams: Arc::new(AtomicU32::new(0)),
+        }
+    }
+    pub async fn open_bi(&self) -> Result<QuicBiSocket, NetworkError> {
+        let (send, recv) = self
+            .con
+            .open_bi()
+            .await
+            .map_err(|_| NetworkError::QuicError)?;
+        // self.number_of_streams.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(QuicBiSocket {
             send,
             recv,
-            remote_addr,
+            // number_of_streams: self.number_of_streams.clone(),
         })
     }
-    pub async fn accept(stream: &Connection) -> Result<Self, NetworkError> {
-        let remote_addr = stream.remote_address();
-        let (send, recv) = stream
+    pub async fn accept_bi(&self) -> Result<QuicBiSocket, NetworkError> {
+        let (send, recv) = self
+            .con
             .accept_bi()
             .await
             .map_err(|_| NetworkError::QuicError)?;
-        Ok(Self {
+        // self.number_of_streams.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(QuicBiSocket {
             send,
             recv,
-            remote_addr,
+            // number_of_streams: self.number_of_streams.clone(),
         })
     }
     pub fn remote_addr(&self) -> SocketAddr {
-        self.remote_addr
+        self.con.remote_address()
     }
+}
+
+pub struct QuicBiSocket {
+    send: SendStream,
+    recv: RecvStream,
+    // number_of_streams: Arc<AtomicU32>,
 }
 
 impl AsyncRead for QuicBiSocket {
@@ -259,6 +275,13 @@ impl AsyncWrite for QuicBiSocket {
         std::pin::Pin::new(&mut self.send).poll_shutdown(cx)
     }
 }
+
+// impl Drop for QuicBiSocket {
+//     fn drop(&mut self) {
+//         self.number_of_streams.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+//     }
+// }
+
 #[async_recursion]
 pub async fn udp_punched_socket(
     p2p: &Peer2PeerRequest,

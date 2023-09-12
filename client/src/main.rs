@@ -20,7 +20,7 @@ use hmac::Mac;
 use narrowlink_network::{
     error::NetworkError,
     event::{NarrowEvent, NarrowEventRequest},
-    p2p::QuicBiSocket,
+    p2p::QuicStream,
     stream_forward,
     ws::{WsConnection, WsConnectionBinary},
     AsyncSocket, AsyncToStream, StreamCrypt, UniversalStream,
@@ -159,7 +159,7 @@ async fn main() -> Result<(), ClientError> {
     let mut sleep_time = 0;
     let arg_commands = args.arg_commands.clone();
     let connections = Arc::new(Mutex::new(HashMap::new()));
-    let p2p_stream = Arc::new(RwLock::new(None));
+    let p2p_stream = Arc::new(RwLock::new(None::<QuicStream>));
     loop {
         let arg_commands = arg_commands.clone();
         let conf = conf.clone();
@@ -376,10 +376,10 @@ async fn main() -> Result<(), ClientError> {
                     let gateway_address = conf.gateway.clone();
 
                     // dbg!("before");
-                    dbg!(&p2p_stream);
+                    // dbg!(&p2p_stream);
 
                     if let Some(stream) = p2p_stream.read().await.as_ref() {
-                        let mut quic_socket = QuicBiSocket::open(stream).await.unwrap();
+                        let mut quic_socket = stream.open_bi().await.unwrap();
                         let r = narrowlink_network::p2p::Request::from(&connect);
                         r.write(&mut quic_socket).await.unwrap();
                         let res = narrowlink_network::p2p::Response::read(&mut quic_socket)
@@ -546,6 +546,7 @@ async fn main() -> Result<(), ClientError> {
                                     continue;
                                 }
                             };
+                            info!("Peer to peer channel created");
                             let runtime = default_runtime().unwrap();
                             let mut end = Endpoint::new(
                                 EndpointConfig::default(),
@@ -563,12 +564,13 @@ async fn main() -> Result<(), ClientError> {
                             config.enable_sni = false;
                             end.set_default_client_config(ClientConfig::new(Arc::new(config)));
                             dbg!(11);
-                            let connect = end
-                                .connect(peer, &peer.ip().to_string())
-                                .unwrap()
-                                .await
-                                .unwrap();
-                            dbg!(connect.remote_address());
+                            let connect = QuicStream::new(
+                                end.connect(peer, &peer.ip().to_string())
+                                    .unwrap()
+                                    .await
+                                    .unwrap(),
+                            );
+                            dbg!(connect.remote_addr());
                             p2p_stream.write().await.replace(connect);
                             // dbg!(&p2p_stream);
                             // let mut _quic_socket = QuicBiSocket::open(connect).await.unwrap();
@@ -593,13 +595,13 @@ async fn main() -> Result<(), ClientError> {
                     ),
                 ))
                 .await;
-            let x = sys_req
+            let _todo = sys_req
                 .request(ClientEventOutBound::Request(
                     0,
                     ClientEventRequest::Peer2Peer("MBP".to_string()),
                 ))
                 .await;
-            let _ = dbg!(x);
+
             session = Some((session_id, req, event_stream_task));
         }
     }

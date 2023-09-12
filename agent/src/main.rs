@@ -16,7 +16,7 @@ use hmac::Mac;
 use narrowlink_network::{
     error::NetworkError,
     event::NarrowEvent,
-    p2p::QuicBiSocket,
+    p2p::QuicStream,
     stream_forward,
     transport::{StreamType, TlsConfiguration, UnifiedSocket},
     ws::{WsConnection, WsConnectionBinary},
@@ -232,6 +232,7 @@ async fn start(args: Args) -> Result<(), AgentError> {
                         continue;
                     }
                 };
+                info!("Peer to peer channel created");
                 let (server_config, _) = configure_server(p2p.cert, p2p.key).unwrap();
                 let runtime = default_runtime().unwrap();
                 let end = Endpoint::new(
@@ -241,11 +242,14 @@ async fn start(args: Args) -> Result<(), AgentError> {
                     runtime,
                 )
                 .unwrap();
-                let con = end.accept().await.unwrap().await.unwrap();
+                // let con = end.accept().await.unwrap().await.unwrap();
+
+                let con = QuicStream::new(end.accept().await.unwrap().await.unwrap());
+
                 loop {
-                    let Ok(mut s) = QuicBiSocket::accept(&con).await else {
+                    let Ok(mut s) = con.accept_bi().await else {
                         dbg!("accept failed");
-                        continue;
+                        break;
                     };
                     tokio::spawn(async {
                         // let mut buf = vec![0u8; 5];
@@ -463,8 +467,9 @@ fn configure_server(
     let cert_chain = vec![rustls::Certificate(cert.clone())];
 
     let mut server_config = quinn::ServerConfig::with_single_cert(cert_chain, priv_key)?;
-    let transport_config = std::sync::Arc::get_mut(&mut server_config.transport).unwrap();
-    transport_config.max_concurrent_uni_streams(0_u8.into());
-    // todo!()
+    if let Some(conf) = std::sync::Arc::get_mut(&mut server_config.transport) {
+        conf.keep_alive_interval(Some(Duration::from_secs(5)));
+        conf.max_concurrent_uni_streams(0_u8.into());
+    };
     Ok((server_config, cert))
 }
