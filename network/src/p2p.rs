@@ -15,7 +15,7 @@ use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::UdpSocket,
 };
-use tracing::warn;
+use tracing::{debug, warn};
 
 use crate::error::NetworkError;
 #[derive(PartialEq)]
@@ -286,7 +286,7 @@ pub struct QuicStream {
 impl QuicStream {
     pub async fn new_client(
         remote_addr: SocketAddr,
-        socket: UdpSocket,
+        socket: UdpSocket, // tokio udpsocket
         cert: Vec<u8>,
     ) -> Result<Self, NetworkError> {
         let mut end = Endpoint::new(
@@ -314,18 +314,18 @@ impl QuicStream {
         Ok(Self { con })
     }
     pub async fn new_server(
-        socket: UdpSocket,
+        socket: UdpSocket, // tokio udpsocket
         cert: Vec<u8>,
         key: Vec<u8>,
     ) -> Result<Self, NetworkError> {
-        let priv_key = rustls::PrivateKey(key);
-        let cert_chain = vec![rustls::Certificate(cert.clone())];
-
-        let mut server_config = quinn::ServerConfig::with_single_cert(cert_chain, priv_key)
-            .map_err(|_| NetworkError::TlsError)?;
+        let mut server_config = quinn::ServerConfig::with_single_cert(
+            vec![rustls::Certificate(cert)],
+            rustls::PrivateKey(key),
+        )
+        .map_err(|_| NetworkError::TlsError)?;
         if let Some(conf) = std::sync::Arc::get_mut(&mut server_config.transport) {
             conf.keep_alive_interval(Some(Duration::from_secs(5)));
-            conf.max_concurrent_uni_streams(0_u8.into());
+            // conf.max_concurrent_uni_streams(0_u8.into());
         };
         let end = Endpoint::new(
             EndpointConfig::default(),
@@ -425,6 +425,7 @@ pub async fn udp_punched_socket(
     left: bool,
     inner: bool,
 ) -> Result<(UdpSocket, SocketAddr), NetworkError> {
+    debug!("P2P: {:?}", p2p);
     let unspecified_ip = if p2p.peer_ip.is_ipv4() {
         IpAddr::V4(Ipv4Addr::UNSPECIFIED)
     } else {
@@ -489,8 +490,16 @@ pub async fn udp_punched_socket(
 
         if let Some(socket) = socket.as_ref() {
             let buf = if puncher {
+                debug!(
+                    "Punching peer {}:{} -> {}:{}",
+                    unspecified_ip, my_port, p2p.peer_ip, peer_port
+                );
                 vec![0]
             } else {
+                debug!(
+                    "Discovering peer {}:{} -> {}:{}",
+                    unspecified_ip, my_port, p2p.peer_ip, peer_port
+                );
                 handshake_key[0..3].to_vec()
             };
             if let Err(e) = socket
@@ -546,6 +555,15 @@ pub async fn udp_punched_socket(
         };
 
         if puncher && handshake_key[0..3] == buf[0..3] {
+            if let Ok(local_addr) = socket.local_addr() {
+                debug!(
+                    "Confirming p2p channel peer {}:{} -> {}:{}",
+                    local_addr.ip(),
+                    local_addr.port(),
+                    peer.ip(),
+                    peer.port()
+                );
+            }
             if let Err(e) = socket.send_to(&handshake_key[3..6], peer).await {
                 warn!("Error sending to peer: {}", e);
                 sockets = remaining_sockets;
