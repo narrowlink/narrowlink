@@ -163,7 +163,8 @@ impl State {
                                             continue
                                         };
                                         let _ = client.send(ClientEventInBound::Response(request_id,ClientEventResponse::Ok)).await;
-
+                                        let policies = client.get_policy();
+                                        let agent_name = agent.name();
                                         let port = rand::thread_rng().gen_range((49152+seq)..(65535-seq));
                                         let _ = agent.send(AgentEventInBound::Peer2Peer(Peer2PeerRequest {
                                             peer_ip: client_ip,
@@ -173,6 +174,8 @@ impl State {
                                             nat: a,
                                             cert:cert.clone(),
                                             key,
+                                            policies:policies.clone(),
+                                            agent_name: agent_name.clone(),
                                         })).await;
                                         let _ = client.send(ClientEventInBound::Peer2Peer(Peer2PeerRequest {
                                             peer_ip: agent_ip,
@@ -182,6 +185,8 @@ impl State {
                                             nat: c,
                                             cert,
                                             key: Vec::new(),
+                                            policies,
+                                            agent_name
                                         })).await;
 
                                     }

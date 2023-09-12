@@ -237,8 +237,11 @@ async fn start(args: Args) -> Result<(), AgentError> {
                         warn!("Unable to create peer to peer channel");
                         return;
                     };
-
+                    let policies = p2p.policies;
+                    let agent_name = p2p.agent_name;
                     loop {
+                        let policies = policies.clone();
+                        let agent_name = agent_name.clone();
                         let mut s = match con.accept_bi().await {
                             Ok(s) => s,
                             Err(e) => {
@@ -247,12 +250,28 @@ async fn start(args: Args) -> Result<(), AgentError> {
                             }
                         };
 
-                        tokio::spawn(async {
+                        tokio::spawn(async move {
                             let Ok(r) = narrowlink_network::p2p::Request::read(&mut s).await else {
                                 warn!("Unable to read request");
                                 return;
                             };
                             let con = Into::<Connect>::into(&r);
+                            if !policies.permit(Some(&agent_name), &con) {
+                                warn!(
+                                    "Access denied to {}:{}, peer: {}",
+                                    con.host, con.port, p2p.peer_ip
+                                );
+                                if narrowlink_network::p2p::Response::write(
+                                    &narrowlink_network::p2p::Response::AccessDenied,
+                                    &mut s,
+                                )
+                                .await
+                                .is_err()
+                                {
+                                    warn!("Unable to write response");
+                                }
+                                return;
+                            }
                             // dbg!(&con);
                             trace!("Connecting to {}", con.host);
                             let stream = match TcpStream::connect((con.host, con.port)).await {
