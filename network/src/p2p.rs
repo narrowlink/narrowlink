@@ -15,7 +15,7 @@ use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::UdpSocket,
 };
-use tracing::{debug, warn};
+use tracing::{debug, field::debug, warn};
 
 use crate::error::NetworkError;
 #[derive(PartialEq)]
@@ -289,6 +289,7 @@ impl QuicStream {
         socket: UdpSocket, // tokio udpsocket
         cert: Vec<u8>,
     ) -> Result<Self, NetworkError> {
+        debug!("Connecting to {}", remote_addr);
         let mut end = Endpoint::new(
             EndpointConfig::default(),
             None,
@@ -318,6 +319,7 @@ impl QuicStream {
         cert: Vec<u8>,
         key: Vec<u8>,
     ) -> Result<Self, NetworkError> {
+        debug("Accepting connection");
         let mut server_config = quinn::ServerConfig::with_single_cert(
             vec![rustls::Certificate(cert)],
             rustls::PrivateKey(key),
