@@ -183,7 +183,9 @@ async fn main() -> Result<(), ClientError> {
     let mut sleep_time = 0;
     let arg_commands = args.arg_commands.clone();
     let connections = Arc::new(Mutex::new(HashMap::new()));
-    let p2p_stream = Arc::new(RwLock::new(None::<(QuicStream, (narrowlink_types::policy::Policies, String))>));
+    let p2p_stream = Arc::new(RwLock::new(
+        None::<(QuicStream, (narrowlink_types::policy::Policies, String))>,
+    ));
     let p2p_status = Arc::new(AtomicU8::new(P2PStatus::Uninitialized as u8));
     loop {
         let arg_commands = arg_commands.clone();
@@ -443,7 +445,7 @@ async fn main() -> Result<(), ClientError> {
                     // dbg!("before");
                     // dbg!(&p2p_stream);
 
-                    if let Some((stream,_policies)) = p2p_stream.read().await.as_ref() {
+                    if let Some((stream, _policies)) = p2p_stream.read().await.as_ref() {
                         if let Ok(mut quic_socket) = stream.open_bi().await {
                             if narrowlink_network::p2p::Request::from(&connect)
                                 .write(&mut quic_socket)
@@ -644,9 +646,11 @@ async fn main() -> Result<(), ClientError> {
 
                                 if let Ok(qs) = QuicStream::new_client(peer, socket, p2p.cert).await
                                 {
-                                    p2p_stream.write().await.replace((qs,(p2p.policies, p2p.agent_name)));
-                                    p2p_status
-                                        .store(P2PStatus::Success as u8, Ordering::Relaxed);
+                                    p2p_stream
+                                        .write()
+                                        .await
+                                        .replace((qs, (p2p.policies, p2p.agent_name)));
+                                    p2p_status.store(P2PStatus::Success as u8, Ordering::Relaxed);
                                 } else {
                                     p2p_status.store(P2PStatus::Failed as u8, Ordering::Relaxed);
                                     warn!("Unable to create quic stream");
