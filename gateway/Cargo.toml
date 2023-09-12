@@ -32,7 +32,7 @@ tracing-subscriber = { version = "0.3.17", default-features = false, features = 
 ] }
 tracing-appender = { version = "0.2.2" }
 dirs = { version = "5.0.1" }
-serde_json = { version = "1.0.105" }
+serde_json = { version = "1.0.106" }
 serde_yaml = "0.9.25"
 serde = { version = "1.0.188", features = ["derive"] }
 async-trait = { version = "0.1.73" }
@@ -49,6 +49,6 @@ validator = { version = "0.16.1", features = ["derive"] }
 rcgen = { version = "0.11.1", features = ["pem", "x509-parser"] }
 x509-parser = { version = "0.15.1" }
 clap_lex = { version = "0.5.1" }
-rand = { version = "0.8.4", features = ["std"] }
+rand = { version = "0.8.5", features = ["std"] }
 narrowlink-types = { version = "0.1.4" }
 narrowlink-network = { version = "0.1.4" }

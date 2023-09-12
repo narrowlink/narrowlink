@@ -36,36 +36,56 @@ impl UnifiedSocket {
                 let peer_addr = tcp_stream.peer_addr()?;
                 let mut stream: Box<dyn AsyncSocket> = Box::new(tcp_stream);
                 if let StreamType::Tls(conf) = transport_type {
-                    debug!("using rustls to connect to {}", peer_addr.to_string());
-                    use std::sync::Arc;
-                    use tokio_rustls::{
-                        rustls::{ClientConfig, OwnedTrustAnchor, RootCertStore, ServerName},
-                        TlsConnector,
-                    };
+                    #[cfg(feature = "rustls")]
+                    {
+                        debug!("using rustls to connect to {}", peer_addr.to_string());
+                        use std::sync::Arc;
+                        use tokio_rustls::{
+                            rustls::{ClientConfig, OwnedTrustAnchor, RootCertStore, ServerName},
+                            TlsConnector,
+                        };
 
-                    let mut root_store = RootCertStore::empty();
-                    root_store.add_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.iter().map(|ta| {
-                        OwnedTrustAnchor::from_subject_spki_name_constraints(
-                            ta.subject,
-                            ta.spki,
-                            ta.name_constraints,
-                        )
-                    }));
+                        let mut root_store = RootCertStore::empty();
+                        root_store.add_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.iter().map(
+                            |ta| {
+                                OwnedTrustAnchor::from_subject_spki_name_constraints(
+                                    ta.subject,
+                                    ta.spki,
+                                    ta.name_constraints,
+                                )
+                            },
+                        ));
 
-                    let config = ClientConfig::builder()
-                        .with_safe_default_cipher_suites()
-                        .with_safe_default_kx_groups()
-                        .with_safe_default_protocol_versions()
-                        .or(Err(NetworkError::TlsError))?
-                        .with_root_certificates(root_store)
-                        .with_no_client_auth();
+                        let config = ClientConfig::builder()
+                            .with_safe_default_cipher_suites()
+                            .with_safe_default_kx_groups()
+                            .with_safe_default_protocol_versions()
+                            .or(Err(NetworkError::TlsError))?
+                            .with_root_certificates(root_store)
+                            .with_no_client_auth();
 
-                    let config = TlsConnector::from(Arc::new(config));
+                        let config = TlsConnector::from(Arc::new(config));
 
-                    let dnsname = ServerName::try_from(conf.sni.as_str()).or(Err(
-                        io::Error::new(io::ErrorKind::InvalidInput, "invalid dnsname"),
-                    ))?;
-                    stream = Box::new(config.connect(dnsname, stream).await?);
+                        let dnsname = ServerName::try_from(conf.sni.as_str()).or(Err(
+                            io::Error::new(io::ErrorKind::InvalidInput, "invalid dnsname"),
+                        ))?;
+                        stream = Box::new(config.connect(dnsname, stream).await?);
+                    }
+
+                    #[cfg(feature = "native-tls")]
+                    {
+                        debug!("using native-ls to connect to {}", peer_addr.to_string());
+                        let cx = tokio_native_tls::native_tls::TlsConnector::builder()
+                            .build()
+                            .or(Err(NetworkError::TlsError))?;
+                        let cx = tokio_native_tls::TlsConnector::from(cx);
+
+                        stream = Box::new(
+                            cx.connect(conf.sni.as_str(), stream)
+                                .await
+                                .or(Err(io::Error::from(io::ErrorKind::WouldBlock)))?,
+                        );
+                    }
                 }
 
                 Ok(Self {
