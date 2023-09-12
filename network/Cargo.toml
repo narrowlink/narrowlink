@@ -39,14 +39,18 @@ tungstenite = { version = "0.20.0", features = [
 chacha20poly1305 = { version = "0.10.1", features = [
     "alloc",
 ], default-features = false }
-quinn = { version = "0.10.2" }
+quinn = { version = "0.10.2", default-features = false, features = [
+    "runtime-tokio",
+    "tls-rustls",
+] }
 async-recursion = { version = "1.0.5", default-features = false }
 tracing = { version = "0.1.37", default-features = false }
 tokio-native-tls = { version = "0.3.1", optional = true, default-features = false }
 narrowlink-types = { version = "0.1.4" }
 
+
 [target.'cfg(unix)'.dependencies]
-rlimit = { version = "0.10" }
+rlimit = { version = "0.10", default-features = false }
 
 
 [features]
