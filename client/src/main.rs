@@ -561,29 +561,35 @@ async fn main() -> Result<(), ClientError> {
                                 .insert(connection_id.to_string(), msg);
                         }
                         narrowlink_types::client::EventInBound::Peer2Peer(p2p) => {
-                            is_p2p_failed.store(true, Ordering::Relaxed);
-                            let (socket, peer) = match narrowlink_network::p2p::udp_punched_socket(
-                                &p2p,
-                                &Sha3_256::digest(&p2p.cert)[0..6],
-                                true,
-                                false,
-                            )
-                            .await
-                            {
-                                Ok(s) => s,
-                                Err(e) => {
-                                    warn!("Unable to create peer to peer channel: {}", e);
-                                    continue;
-                                }
-                            };
-                            info!("Peer to peer channel created");
+                            let is_p2p_failed = is_p2p_failed.clone();
+                            let p2p_stream = p2p_stream.clone();
+                            tokio::spawn(async move {
+                                is_p2p_failed.store(true, Ordering::Relaxed);
+                                let (socket, peer) =
+                                    match narrowlink_network::p2p::udp_punched_socket(
+                                        &p2p,
+                                        &Sha3_256::digest(&p2p.cert)[0..6],
+                                        true,
+                                        false,
+                                    )
+                                    .await
+                                    {
+                                        Ok(s) => s,
+                                        Err(e) => {
+                                            warn!("Unable to create peer to peer channel: {}", e);
+                                            return;
+                                        }
+                                    };
+                                info!("Peer to peer channel created");
 
-                            if let Ok(qs) = QuicStream::new_client(peer, socket, p2p.cert).await {
-                                p2p_stream.write().await.replace(qs);
-                            } else {
-                                warn!("Unable to create quic stream");
-                            };
-                            is_p2p_failed.store(true, Ordering::Relaxed);
+                                if let Ok(qs) = QuicStream::new_client(peer, socket, p2p.cert).await
+                                {
+                                    p2p_stream.write().await.replace(qs);
+                                } else {
+                                    warn!("Unable to create quic stream");
+                                };
+                                is_p2p_failed.store(true, Ordering::Relaxed);
+                            });
                         }
                         _ => {
                             continue;
