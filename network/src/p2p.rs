@@ -10,9 +10,7 @@ use narrowlink_types::{
     generic::{Connect, CryptographicAlgorithm, Protocol, SigningAlgorithm},
     NatType, Peer2PeerRequest,
 };
-use quinn::{
-    default_runtime, ClientConfig, Connection, Endpoint, EndpointConfig, RecvStream, SendStream,
-};
+use quinn::{ClientConfig, Connection, Endpoint, EndpointConfig, RecvStream, SendStream};
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::UdpSocket,
@@ -291,8 +289,12 @@ impl QuicStream {
         socket: UdpSocket,
         cert: Vec<u8>,
     ) -> Result<Self, NetworkError> {
-        let runtime = default_runtime().ok_or(NetworkError::QuicError)?;
-        let mut end = Endpoint::new(EndpointConfig::default(), None, socket.into_std()?, runtime)?;
+        let mut end = Endpoint::new(
+            EndpointConfig::default(),
+            None,
+            socket.into_std()?,
+            Arc::new(quinn::TokioRuntime),
+        )?;
         let mut root_store = rustls::RootCertStore::empty();
         root_store
             .add(&rustls::Certificate(cert))
@@ -325,14 +327,11 @@ impl QuicStream {
             conf.keep_alive_interval(Some(Duration::from_secs(5)));
             conf.max_concurrent_uni_streams(0_u8.into());
         };
-
-        let runtime = default_runtime().ok_or(NetworkError::QuicError)?;
-
         let end = Endpoint::new(
             EndpointConfig::default(),
             Some(server_config),
             socket.into_std()?,
-            runtime,
+            Arc::new(quinn::TokioRuntime),
         )?;
         let con = end
             .accept()
