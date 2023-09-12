@@ -5,7 +5,6 @@ use std::{
     net::SocketAddr,
     str::FromStr,
     time::Duration,
-    vec,
 };
 mod args;
 use args::Args;
@@ -31,7 +30,6 @@ use narrowlink_types::{
     policy::Policies,
     ServiceType,
 };
-use quinn::{default_runtime, Endpoint, EndpointConfig};
 use sha3::{Digest, Sha3_256};
 use sysinfo::SystemExt;
 use tokio::{
@@ -218,7 +216,7 @@ async fn start(args: Args) -> Result<(), AgentError> {
                 continue;
             }
             Some(Ok(AgentEventInBound::Peer2Peer(p2p))) => {
-                let (s, _) = match narrowlink_network::p2p::udp_punched_socket(
+                let (socket, _) = match narrowlink_network::p2p::udp_punched_socket(
                     &p2p,
                     &Sha3_256::digest(&p2p.cert)[0..6],
                     false,
@@ -233,51 +231,57 @@ async fn start(args: Args) -> Result<(), AgentError> {
                     }
                 };
                 info!("Peer to peer channel created");
-                let (server_config, _) = configure_server(p2p.cert, p2p.key).unwrap();
-                let runtime = default_runtime().unwrap();
-                let end = Endpoint::new(
-                    EndpointConfig::default(),
-                    Some(server_config),
-                    s.into_std().unwrap(),
-                    runtime,
-                )
-                .unwrap();
-                // let con = end.accept().await.unwrap().await.unwrap();
-
-                let con = QuicStream::new(end.accept().await.unwrap().await.unwrap());
+                let Ok(con) = QuicStream::new_server(socket, p2p.cert, p2p.key).await else {
+                    warn!("Unable to create peer to peer channel");
+                    continue;
+                };
 
                 loop {
                     let Ok(mut s) = con.accept_bi().await else {
-                        dbg!("accept failed");
+                        warn!("accept failed");
                         break;
                     };
                     tokio::spawn(async {
-                        // let mut buf = vec![0u8; 5];
-                        // s.read(&mut buf).await.unwrap();
-                        let r = narrowlink_network::p2p::Request::read(&mut s)
-                            .await
-                            .unwrap();
+                        let Ok(r) = narrowlink_network::p2p::Request::read(&mut s).await else {
+                            warn!("Unable to read request");
+                            return;
+                        };
                         let con = Into::<Connect>::into(&r);
-                        narrowlink_network::p2p::Response::write(
-                            &narrowlink_network::p2p::Response::Success,
-                            &mut s,
-                        )
-                        .await
-                        .unwrap();
-                        dbg!(&con);
-                        let stream = TcpStream::connect((con.host, con.port)).await.unwrap();
+                        // dbg!(&con);
+                        let stream = match TcpStream::connect((con.host, con.port)).await {
+                            Ok(stream) => {
+                                if narrowlink_network::p2p::Response::write(
+                                    &narrowlink_network::p2p::Response::Success,
+                                    &mut s,
+                                )
+                                .await
+                                .is_err()
+                                {
+                                    warn!("Unable to write response");
+                                    return;
+                                }
+                                stream
+                            }
+                            Err(_e) => {
+                                if narrowlink_network::p2p::Response::write(
+                                    &narrowlink_network::p2p::Response::Failed,
+                                    &mut s,
+                                )
+                                .await
+                                .is_err()
+                                {
+                                    warn!("Unable to write response");
+                                }
+                                return;
+                            }
+                        };
                         if let Err(_e) =
                             stream_forward(AsyncToStream::new(stream), AsyncToStream::new(s)).await
                         {
-                            dbg!(_e);
+                            trace!("Data channel closed: {}", _e.to_string());
                         }
                     });
                 }
-                // s.write(&buf).await.unwrap();
-                // let _c = con.accept_bi().await.unwrap();
-
-                // c.1.read(buf);
-                // dbg!(con.remote_address());
             }
             Some(Ok(AgentEventInBound::IsReachable(connection, connect))) => {
                 let res = match is_ready(connect).await {
@@ -457,19 +461,4 @@ pub async fn is_ready(command: generic::Connect) -> Result<bool, std::io::Error>
         }
         generic::Protocol::QUIC | generic::Protocol::DTLS | generic::Protocol::UDP => Ok(false),
     }
-}
-
-fn configure_server(
-    cert: Vec<u8>,
-    key: Vec<u8>,
-) -> Result<(quinn::ServerConfig, Vec<u8>), Box<dyn std::error::Error>> {
-    let priv_key = rustls::PrivateKey(key);
-    let cert_chain = vec![rustls::Certificate(cert.clone())];
-
-    let mut server_config = quinn::ServerConfig::with_single_cert(cert_chain, priv_key)?;
-    if let Some(conf) = std::sync::Arc::get_mut(&mut server_config.transport) {
-        conf.keep_alive_interval(Some(Duration::from_secs(5)));
-        conf.max_concurrent_uni_streams(0_u8.into());
-    };
-    Ok((server_config, cert))
 }

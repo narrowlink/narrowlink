@@ -980,6 +980,8 @@ dependencies = [
  "hyper",
  "narrowlink-types",
  "quinn",
+ "rlimit",
+ "rustls",
  "serde",
  "serde_json",
  "tokio",
@@ -1442,6 +1444,15 @@ dependencies = [
  "untrusted",
  "web-sys",
  "winapi",
+]
+
+[[package]]
+name = "rlimit"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3560f70f30a0f16d11d01ed078a07740fe6b489667abc7c7b029155d9f21c3d8"
+dependencies = [
+ "libc",
 ]
 
 [[package]]

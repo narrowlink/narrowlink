@@ -49,6 +49,7 @@ tracing-appender = { version = "0.2.2" }
 clap_lex = { version = "0.5.1", default-features = false }
 quinn = { version = "0.10" }
 rustls = { version = "0.21" }
+
 narrowlink-types = { version = "0.1.4" }
 narrowlink-network = { version = "0.1.4" }
 

@@ -31,7 +31,6 @@ use narrowlink_types::{
     generic, GetResponse,
 };
 use proxy_stream::ProxyStream;
-use quinn::{default_runtime, ClientConfig, Endpoint, EndpointConfig};
 use sha3::{Digest, Sha3_256};
 use tokio::{
     net::TcpListener,
@@ -160,11 +159,13 @@ async fn main() -> Result<(), ClientError> {
     let arg_commands = args.arg_commands.clone();
     let connections = Arc::new(Mutex::new(HashMap::new()));
     let p2p_stream = Arc::new(RwLock::new(None::<QuicStream>));
+    let is_p2p_failed = Arc::new(AtomicBool::new(false));
     loop {
         let arg_commands = arg_commands.clone();
         let conf = conf.clone();
         let token = conf.token.clone();
         let p2p_stream = p2p_stream.clone();
+        let is_p2p_failed = is_p2p_failed.clone();
 
         if let Some((session_id, req, _)) = session
             .as_ref()
@@ -196,72 +197,81 @@ async fn main() -> Result<(), ClientError> {
                 list_of_agents_refresh_required.store(false, Ordering::Relaxed);
             }
 
-            let (mut socket, agent_name) =
-                if let ArgCommands::List(list_args) = arg_commands.as_ref() {
-                    trace!("List of agents");
-                    if agents.is_empty() {
-                        println!("Agent not found");
-                    }
-                    for agent in agents.iter() {
-                        println!("{}:", agent.name);
-                        println!("\tAddress: {}", agent.socket_addr);
+            let (mut socket, agent_name) = if let ArgCommands::List(list_args) =
+                arg_commands.as_ref()
+            {
+                trace!("List of agents");
+                if agents.is_empty() {
+                    println!("Agent not found");
+                }
+                for agent in agents.iter() {
+                    println!("{}:", agent.name);
+                    println!("\tAddress: {}", agent.socket_addr);
 
-                        if let Some(forward_addr) = &agent.forward_addr {
-                            println!("\tForward Address: {}", forward_addr);
-                        }
-                        if let Some(system_info) = &agent.system_info {
-                            println!("\tSystem Info:");
-                            println!("\t\tLocal Address: {}", system_info.constant.local_addr);
-                            println!("\t\tLoad Avarage: {}", system_info.dynamic.loadavg);
-                            println!("\t\tCPU Cores: {}", system_info.constant.cpus);
-                        }
-                        if list_args.verbose {
-                            if !agent.publish_info.is_empty() {
-                                println!("\tPublish Info:");
-                                for agent_publish_info in &agent.publish_info {
-                                    println!("\t\t{}", agent_publish_info.to_string());
-                                }
-                            }
-                            if let Some(since) =
-                                &chrono::NaiveDateTime::from_timestamp_opt(agent.since as i64, 0)
-                            {
-                                let datetime: chrono::DateTime<chrono::Local> =
-                                    chrono::DateTime::from_naive_utc_and_offset(
-                                        *since,
-                                        *chrono::Local::now().offset(),
-                                    );
-                                println!("\tConnection Time: {}", datetime);
+                    if let Some(forward_addr) = &agent.forward_addr {
+                        println!("\tForward Address: {}", forward_addr);
+                    }
+                    if let Some(system_info) = &agent.system_info {
+                        println!("\tSystem Info:");
+                        println!("\t\tLocal Address: {}", system_info.constant.local_addr);
+                        println!("\t\tLoad Avarage: {}", system_info.dynamic.loadavg);
+                        println!("\t\tCPU Cores: {}", system_info.constant.cpus);
+                    }
+                    if list_args.verbose {
+                        if !agent.publish_info.is_empty() {
+                            println!("\tPublish Info:");
+                            for agent_publish_info in &agent.publish_info {
+                                println!("\t\t{}", agent_publish_info.to_string());
                             }
                         }
-
-                        println!("\tConnection Ping: {}ms\r\n", agent.ping);
+                        if let Some(since) =
+                            &chrono::NaiveDateTime::from_timestamp_opt(agent.since as i64, 0)
+                        {
+                            let datetime: chrono::DateTime<chrono::Local> =
+                                chrono::DateTime::from_naive_utc_and_offset(
+                                    *since,
+                                    *chrono::Local::now().offset(),
+                                );
+                            println!("\tConnection Time: {}", datetime);
+                        }
                     }
-                    req.shutdown().await;
-                    break;
+
+                    println!("\tConnection Ping: {}ms\r\n", agent.ping);
+                }
+                req.shutdown().await;
+                break;
+            } else {
+                trace!("Network connection to agent");
+                let agent_name: String = arg_commands
+                    .agent_name()
+                    .clone()
+                    .filter(|name| agents.iter().any(|agent| &agent.name == name))
+                    .ok_or(ClientError::AgentNotFound)?;
+
+                if let Some(ref listener) = socket_listener {
+                    if p2p_stream.read().await.is_some() && !is_p2p_failed.load(Ordering::Relaxed) {
+                        let _ = req
+                            .request(ClientEventOutBound::Request(
+                                0,
+                                ClientEventRequest::Peer2Peer(agent_name.clone()),
+                            ))
+                            .await;
+                    }
+                    trace!("Accept connection");
+                    let socket: Box<dyn AsyncSocket> = match listener {
+                        Either::Left(ref udp_listen) => Box::new(udp_listen.accept().await?.0),
+                        Either::Right(ref tcp_listen) => Box::new(tcp_listen.accept().await?.0),
+                    };
+                    debug!("Connection accepted");
+                    (socket, agent_name)
                 } else {
-                    trace!("Network connection to agent");
-                    let agent_name: String = arg_commands
-                        .agent_name()
-                        .clone()
-                        .filter(|name| agents.iter().any(|agent| &agent.name == name))
-                        .ok_or(ClientError::AgentNotFound)?;
-
-                    if let Some(ref listener) = socket_listener {
-                        trace!("Accept connection");
-                        let socket: Box<dyn AsyncSocket> = match listener {
-                            Either::Left(ref udp_listen) => Box::new(udp_listen.accept().await?.0),
-                            Either::Right(ref tcp_listen) => Box::new(tcp_listen.accept().await?.0),
-                        };
-                        debug!("Connection accepted");
-                        (socket, agent_name)
-                    } else {
-                        trace!("Stdin/Stdout connection");
-                        (
-                            Box::new(InputStream::new()) as Box<dyn AsyncSocket>,
-                            agent_name,
-                        )
-                    }
-                };
+                    trace!("Stdin/Stdout connection");
+                    (
+                        Box::new(InputStream::new()) as Box<dyn AsyncSocket>,
+                        agent_name,
+                    )
+                }
+            };
             // let agent_name: String = args
             //     .agent_name()
             //     .clone()
@@ -379,23 +389,42 @@ async fn main() -> Result<(), ClientError> {
                     // dbg!(&p2p_stream);
 
                     if let Some(stream) = p2p_stream.read().await.as_ref() {
-                        let mut quic_socket = stream.open_bi().await.unwrap();
-                        let r = narrowlink_network::p2p::Request::from(&connect);
-                        r.write(&mut quic_socket).await.unwrap();
-                        let res = narrowlink_network::p2p::Response::read(&mut quic_socket)
-                            .await
-                            .unwrap();
-                        dbg!(res);
-                        if let Err(_e) = stream_forward(
-                            AsyncToStream::new(quic_socket),
-                            AsyncToStream::new(socket),
-                        )
-                        .await
-                        {}
-                        return;
-                        // let mut _quic_socket = QuicBiSocket::open(connect).await.unwrap();
+                        if let Ok(mut quic_socket) = stream.open_bi().await {
+                            let r = narrowlink_network::p2p::Request::from(&connect);
+                            if r.write(&mut quic_socket).await.is_ok() {
+                                match narrowlink_network::p2p::Response::read(&mut quic_socket)
+                                    .await
+                                {
+                                    Ok(narrowlink_network::p2p::Response::Success) => {
+                                        trace!("P2P connection established");
+                                        if let Err(_e) = stream_forward(
+                                            AsyncToStream::new(quic_socket),
+                                            AsyncToStream::new(socket),
+                                        )
+                                        .await
+                                        {
+                                            // debug!("connection closed {}", _e);
+                                        }
+                                        return;
+                                    }
+                                    Ok(status) => {
+                                        warn!("P2P connection failed: {}", status.to_string());
+                                        return;
+                                    }
+                                    Err(e) => {
+                                        warn!(
+                                            "Unable to read p2p response: {}, try with normal mode",
+                                            e
+                                        );
+                                    }
+                                };
+                            }
+                        } else {
+                            warn!("Unable to open quic stream, close p2p connection");
+                            p2p_stream.write().await.take();
+                        }
                     }
-                    dbg!("after");
+
                     let Ok(cmd) = serde_json::to_string(&ClientDataOutBound::Connect(
                         agent_name,
                         connect.clone(),
@@ -532,7 +561,8 @@ async fn main() -> Result<(), ClientError> {
                                 .insert(connection_id.to_string(), msg);
                         }
                         narrowlink_types::client::EventInBound::Peer2Peer(p2p) => {
-                            let (s, peer) = match narrowlink_network::p2p::udp_punched_socket(
+                            is_p2p_failed.store(true, Ordering::Relaxed);
+                            let (socket, peer) = match narrowlink_network::p2p::udp_punched_socket(
                                 &p2p,
                                 &Sha3_256::digest(&p2p.cert)[0..6],
                                 true,
@@ -547,39 +577,13 @@ async fn main() -> Result<(), ClientError> {
                                 }
                             };
                             info!("Peer to peer channel created");
-                            let runtime = default_runtime().unwrap();
-                            let mut end = Endpoint::new(
-                                EndpointConfig::default(),
-                                None,
-                                s.into_std().unwrap(),
-                                runtime,
-                            )
-                            .unwrap();
-                            let mut root_store = rustls::RootCertStore::empty();
-                            root_store.add(&rustls::Certificate(p2p.cert)).unwrap();
-                            let mut config = rustls::ClientConfig::builder()
-                                .with_safe_defaults()
-                                .with_root_certificates(root_store)
-                                .with_no_client_auth();
-                            config.enable_sni = false;
-                            end.set_default_client_config(ClientConfig::new(Arc::new(config)));
-                            dbg!(11);
-                            let connect = QuicStream::new(
-                                end.connect(peer, &peer.ip().to_string())
-                                    .unwrap()
-                                    .await
-                                    .unwrap(),
-                            );
-                            dbg!(connect.remote_addr());
-                            p2p_stream.write().await.replace(connect);
-                            // dbg!(&p2p_stream);
-                            // let mut _quic_socket = QuicBiSocket::open(connect).await.unwrap();
-                            // quic_socket.write(b"hello").await.unwrap();
-                            // let mut buf = vec![0u8; 5];
-                            // quic_socket.read(&mut buf).await.unwrap();
-                            // dbg!(connect.remote_address());
 
-                            // dbg!("{}", peer);
+                            if let Ok(qs) = QuicStream::new_client(peer, socket, p2p.cert).await {
+                                p2p_stream.write().await.replace(qs);
+                            } else {
+                                warn!("Unable to create quic stream");
+                            };
+                            is_p2p_failed.store(true, Ordering::Relaxed);
                         }
                         _ => {
                             continue;

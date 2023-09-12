@@ -1,5 +1,6 @@
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
+    sync::Arc,
     // sync::{atomic::AtomicU32, Arc},
     time::Duration,
 };
@@ -9,7 +10,9 @@ use narrowlink_types::{
     generic::{Connect, Protocol},
     NatType, Peer2PeerRequest,
 };
-use quinn::{Connection, RecvStream, SendStream};
+use quinn::{
+    default_runtime, ClientConfig, Connection, Endpoint, EndpointConfig, RecvStream, SendStream,
+};
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::UdpSocket,
@@ -139,6 +142,17 @@ pub enum Response {
     Failed = 0xFF,
 }
 
+impl ToString for Response {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Success => "Success".to_owned(),
+            Self::InvalidRequest => "InvalidRequest".to_owned(),
+            Self::AccessDenied => "AccessDenied".to_owned(),
+            Self::Failed => "Failed".to_owned(),
+        }
+    }
+}
+
 impl Response {
     pub async fn read(mut reader: impl AsyncRead + Unpin) -> Result<Self, NetworkError> {
         let val = reader.read_u8().await?;
@@ -204,6 +218,62 @@ impl QuicStream {
             con,
             // number_of_streams: Arc::new(AtomicU32::new(0)),
         }
+    }
+    pub async fn new_client(
+        remote_addr: SocketAddr,
+        socket: UdpSocket,
+        cert: Vec<u8>,
+    ) -> Result<Self, NetworkError> {
+        let runtime = default_runtime().ok_or(NetworkError::QuicError)?;
+        let mut end = Endpoint::new(EndpointConfig::default(), None, socket.into_std()?, runtime)?;
+        let mut root_store = rustls::RootCertStore::empty();
+        root_store
+            .add(&rustls::Certificate(cert))
+            .map_err(|_| NetworkError::TlsError)?;
+        let mut config = rustls::ClientConfig::builder()
+            .with_safe_defaults()
+            .with_root_certificates(root_store)
+            .with_no_client_auth();
+        config.enable_sni = false;
+        end.set_default_client_config(ClientConfig::new(Arc::new(config)));
+
+        let con = end
+            .connect(remote_addr, &remote_addr.ip().to_string())
+            .map_err(|_| NetworkError::QuicError)?
+            .await
+            .map_err(|_| NetworkError::QuicError)?;
+        Ok(Self { con })
+    }
+    pub async fn new_server(
+        socket: UdpSocket,
+        cert: Vec<u8>,
+        key: Vec<u8>,
+    ) -> Result<Self, NetworkError> {
+        let priv_key = rustls::PrivateKey(key);
+        let cert_chain = vec![rustls::Certificate(cert.clone())];
+
+        let mut server_config = quinn::ServerConfig::with_single_cert(cert_chain, priv_key)
+            .map_err(|_| NetworkError::TlsError)?;
+        if let Some(conf) = std::sync::Arc::get_mut(&mut server_config.transport) {
+            conf.keep_alive_interval(Some(Duration::from_secs(5)));
+            conf.max_concurrent_uni_streams(0_u8.into());
+        };
+
+        let runtime = default_runtime().ok_or(NetworkError::QuicError)?;
+
+        let end = Endpoint::new(
+            EndpointConfig::default(),
+            Some(server_config),
+            socket.into_std()?,
+            runtime,
+        )?;
+        let con = end
+            .accept()
+            .await
+            .ok_or(NetworkError::QuicError)?
+            .await
+            .map_err(|_| NetworkError::QuicError)?;
+        Ok(Self { con })
     }
     pub async fn open_bi(&self) -> Result<QuicBiSocket, NetworkError> {
         let (send, recv) = self
@@ -294,6 +364,13 @@ pub async fn udp_punched_socket(
     } else {
         IpAddr::V6(Ipv6Addr::UNSPECIFIED)
     };
+    let no_file_limit = rlimit::getrlimit(rlimit::Resource::NOFILE)
+        .map(|(n, _)| n)
+        .ok();
+
+    if p2p.seq > 128 && no_file_limit.is_some() {
+        _ = rlimit::increase_nofile_limit(512);
+    }
 
     let (puncher, dyn_my_port, dyn_peer_port) = match (p2p.nat, p2p.peer_nat) {
         (NatType::Easy, NatType::Easy) => (left, true, true),
@@ -363,6 +440,7 @@ pub async fn udp_punched_socket(
     }
     loop {
         if sockets.is_empty() {
+            no_file_limit.and_then(|n| rlimit::increase_nofile_limit(n).ok());
             return Err(NetworkError::P2PFailed);
         };
         let Ok((socket, _size, remaining_sockets)) = tokio::time::timeout(
@@ -375,6 +453,7 @@ pub async fn udp_punched_socket(
             if !inner && p2p.nat == p2p.peer_nat && p2p.nat == NatType::Unknown {
                 return udp_punched_socket(p2p, handshake_key, !left, true).await;
             }
+            no_file_limit.and_then(|n| rlimit::increase_nofile_limit(n).ok());
             return Err(NetworkError::P2PTimeout);
         };
         let socket = match socket {
@@ -408,6 +487,7 @@ pub async fn udp_punched_socket(
             sockets = remaining_sockets;
             continue;
         };
+        no_file_limit.and_then(|n| rlimit::increase_nofile_limit(n).ok());
         return Ok((socket, peer));
     }
 }
