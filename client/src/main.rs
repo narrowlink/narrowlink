@@ -403,7 +403,7 @@ async fn main() -> Result<(), ClientError> {
                                         )
                                         .await
                                         {
-                                            // debug!("connection closed {}", _e);
+                                            debug!("connection closed {}", _e);
                                         }
                                         return;
                                     }
@@ -604,12 +604,6 @@ async fn main() -> Result<(), ClientError> {
                     ClientEventRequest::UpdateConstantSysInfo(
                         narrowlink_types::client::ConstSystemInfo { local_addr },
                     ),
-                ))
-                .await;
-            let _todo = sys_req
-                .request(ClientEventOutBound::Request(
-                    0,
-                    ClientEventRequest::Peer2Peer("MBP".to_string()),
                 ))
                 .await;
 

@@ -238,10 +238,14 @@ async fn start(args: Args) -> Result<(), AgentError> {
                     };
 
                     loop {
-                        let Ok(mut s) = con.accept_bi().await else {
-                            warn!("accept failed");
-                            break;
+                        let mut s = match con.accept_bi().await {
+                            Ok(s) => s,
+                            Err(e) => {
+                                warn!("Unable to accept peer to peer channel: {}", e);
+                                break;
+                            }
                         };
+
                         tokio::spawn(async {
                             let Ok(r) = narrowlink_network::p2p::Request::read(&mut s).await else {
                                 warn!("Unable to read request");

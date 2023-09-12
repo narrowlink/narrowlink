@@ -286,12 +286,6 @@ pub struct QuicStream {
 }
 
 impl QuicStream {
-    pub fn new(con: Connection) -> Self {
-        Self {
-            con,
-            // number_of_streams: Arc::new(AtomicU32::new(0)),
-        }
-    }
     pub async fn new_client(
         remote_addr: SocketAddr,
         socket: UdpSocket,
