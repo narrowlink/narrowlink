@@ -3,7 +3,7 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{error::MessageError, generic::AgentInfo, GetResponse};
+use crate::{error::MessageError, generic::AgentInfo, GetResponse, Peer2PeerRequest};
 
 use super::ConstSystemInfo;
 
@@ -16,18 +16,21 @@ pub enum OutBound {
 pub enum InBound {
     Response(usize, Response),
     ConnectionError(Uuid, String),
+    Peer2Peer(Peer2PeerRequest),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Request {
     ListOfAgents(bool), // verbose
     UpdateConstantSysInfo(ConstSystemInfo),
+    Peer2Peer(String), // agent_name
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Response {
     ActiveAgents(Vec<AgentInfo>),
     Ok,
+    Failed,
 }
 
 impl FromStr for OutBound {

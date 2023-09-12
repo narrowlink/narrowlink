@@ -1,4 +1,8 @@
-use std::{collections::HashMap, net::SocketAddr};
+use std::{
+    collections::HashMap,
+    net::{IpAddr, SocketAddr},
+    str::FromStr,
+};
 
 use futures_util::{stream::SplitSink, SinkExt};
 use narrowlink_network::{error::NetworkError, event::NarrowEvent};
@@ -6,6 +10,7 @@ use narrowlink_types::{
     agent::{ConstSystemInfo, DynSystemInfo, EventInBound, EventOutBound, SystemInfo},
     generic::Connect,
     publish::PublishHost,
+    NatType,
 };
 
 pub struct Agent {
@@ -75,6 +80,38 @@ impl Agent {
     }
     pub fn pingupdate(&mut self, ping: u16) {
         self.ping = ping;
+    }
+    pub fn get_real_ip(&self) -> IpAddr {
+        if let Some(addr) = self
+            .forward_addr
+            .as_ref()
+            .and_then(|a| IpAddr::from_str(a).ok())
+        {
+            addr
+        } else {
+            self.socket_addr.ip()
+        }
+    }
+    pub fn get_local_addr(&self) -> Option<SocketAddr> {
+        self.system_info.as_ref().map(|i| i.constant.local_addr)
+    }
+    pub fn nat_type(&self) -> NatType {
+        if self
+            .forward_addr
+            .as_ref()
+            .and_then(|a| IpAddr::from_str(a).ok())
+            .is_some()
+        {
+            NatType::Unknown
+        } else if let Some(system_info) = self.system_info.as_ref() {
+            if system_info.constant.local_addr.port() == self.socket_addr.port() {
+                NatType::Easy
+            } else {
+                NatType::Hard
+            }
+        } else {
+            NatType::Unknown
+        }
     }
 }
 

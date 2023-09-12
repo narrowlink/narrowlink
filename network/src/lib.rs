@@ -4,6 +4,7 @@ use std::{pin::Pin, task::Poll};
 mod async_tools;
 pub mod error;
 pub mod event;
+pub mod p2p;
 pub mod transport;
 pub mod ws;
 use error::NetworkError;

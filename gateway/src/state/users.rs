@@ -4,6 +4,7 @@ use narrowlink_types::{
     agent::AgentPublishInfo,
     generic::{AgentInfo, Connect},
     policy::Policies,
+    NatType,
 };
 use uuid::Uuid;
 
@@ -50,8 +51,29 @@ impl User {
     pub fn get_client(&self, client_id: Uuid) -> Option<&Client> {
         self.clients.get(&client_id)
     }
+    pub fn get_mut_pair(
+        &mut self,
+        client_id: Uuid,
+        agent_name: &str,
+    ) -> Option<(&mut Client, &mut Agent)> {
+        let client = self.clients.get_mut(&client_id)?;
+        let agent = self.agents.get_mut(agent_name)?;
+        Some((client, agent))
+    }
     pub fn get_mut_connection(&mut self, connection_id: Uuid) -> Option<Connection> {
         self.connections.remove(&connection_id)
+    }
+    pub fn agent_nat_type(&self, agent_name: &str) -> Option<NatType> {
+        self.agents
+            .get(agent_name)
+            .map(|a| a.nat_type())
+            .or(Some(NatType::Unknown))
+    }
+    pub fn client_nat_type(&self, client_id: Uuid) -> Option<NatType> {
+        self.clients
+            .get(&client_id)
+            .map(|c| c.nat_type())
+            .or(Some(NatType::Unknown))
     }
     pub fn is_empty(&self) -> bool {
         self.agents.is_empty()
@@ -106,6 +128,9 @@ impl Users {
     }
     pub fn add_user(&mut self, user_id: Uuid, user: User) -> Option<User> {
         self.users.insert(user_id, user)
+    }
+    pub fn get_mut_user(&mut self, user_id: Uuid) -> Option<&mut User> {
+        self.users.get_mut(&user_id)
     }
     pub fn add_agent(&mut self, user_id: Uuid, agent: Agent) -> Option<Agent> {
         for (domain_name, pub_info) in &agent.publish_map {
@@ -178,7 +203,16 @@ impl Users {
             .get_mut(&user_id)
             .and_then(|u| u.get_mut_client(client_id))
     }
-
+    // pub fn agent_nat_type(&self, user_id: Uuid, agent_name: &str) -> Option<NatType> {
+    //     self.users
+    //         .get(&user_id)
+    //         .and_then(|u| u.agent_nat_type(agent_name))
+    // }
+    // pub fn client_nat_type(&self, user_id: Uuid, client_id: Uuid) -> Option<NatType> {
+    //     self.users
+    //         .get(&user_id)
+    //         .and_then(|u| u.client_nat_type(client_id))
+    // }
     pub fn get_mut_connection(&mut self, user_id: Uuid, connection_id: Uuid) -> Option<Connection> {
         self.users
             .get_mut(&user_id)

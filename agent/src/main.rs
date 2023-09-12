@@ -15,6 +15,7 @@ use hmac::Mac;
 use narrowlink_network::{
     error::NetworkError,
     event::NarrowEvent,
+    p2p::QuicStream,
     stream_forward,
     transport::{StreamType, TlsConfiguration, UnifiedSocket},
     ws::{WsConnection, WsConnectionBinary},
@@ -25,7 +26,7 @@ use narrowlink_types::{
         ConstSystemInfo, DynSystemInfo, EventInBound as AgentEventInBound,
         EventOutBound as AgentEventOutBound, EventRequest as AgentEventRequest,
     },
-    generic,
+    generic::{self, Connect},
     policy::Policies,
     ServiceType,
 };
@@ -35,8 +36,8 @@ use tokio::{
     net::{lookup_host, TcpStream},
     time,
 };
-use tracing::Level;
 use tracing::{debug, error, info, trace};
+use tracing::{warn, Level};
 use tracing_subscriber::{
     filter::{LevelFilter, Targets},
     fmt::writer::MakeWriterExt,
@@ -213,6 +214,77 @@ async fn start(args: Args) -> Result<(), AgentError> {
                     };
                 });
                 continue;
+            }
+            Some(Ok(AgentEventInBound::Peer2Peer(p2p))) => {
+                tokio::spawn(async {
+                    let (socket, _) = match narrowlink_network::p2p::udp_punched_socket(
+                        &p2p,
+                        &Sha3_256::digest(&p2p.cert)[0..6],
+                        false,
+                        false,
+                    )
+                    .await
+                    {
+                        Ok(s) => s,
+                        Err(e) => {
+                            warn!("Unable to create peer to peer channel: {}", e);
+                            return;
+                        }
+                    };
+                    info!("Peer to peer channel created");
+                    let Ok(con) = QuicStream::new_server(socket, p2p.cert, p2p.key).await else {
+                        warn!("Unable to create peer to peer channel");
+                        return;
+                    };
+
+                    loop {
+                        let Ok(mut s) = con.accept_bi().await else {
+                            warn!("accept failed");
+                            break;
+                        };
+                        tokio::spawn(async {
+                            let Ok(r) = narrowlink_network::p2p::Request::read(&mut s).await else {
+                                warn!("Unable to read request");
+                                return;
+                            };
+                            let con = Into::<Connect>::into(&r);
+                            // dbg!(&con);
+                            let stream = match TcpStream::connect((con.host, con.port)).await {
+                                Ok(stream) => {
+                                    if narrowlink_network::p2p::Response::write(
+                                        &narrowlink_network::p2p::Response::Success,
+                                        &mut s,
+                                    )
+                                    .await
+                                    .is_err()
+                                    {
+                                        warn!("Unable to write response");
+                                        return;
+                                    }
+                                    stream
+                                }
+                                Err(_e) => {
+                                    if narrowlink_network::p2p::Response::write(
+                                        &narrowlink_network::p2p::Response::Failed,
+                                        &mut s,
+                                    )
+                                    .await
+                                    .is_err()
+                                    {
+                                        warn!("Unable to write response");
+                                    }
+                                    return;
+                                }
+                            };
+                            if let Err(_e) =
+                                stream_forward(AsyncToStream::new(stream), AsyncToStream::new(s))
+                                    .await
+                            {
+                                trace!("Data channel closed: {}", _e.to_string());
+                            }
+                        });
+                    }
+                });
             }
             Some(Ok(AgentEventInBound::IsReachable(connection, connect))) => {
                 let res = match is_ready(connect).await {

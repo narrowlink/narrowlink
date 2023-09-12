@@ -1,4 +1,6 @@
 use futures_util::StreamExt;
+use rand::Rng;
+use rcgen::{CertificateParams, DistinguishedName};
 use std::{net::SocketAddr, str::FromStr};
 use uuid::Uuid;
 mod agent;
@@ -11,7 +13,6 @@ use crate::{
     CONNECTION_ORIANTED,
 };
 use narrowlink_network::{error::NetworkError, event::NarrowEvent, UniversalStream};
-use narrowlink_types::token::{AgentPublishToken, AgentToken, ClientToken};
 use narrowlink_types::{
     agent::{
         EventInBound as AgentEventInBound, EventOutBound as AgentEventOutBound,
@@ -22,6 +23,10 @@ use narrowlink_types::{
         EventOutBound as ClientEventOutBound, EventRequest as ClientEventRequest,
         EventResponse as ClientEventResponse,
     },
+};
+use narrowlink_types::{
+    token::{AgentPublishToken, AgentToken, ClientToken},
+    NatType, Peer2PeerRequest,
 };
 use tokio::{
     io::AsyncWriteExt,
@@ -101,7 +106,6 @@ impl State {
                     let (uid, session, msg): (Uuid,Uuid,Result<ClientEventOutBound, NetworkError>) = client_types;
                     let client_event_message_span = tracing::span!(tracing::Level::TRACE, "client_message", user_id = uid.to_string(), client_session = session.to_string());
                     let _agent_data_gaurd = client_event_message_span.enter();
-
                     match msg{
                         Ok(ClientEventOutBound::Request(request_id,req))=>{
                             debug!("Client Message {}: {:?}", request_id, req);
@@ -118,6 +122,70 @@ impl State {
                                         let _ = client.send(ClientEventInBound::Response(request_id,ClientEventResponse::Ok)).await;
                                         continue
                                     }
+                                }
+                                ClientEventRequest::Peer2Peer(agent_name) =>{
+                                    let Some(user) = users.get_mut_user(uid) else {
+                                        continue
+                                    };
+                                     if let (Some(c),Some(a)) = (user.client_nat_type(session),user.agent_nat_type(&agent_name)){
+                                        let Some((client,agent)) = user.get_mut_pair(session,&agent_name) else {
+                                            if let Some(c) = user.get_mut_client(session){
+                                                c.send(ClientEventInBound::Response(request_id,ClientEventResponse::Failed)).await.ok();
+                                            }
+                                            continue
+                                        };
+                                        let mut client_ip = client.get_real_ip();
+                                        let mut agent_ip = agent.get_real_ip();
+                                        let mut seq = if (c == NatType::Hard && a == NatType::Hard) && client_ip != agent_ip {
+                                            let _ = client.send(ClientEventInBound::Response(request_id,ClientEventResponse::Failed)).await;
+                                            continue
+                                        } else if c == NatType::Easy && a == NatType::Easy{
+                                            2
+                                        } else {
+                                            255
+                                        };
+
+                                        if client_ip == agent_ip{
+                                            let (Some(cip),Some(aip)) = (client.get_local_addr(),agent.get_local_addr()) else{
+                                                let _ = client.send(ClientEventInBound::Response(request_id,ClientEventResponse::Failed)).await;
+                                                continue
+                                            };
+                                            client_ip = cip.ip();
+                                            agent_ip = aip.ip();
+                                            seq = 2;
+                                        }
+
+                                        let mut params = CertificateParams::new(vec![agent_ip.to_string()]);
+                                        params.distinguished_name = DistinguishedName::new();
+                                        params.distinguished_name.push(rcgen::DnType::OrganizationName, "Narrowlink");
+                                        let Ok((cert,key)) = rcgen::Certificate::from_params(params).and_then(|cert|cert.serialize_der().map(|c|(c,cert.serialize_private_key_der()))) else {
+                                            let _ = client.send(ClientEventInBound::Response(request_id,ClientEventResponse::Failed)).await;
+                                            continue
+                                        };
+                                        let _ = client.send(ClientEventInBound::Response(request_id,ClientEventResponse::Ok)).await;
+
+                                        let port = rand::thread_rng().gen_range((49152+seq)..(65535-seq));
+                                        let _ = agent.send(AgentEventInBound::Peer2Peer(Peer2PeerRequest {
+                                            peer_ip: client_ip,
+                                            seed_port: port,
+                                            seq,
+                                            peer_nat: c,
+                                            nat: a,
+                                            cert:cert.clone(),
+                                            key,
+                                        })).await;
+                                        let _ = client.send(ClientEventInBound::Peer2Peer(Peer2PeerRequest {
+                                            peer_ip: agent_ip,
+                                            seed_port: port,
+                                            seq,
+                                            peer_nat: a,
+                                            nat: c,
+                                            cert,
+                                            key: Vec::new(),
+                                        })).await;
+
+                                    }
+
                                 }
                             }
                         }
@@ -226,7 +294,7 @@ impl State {
 
                                 //policy todo
                                 info!("Client {}:{}:{} ({}) added", client_token.uid, client_token.name, session,peer_socket_addr);
-                                users.add_client(client_token.uid,client::Client::new(client_token.name, session,policies, sender));
+                                users.add_client(client_token.uid,client::Client::new(client_token.name, session,policies,peer_socket_addr,peer_forward_addr, sender));
                                 client_types.push(receiver.map(move |f| (client_token.uid, session, f)));
 
                             } else {
