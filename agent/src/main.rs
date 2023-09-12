@@ -268,6 +268,7 @@ async fn start(args: Args) -> Result<(), AgentError> {
                                     stream
                                 }
                                 Err(_e) => {
+                                    warn!("Unable to connect to {}", _e);
                                     if narrowlink_network::p2p::Response::write(
                                         &narrowlink_network::p2p::Response::Failed,
                                         &mut s,

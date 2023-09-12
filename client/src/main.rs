@@ -586,10 +586,10 @@ async fn main() -> Result<(), ClientError> {
                                 if let Ok(qs) = QuicStream::new_client(peer, socket, p2p.cert).await
                                 {
                                     p2p_stream.write().await.replace(qs);
+                                    is_p2p_failed.store(false, Ordering::Relaxed);
                                 } else {
                                     warn!("Unable to create quic stream");
                                 };
-                                is_p2p_failed.store(true, Ordering::Relaxed);
                             });
                         }
                         _ => {
