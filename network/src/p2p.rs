@@ -437,10 +437,12 @@ pub async fn udp_punched_socket(
     } else {
         IpAddr::V6(Ipv6Addr::UNSPECIFIED)
     };
+    #[cfg(unix)]
     let no_file_limit = rlimit::getrlimit(rlimit::Resource::NOFILE)
         .map(|(n, _)| n)
         .ok();
 
+    #[cfg(unix)]
     if p2p.seq > 128 && no_file_limit.is_some() {
         _ = rlimit::increase_nofile_limit(512);
     }
@@ -513,6 +515,7 @@ pub async fn udp_punched_socket(
     }
     loop {
         if sockets.is_empty() {
+            #[cfg(unix)]
             no_file_limit.and_then(|n| rlimit::increase_nofile_limit(n).ok());
             return Err(NetworkError::P2PFailed);
         };
@@ -526,6 +529,7 @@ pub async fn udp_punched_socket(
             if !inner && p2p.nat == p2p.peer_nat && p2p.nat == NatType::Unknown {
                 return udp_punched_socket(p2p, handshake_key, !left, true).await;
             }
+            #[cfg(unix)]
             no_file_limit.and_then(|n| rlimit::increase_nofile_limit(n).ok());
             return Err(NetworkError::P2PTimeout);
         };
@@ -560,6 +564,7 @@ pub async fn udp_punched_socket(
             sockets = remaining_sockets;
             continue;
         };
+        #[cfg(unix)]
         no_file_limit.and_then(|n| rlimit::increase_nofile_limit(n).ok());
         return Ok((socket, peer));
     }
