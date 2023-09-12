@@ -253,6 +253,7 @@ async fn start(args: Args) -> Result<(), AgentError> {
                             };
                             let con = Into::<Connect>::into(&r);
                             // dbg!(&con);
+                            trace!("Connecting to {}", con.host);
                             let stream = match TcpStream::connect((con.host, con.port)).await {
                                 Ok(stream) => {
                                     if narrowlink_network::p2p::Response::write(

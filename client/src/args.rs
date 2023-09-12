@@ -47,6 +47,7 @@ pub struct ForwardArgs {
     pub silent: bool,                 //s silent
     pub cryptography: Option<String>, //k key
     pub udp: bool,                    //u udp
+    pub p2p: bool,                    //p p2p
     pub remote_addr: (String, u16),   //<Remote>
 }
 
@@ -54,6 +55,7 @@ pub struct ForwardArgs {
 pub struct ProxyArgs {
     pub agent_name: String,           //i name
     pub cryptography: Option<String>, //k key
+    pub p2p: bool,                    //p p2p
     pub local_addr: (String, u16),    //<Local>
 }
 
@@ -216,6 +218,7 @@ impl Args {
                         silent: false,
                         cryptography: None,
                         udp: false,
+                        p2p: false,
                         remote_addr: ("".to_string(), 0),
                     };
                     while let Some(arg) = raw.next(&mut cursor) {
@@ -226,6 +229,9 @@ impl Args {
                                 }
                                 Ok("silent") => {
                                     sub.silent = true;
+                                }
+                                Ok("p2p") => {
+                                    sub.p2p = true;
                                 }
                                 Ok("name") => {
                                     sub.agent_name = value
@@ -548,6 +554,7 @@ impl Args {
                     let mut sub = ProxyArgs {
                         agent_name: String::new(),
                         cryptography: None,
+                        p2p: false,
                         local_addr: ("".to_string(), 0),
                     };
                     while let Some(arg) = raw.next(&mut cursor) {
@@ -570,6 +577,9 @@ impl Args {
                                     //         .ok_or(ClientError::Encoding)?,
                                     // )
                                     // .await?;
+                                }
+                                Ok("p2p") => {
+                                    sub.p2p = true;
                                 }
                                 Ok("key") => {
                                     sub.cryptography = Some(
