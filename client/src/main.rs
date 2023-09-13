@@ -1,3 +1,7 @@
+use core::{
+    pin::Pin,
+    task::{Context, Poll},
+};
 use std::{
     collections::HashMap,
     env,
@@ -9,6 +13,7 @@ use std::{
     },
     time::Duration,
 };
+
 mod args;
 mod error;
 use args::{ArgCommands, Args};
@@ -26,6 +31,7 @@ use narrowlink_network::{
     ws::{WsConnection, WsConnectionBinary},
     AsyncSocket, AsyncToStream, StreamCrypt, UniversalStream,
 };
+
 use narrowlink_types::{
     client::DataOutBound as ClientDataOutBound, client::EventInBound as ClientEventInBound,
     client::EventOutBound as ClientEventOutBound, client::EventRequest as ClientEventRequest,
@@ -34,6 +40,7 @@ use narrowlink_types::{
 use proxy_stream::ProxyStream;
 use sha3::{Digest, Sha3_256};
 use tokio::{
+    io::{AsyncRead, AsyncWrite},
     net::TcpListener,
     sync::{Mutex, RwLock},
     time,
@@ -59,13 +66,10 @@ pub enum P2PStatus {
 #[tokio::main]
 async fn main() -> Result<(), ClientError> {
     let args = Args::parse(env::args())?;
-    let require_blocking_for_p2p = if let ArgCommands::Connect(_) = args.arg_commands.as_ref() {
-        true
-    } else {
-        false
-    };
+    let require_blocking_for_p2p = matches!(args.arg_commands.as_ref(), ArgCommands::Connect(_));
     let (stdout, _stdout_guard) = if require_blocking_for_p2p {
         // print all output to stderr when use connect command to avoid conflict with the socket stdout
+
         tracing_appender::non_blocking(io::stderr())
     } else {
         tracing_appender::non_blocking(io::stdout())
@@ -74,7 +78,7 @@ async fn main() -> Result<(), ClientError> {
 
     let cmd = tracing_subscriber::fmt::layer()
         .with_ansi(
-            if let ArgCommands::Connect(_) = args.arg_commands.as_ref() {
+            if matches!(args.arg_commands.as_ref(), ArgCommands::Connect(_)) {
                 true
             } else {
                 io::stdout().is_terminal()
@@ -313,7 +317,7 @@ async fn main() -> Result<(), ClientError> {
                     } else {
                         trace!("Stdin/Stdout connection");
                         (
-                            Box::new(InputStream::new()) as Box<dyn AsyncSocket>,
+                            Box::<InputStream>::default() as Box<dyn AsyncSocket>,
                             agent_name,
                         )
                     }
@@ -570,8 +574,8 @@ async fn main() -> Result<(), ClientError> {
             }
         } else {
             trace!("Session not found, create new event stream");
-            if let ArgCommands::List(_) = arg_commands.as_ref() {
-            } else {
+
+            if !matches!(args.arg_commands.as_ref(), ArgCommands::List(_)) {
                 info!("Connecting to gateway: {}", conf.gateway);
             }
             let (event_stream, local_addr) = match WsConnection::new(
@@ -582,8 +586,7 @@ async fn main() -> Result<(), ClientError> {
             .await
             {
                 Ok(es) => {
-                    if let ArgCommands::List(_) = arg_commands.as_ref() {
-                    } else {
+                    if !matches!(args.arg_commands.as_ref(), ArgCommands::List(_)) {
                         info!("Connection successful");
                     }
 
@@ -669,7 +672,10 @@ async fn main() -> Result<(), ClientError> {
                                     {
                                         Ok(s) => s,
                                         Err(e) => {
-                                            warn!("Unable to establish a peer-to-peer channel: {}", e);
+                                            warn!(
+                                                "Unable to establish a peer-to-peer channel: {}",
+                                                e
+                                            );
                                             if !require_blocking_for_p2p {
                                                 info!(
                                                     "Your connection continues to use normal mode"
@@ -725,23 +731,14 @@ pub struct InputStream {
 
 impl Default for InputStream {
     fn default() -> Self {
-        Self::new()
-    }
-}
-
-use tokio::io::AsyncRead as TAsyncRead;
-use tokio::io::AsyncWrite as TAsyncWrite;
-impl InputStream {
-    pub fn new() -> Self {
         InputStream {
             stdin: tokio::io::stdin(),
             stdout: tokio::io::stdout(),
         }
     }
 }
-use core::pin::Pin;
-use core::task::{Context, Poll};
-impl TAsyncRead for InputStream {
+
+impl AsyncRead for InputStream {
     fn poll_read(
         mut self: Pin<&mut Self>,
         ctx: &mut Context<'_>,
@@ -751,7 +748,7 @@ impl TAsyncRead for InputStream {
     }
 }
 
-impl TAsyncWrite for InputStream {
+impl AsyncWrite for InputStream {
     fn poll_write(
         mut self: Pin<&mut Self>,
         ctx: &mut Context<'_>,
