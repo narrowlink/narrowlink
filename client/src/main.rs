@@ -105,7 +105,13 @@ async fn main() -> Result<(), ClientError> {
 
     let span = span!(Level::TRACE, "main", args= ?args);
 
-    let conf = Arc::new(config::Config::load(args.config_path)?);
+    let conf = match config::Config::load(args.config_path).map(Arc::new) {
+        Ok(conf) => conf,
+        Err(e) => {
+            error!("Unable to load config: {}", e);
+            return Ok(());
+        }
+    };
 
     span.in_scope(|| trace!("config successfully read"));
 
@@ -271,11 +277,14 @@ async fn main() -> Result<(), ClientError> {
                     break;
                 } else {
                     trace!("Network connection to agent");
-                    let agent_name: String = arg_commands
+                    let Some(agent_name) = arg_commands
                         .agent_name()
                         .clone()
                         .filter(|name| agents.iter().any(|agent| &agent.name == name))
-                        .ok_or(ClientError::AgentNotFound)?;
+                    else {
+                        error!("Agent not found");
+                        return Ok(());
+                    };
 
                     if p2p_stream.read().await.is_none()
                         && (p2p_status.load(Ordering::Relaxed) == P2PStatus::Uninitialized as u8)
