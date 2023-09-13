@@ -59,7 +59,12 @@ pub enum P2PStatus {
 #[tokio::main]
 async fn main() -> Result<(), ClientError> {
     let args = Args::parse(env::args())?;
-    let (stdout, _stdout_guard) = if let ArgCommands::Connect(_) = args.arg_commands.as_ref() {
+    let require_blocking_for_p2p = if let ArgCommands::Connect(_) = args.arg_commands.as_ref() {
+        true
+    } else {
+        false
+    };
+    let (stdout, _stdout_guard) = if require_blocking_for_p2p {
         // print all output to stderr when use connect command to avoid conflict with the socket stdout
         tracing_appender::non_blocking(io::stderr())
     } else {
@@ -341,12 +346,12 @@ async fn main() -> Result<(), ClientError> {
                                         if p2p_status.load(Ordering::Relaxed)
                                             == P2PStatus::Failed as u8
                                         {
-                                            warn!("P2P connection failed, try with normal mode");
+                                            warn!("The peer-to-peer channel has failed. Using normal mode");
                                             break;
                                         }
                                         if i % 4 == 0 {
                                             info!(
-                                                "P2P connection not established yet, please wait"
+                                                "The peer-to-peer channel has not been established yet. Please wait."
                                             );
                                         }
                                         tokio::time::sleep(Duration::from_millis(500)).await;
@@ -456,6 +461,7 @@ async fn main() -> Result<(), ClientError> {
 
                     if p2p_status.load(Ordering::Relaxed) == P2PStatus::Closed as u8 {
                         p2p_stream.write().await.take();
+                        p2p_status.store(P2PStatus::Uninitialized as u8, Ordering::Relaxed);
                     }
 
                     if let Some((stream, _policies)) = p2p_stream.read().await.as_ref() {
@@ -492,7 +498,7 @@ async fn main() -> Result<(), ClientError> {
                                                 .store(P2PStatus::Closed as u8, Ordering::Relaxed);
                                         } else {
                                             warn!(
-                                            "Unable to read p2p response: {}, try with normal mode",
+                                            "Unable to read the peer-to-peer response: {}, try with normal mode",
                                             e
                                         );
                                         }
@@ -500,7 +506,7 @@ async fn main() -> Result<(), ClientError> {
                                 };
                             }
                         } else {
-                            warn!("Unable to open quic stream, close p2p connection");
+                            warn!("Unable to open QUIC stream, close the peer-to-peer channel");
                             p2p_status.store(P2PStatus::Closed as u8, Ordering::Relaxed);
                         }
                     }
@@ -644,6 +650,13 @@ async fn main() -> Result<(), ClientError> {
                             let p2p_stream = p2p_stream.clone();
 
                             tokio::spawn(async move {
+                                if require_blocking_for_p2p {
+                                    info!("Trying to create a peer-to-peer channel, please wait");
+                                } else {
+                                    info!("Trying to create a peer-to-peer channel");
+                                    info!("Your client uses normal mode until the peer-to-peer is established");
+                                }
+
                                 p2p_status.store(P2PStatus::Pending as u8, Ordering::Relaxed);
                                 let (socket, peer) =
                                     match narrowlink_network::p2p::udp_punched_socket(
@@ -656,11 +669,19 @@ async fn main() -> Result<(), ClientError> {
                                     {
                                         Ok(s) => s,
                                         Err(e) => {
-                                            warn!("Unable to create peer to peer channel: {}", e);
+                                            warn!("Unable to establish a peer-to-peer channel: {}", e);
+                                            if !require_blocking_for_p2p {
+                                                info!(
+                                                    "Your connection continues to use normal mode"
+                                                );
+                                            }
+
+                                            p2p_status
+                                                .store(P2PStatus::Failed as u8, Ordering::Relaxed);
                                             return;
                                         }
                                     };
-                                info!("Peer to peer channel created");
+                                info!("A peer-to-peer channel has just been established");
 
                                 if let Ok(qs) = QuicStream::new_client(peer, socket, p2p.cert).await
                                 {
@@ -671,7 +692,7 @@ async fn main() -> Result<(), ClientError> {
                                     p2p_status.store(P2PStatus::Success as u8, Ordering::Relaxed);
                                 } else {
                                     p2p_status.store(P2PStatus::Failed as u8, Ordering::Relaxed);
-                                    warn!("Unable to create quic stream");
+                                    warn!("Unable to create QUIC stream");
                                 };
                             });
                         }
