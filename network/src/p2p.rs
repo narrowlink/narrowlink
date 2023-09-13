@@ -220,6 +220,7 @@ impl Response {
         match val {
             0x00 => Ok(Self::Success),
             0x01 => Ok(Self::InvalidRequest),
+            0x02 => Ok(Self::AccessDenied),
             0xFF => Ok(Self::Failed),
             _ => Err(NetworkError::P2PInvalidCommand),
         }

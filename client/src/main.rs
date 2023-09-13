@@ -52,6 +52,7 @@ pub enum P2PStatus {
     Uninitialized = 0x0,
     Success = 0x1,
     Pending = 0x2,
+    Closed = 0x3,
     Failed = 0xff,
 }
 
@@ -201,12 +202,14 @@ async fn main() -> Result<(), ClientError> {
             trace!("Session: {:?}", session_id);
             if agents.is_empty() || list_of_agents_refresh_required.load(Ordering::Relaxed) {
                 trace!("List of agents refresh required");
-                let Ok(list_of_agents_request) = req
-                    .request(ClientEventOutBound::Request(
+                let Ok(Ok(list_of_agents_request)) = tokio::time::timeout(
+                    Duration::from_secs(5),
+                    req.request(ClientEventOutBound::Request(
                         0,
                         ClientEventRequest::ListOfAgents(arg_commands.verbose()),
-                    ))
-                    .await
+                    )),
+                )
+                .await
                 else {
                     error!("Unable to get list the agents, looks like connection lost");
                     session = None;
@@ -442,8 +445,9 @@ async fn main() -> Result<(), ClientError> {
 
                     let gateway_address = conf.gateway.clone();
 
-                    // dbg!("before");
-                    // dbg!(&p2p_stream);
+                    if p2p_status.load(Ordering::Relaxed) == P2PStatus::Closed as u8 {
+                        p2p_stream.write().await.take();
+                    }
 
                     if let Some((stream, _policies)) = p2p_stream.read().await.as_ref() {
                         if let Ok(mut quic_socket) = stream.open_bi().await {
@@ -473,16 +477,22 @@ async fn main() -> Result<(), ClientError> {
                                         return;
                                     }
                                     Err(e) => {
-                                        warn!(
+                                        if e.to_string() == "E-Io:connection lost" {
+                                            warn!("P2P connection lost, switch to normal mode");
+                                            p2p_status
+                                                .store(P2PStatus::Closed as u8, Ordering::Relaxed);
+                                        } else {
+                                            warn!(
                                             "Unable to read p2p response: {}, try with normal mode",
                                             e
                                         );
+                                        }
                                     }
                                 };
                             }
                         } else {
                             warn!("Unable to open quic stream, close p2p connection");
-                            p2p_stream.write().await.take();
+                            p2p_status.store(P2PStatus::Closed as u8, Ordering::Relaxed);
                         }
                     }
 
@@ -521,7 +531,6 @@ async fn main() -> Result<(), ClientError> {
                             return;
                         }
                     };
-
                     if let (Some(k), Some(n)) = (key, nonce) {
                         trace!("Creating cryptography stream");
                         data_stream = Box::new(StreamCrypt::new(k, n, data_stream));
