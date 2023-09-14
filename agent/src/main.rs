@@ -274,7 +274,23 @@ async fn start(args: Args) -> Result<(), AgentError> {
                             }
                             // dbg!(&con);
                             trace!("Connecting to {}", con.host);
-                            let stream = match TcpStream::connect((con.host, con.port)).await {
+                            let Ok(remote_addr) =
+                                SocketAddr::from_str(&format!("{}:{}", con.host, con.port))
+                            else {
+                                warn!("Unable to resolve {}", con.host);
+                                return;
+                            };
+                            let socket = if matches!(con.protocol, generic::Protocol::UDP) {
+                                UdpStream::connect(remote_addr)
+                                    .await
+                                    .map(|s| Box::new(s) as Box<dyn AsyncSocket>)
+                            } else {
+                                TcpStream::connect(remote_addr)
+                                    .await
+                                    .map(|s| Box::new(s) as Box<dyn AsyncSocket>)
+                            };
+
+                            let stream = match socket {
                                 Ok(stream) => {
                                     if narrowlink_network::p2p::Response::write(
                                         &narrowlink_network::p2p::Response::Success,
