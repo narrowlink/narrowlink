@@ -691,10 +691,7 @@ async fn main() -> Result<(), ClientError> {
 
                                 if let Ok(qs) = QuicStream::new_client(peer, socket, p2p.cert).await
                                 {
-                                    p2p_stream
-                                        .write()
-                                        .await
-                                        .replace((qs, p2p.policies));
+                                    p2p_stream.write().await.replace((qs, p2p.policies));
                                     p2p_status.store(P2PStatus::Success as u8, Ordering::Relaxed);
                                 } else {
                                     p2p_status.store(P2PStatus::Failed as u8, Ordering::Relaxed);

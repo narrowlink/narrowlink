@@ -25,7 +25,6 @@ pub enum ServiceType {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Peer2PeerRequest {
-    // Todo: policy
     pub peer_ip: IpAddr,
     pub seed_port: u16,
     pub seq: u16,

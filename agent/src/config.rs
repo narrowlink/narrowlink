@@ -88,7 +88,7 @@ impl Config {
     }
     pub fn get_agent_name(&self) -> Result<String, AgentError> {
         self.token
-            .splitn(3, '.')
+            .split('.')
             .nth(1)
             .and_then(|c| {
                 base64::engine::general_purpose::STANDARD_NO_PAD
