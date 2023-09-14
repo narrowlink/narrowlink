@@ -200,7 +200,7 @@ async fn main() -> Result<(), ClientError> {
     let arg_commands = args.arg_commands.clone();
     let connections = Arc::new(Mutex::new(HashMap::new()));
     let p2p_stream = Arc::new(RwLock::new(
-        None::<(QuicStream, (narrowlink_types::policy::Policies, String))>,
+        None::<(QuicStream, narrowlink_types::policy::Policies)>,
     ));
     let p2p_status = Arc::new(AtomicU8::new(P2PStatus::Uninitialized as u8));
     loop {
@@ -694,7 +694,7 @@ async fn main() -> Result<(), ClientError> {
                                     p2p_stream
                                         .write()
                                         .await
-                                        .replace((qs, (p2p.policies, p2p.agent_name)));
+                                        .replace((qs, p2p.policies));
                                     p2p_status.store(P2PStatus::Success as u8, Ordering::Relaxed);
                                 } else {
                                     p2p_status.store(P2PStatus::Failed as u8, Ordering::Relaxed);

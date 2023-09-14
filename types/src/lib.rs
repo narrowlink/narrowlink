@@ -34,7 +34,6 @@ pub struct Peer2PeerRequest {
     pub cert: Vec<u8>,
     pub key: Vec<u8>,
     pub policies: policy::Policies,
-    pub agent_name: String,
 }
 
 #[derive(PartialEq, Debug, Serialize, Deserialize, Clone, Copy)]

@@ -4,6 +4,7 @@ use std::{
     io::{self, IsTerminal},
     net::SocketAddr,
     str::FromStr,
+    sync::Arc,
     time::Duration,
 };
 mod args;
@@ -109,7 +110,10 @@ fn main() -> Result<(), AgentError> {
 #[tokio::main]
 async fn start(args: Args) -> Result<(), AgentError> {
     let conf = config::Config::load(args.config_path)?;
-
+    let Ok(agent_name) = conf.get_agent_name().map(Arc::new) else {
+        error!("Invalid Token");
+        return Ok(());
+    };
     let service_type = conf.service_type;
     let token = conf.token;
     let mut event_headers = HashMap::from([("NL-TOKEN", token.clone())]);
@@ -217,7 +221,9 @@ async fn start(args: Args) -> Result<(), AgentError> {
                 continue;
             }
             Some(Ok(AgentEventInBound::Peer2Peer(p2p))) => {
-                tokio::spawn(async {
+                let agent_name = agent_name.clone();
+                tokio::spawn(async move {
+                    let agent_name = agent_name.clone();
                     let (socket, _) = match narrowlink_network::p2p::udp_punched_socket(
                         &p2p,
                         &Sha3_256::digest(&p2p.cert)[0..6],
@@ -238,10 +244,9 @@ async fn start(args: Args) -> Result<(), AgentError> {
                         return;
                     };
                     let policies = p2p.policies;
-                    let agent_name = p2p.agent_name;
+
                     loop {
                         let policies = policies.clone();
-                        let agent_name = agent_name.clone();
                         let mut s = match con.accept_bi().await {
                             Ok(s) => s,
                             Err(e) => {
@@ -249,7 +254,7 @@ async fn start(args: Args) -> Result<(), AgentError> {
                                 break;
                             }
                         };
-
+                        let agent_name = agent_name.clone();
                         tokio::spawn(async move {
                             let Ok(r) = narrowlink_network::p2p::Request::read(&mut s).await else {
                                 warn!("Unable to read request");
