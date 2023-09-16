@@ -114,7 +114,13 @@ async fn main() -> Result<(), ClientError> {
 
     let span = span!(Level::TRACE, "main", args= ?args);
 
-    let conf = match config::Config::load(args.config_path).map(Arc::new) {
+    let conf = match config::Config::load(args.config_path)
+        .and_then(|mut conf| match conf.endpoints.pop() {
+            Some(config::Endpoint::SelfHosted(conf)) => Ok(conf),
+            _ => Err(ClientError::InvalidConfig),
+        })
+        .map(Arc::new)
+    {
         Ok(conf) => conf,
         Err(e) => {
             error!("Unable to load config: {}", e);
@@ -532,7 +538,7 @@ async fn main() -> Result<(), ClientError> {
                             ("NL-SESSION", session_id.clone()),
                             ("NL-COMMAND", cmd.clone()),
                         ]),
-                        conf.service_type.clone(),
+                        conf.protocol.clone(),
                     )
                     .await
                     {
@@ -581,7 +587,7 @@ async fn main() -> Result<(), ClientError> {
             let (event_stream, local_addr) = match WsConnection::new(
                 &conf.gateway,
                 HashMap::from([("NL-TOKEN", token.clone())]),
-                conf.service_type.clone(),
+                conf.protocol.clone(),
             )
             .await
             {

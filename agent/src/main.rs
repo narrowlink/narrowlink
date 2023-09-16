@@ -108,21 +108,36 @@ fn main() -> Result<(), AgentError> {
 
 #[tokio::main]
 async fn start(args: Args) -> Result<(), AgentError> {
-    let conf = config::Config::load(args.config_path)?;
+    let mut conf = match config::Config::load(args.config_path) {
+        Ok(c) => c,
+        Err(e) => {
+            error!("Unable to load config: {}", e.to_string());
+            return Ok(());
+        }
+    };
 
-    let service_type = conf.service_type;
-    let token = conf.token;
+    let Some(config::Endpoint::SelfHosted(self_hosted_config)) = conf.endpoints.pop() else {
+        error!("Invalid config, endpoint not found");
+        return Ok(());
+    };
+
+    let service_type = &self_hosted_config.protocol;
+    let token = &self_hosted_config.token;
     let mut event_headers = HashMap::from([("NL-TOKEN", token.clone())]);
-    if let Some(publish_token) = conf.publish {
-        event_headers.insert("NL-PUBLISH", publish_token);
+    if let Some(publish_token) = self_hosted_config.publish.as_ref().and_then(|p| p.first()) {
+        event_headers.insert("NL-PUBLISH", publish_token.to_owned());
     }
     let mut event_connection = None;
     let mut sleep_time = 0;
     loop {
         let Some(event) = event_connection.as_mut() else {
-            info!("Connecting to gateway: {}", conf.gateway);
-            match WsConnection::new(&conf.gateway, event_headers.clone(), service_type.clone())
-                .await
+            info!("Connecting to gateway: {}", self_hosted_config.gateway);
+            match WsConnection::new(
+                &self_hosted_config.gateway,
+                event_headers.clone(),
+                service_type.clone(),
+            )
+            .await
             {
                 Ok((event_stream, local_addr)) => {
                     sleep_time = 0;
@@ -190,8 +205,13 @@ async fn start(args: Args) -> Result<(), AgentError> {
         let service_type = service_type.clone();
         let event_sender = event.get_sender();
         let token = token.clone();
-        let gateway = conf.gateway.clone();
-        let key = conf.key.clone().map(|k| (k, conf.key_policy));
+        let gateway = self_hosted_config.gateway.clone();
+        let key = if let Some(config::E2EE::PassPhrase(e2ee)) = conf.e2ee.first() {
+            Some((e2ee.phrase.to_owned(), e2ee.policy))
+        } else {
+            None
+        };
+        // let key = conf.e2ee.clone().map(|k| (k, k.policy));
         let service_type = service_type.clone();
         trace!("Waiting for event");
         match event.next().await {

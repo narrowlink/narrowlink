@@ -1,3 +1,5 @@
-gateway: gateway.domain.tld:443 # address of the gateway
-token: eyJ0eX....kNHYQ_4 # token for authentication
-service_type: Wss # Wss or Ws (default: Wss)
+endpoints:
+  - !SelfHosted # Self hosted endpoint, more options coming soon
+    gateway: gateway.domain.tld:443 # address of the gateway
+    token: eyJ0eX....kNHYQ_4 # token for authentication
+    protocol: Wss # Wss or Ws (default: Wss)
