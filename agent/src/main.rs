@@ -108,15 +108,19 @@ fn main() -> Result<(), AgentError> {
 
 #[tokio::main]
 async fn start(args: Args) -> Result<(), AgentError> {
-    let conf = config::Config::load(args.config_path)?;
-    serde_yaml::to_writer(std::io::stdout(), &conf).unwrap();
-    let Some(config::Endpoint::SelfHosted(self_hosted_config)) = conf.endpoints.first().as_ref()
-    else {
-        error!("Platform not supported at the moment");
+    let mut conf = match config::Config::load(args.config_path) {
+        Ok(c) => c,
+        Err(e) => {
+            error!("Unable to load config: {}", e.to_string());
+            return Ok(());
+        }
+    };
+
+    let Some(config::Endpoint::SelfHosted(self_hosted_config)) = conf.endpoints.pop() else {
+        error!("Invalid config, endpoint not found");
         return Ok(());
     };
-    // config::Config;
-    // let self_hosted_config =
+
     let service_type = &self_hosted_config.protocol;
     let token = &self_hosted_config.token;
     let mut event_headers = HashMap::from([("NL-TOKEN", token.clone())]);

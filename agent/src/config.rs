@@ -118,9 +118,9 @@ impl Config {
         file.read_to_string(&mut configuration_data)?;
         serde_yaml::from_str(&configuration_data)
             .or(Err(AgentError::InvalidConfig))
-            .or_else(|_| {
-                let old_config = serde_yaml::from_str::<OldConfig>(&configuration_data)
-                    .or(Err(AgentError::InvalidConfig))?;
+            .or_else(|e| {
+                let old_config =
+                    serde_yaml::from_str::<OldConfig>(&configuration_data).or(Err(e))?;
                 warn!("Update your config file; old format will be deprecated in the next release");
                 Ok(Config {
                     endpoints: vec![Endpoint::SelfHosted(SelfHosted {
