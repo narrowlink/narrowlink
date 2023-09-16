@@ -1,6 +1,6 @@
 [package]
 name = "narrowlink-client"
-version = "0.1.4"
+version = "0.2.0-git"
 description = "Narrowlink Client"
 readme = "README.md"
 homepage = "https://narrowlink.com"
@@ -61,8 +61,8 @@ dirs = { version = "5.0.1", default-features = false }
 uuid = { version = "1.4.1", features = ["v4"], default-features = false }
 chrono = { version = "0.4.30", default-features = false }
 
-narrowlink-types = { version = "0.1.4" }
-narrowlink-network = { version = "0.1.4" }
+narrowlink-types = { version = "0.2.0-git" }
+narrowlink-network = { version = "0.2.0-git" }
 
 [features]
 default = ["rustls"]

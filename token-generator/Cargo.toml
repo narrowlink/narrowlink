@@ -1,6 +1,6 @@
 [package]
 name = "narrowlink-token-generator"
-version = "0.1.4"
+version = "0.2.0-git"
 description = 'Token generator for narrowlink'
 readme = "README.md"
 homepage = "https://narrowlink.com"
