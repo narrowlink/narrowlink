@@ -1,6 +1,10 @@
-gateway: gateway.domain.tld:443 # address of the gateway
-token: eyJ0eX....kNHYQ_4 # token for authentication
-publish: eyJ0eX....kNHYQ_4 # token for publishing webserver (optional)
-service_type: Wss # Wss or Ws (default: Wss)
-#key: "your_key" # key for end to end encryption (optional)
-#key_policy: Lax # Lax or Strict (default: Lax) Lax allows clients to connect without a key, while Strict requires a key
+endpoints:
+  - !SelfHosted # Self hosted endpoint, more options coming soon
+    gateway: gateway.domain.tld:443 # address of the gateway
+    token: eyJ0eX....kNHYQ_4 # token for authentication
+    publish: eyJ0eX....kNHYQ_4 # token for publishing webserver (optional)
+    protocol: Wss # Wss or Ws (default: Wss)
+e2ee:
+  - !PassPhrase # Enabling end to end encryption (optional)
+    phrase: "your_key" # key for end to end encryption
+    policy: Lax # Lax or Strict (default: Lax) Lax allows clients to connect without a key, while Strict requires a key
