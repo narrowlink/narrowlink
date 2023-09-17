@@ -17,11 +17,9 @@ name = "narrowlink-token-generator"
 path = "src/main.rs"
 
 [dependencies]
+narrowlink-types = { version = "0.1.4" }
 jsonwebtoken = { version = "8.3.0" }
 serde = { version = "1.0.188", features = ["derive"] }
 serde_yaml = { version = "0.9.25" }
 dirs = { version = "5.0.1" }
 clap_lex = { version = "0.5.1" }
-uuid = { version = "1.4.1", features = ["serde", "v4"] }
-
-narrowlink-types = { version = "0.2.0-git" }

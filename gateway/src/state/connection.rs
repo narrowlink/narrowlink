@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use hyper::{client::conn, http::HeaderValue, Body, Request, Response};
 use narrowlink_network::{error::NetworkError, UniversalStream};
-use narrowlink_types::policy::Policy;
+use narrowlink_types::policy::Policies;
 use tokio::{net::TcpStream, sync::oneshot};
 use tracing::{debug, Instrument};
 use uuid::Uuid;
@@ -16,7 +16,7 @@ pub struct Connection {
     pub id: Uuid,
     pub session_id: Option<Uuid>,
     pub data: ConnectionData,
-    pub policies: Vec<Policy>,
+    pub policies: Option<Policies>,
 }
 
 // #[derive(Debug)]
@@ -46,7 +46,7 @@ impl Connection {
         session_id: Option<Uuid>,
         client_socket: Option<ClientConnection>,
         agent_socket: Option<AgentConnection>,
-        policies: Vec<Policy>,
+        policies: Option<Policies>,
     ) -> Self {
         Self {
             id,
@@ -59,20 +59,20 @@ impl Connection {
     pub fn set_agent_socket(&mut self, socket: AgentConnection) {
         self.data.agent_socket = Some(socket);
     }
-    // pub fn take_client_socket(
-    //     &mut self,
-    // ) -> Option<oneshot::Sender<Result<ResponseHeaders, ResponseErrors>>> {
-    //     if let Some(ClientConnection::Client(res, _stream)) = self.data.client_socket.take() {
-    //         return res;
-    //     }
-    //     None
-    // }
+    pub fn take_client_socket(
+        &mut self,
+    ) -> Option<oneshot::Sender<Result<ResponseHeaders, ResponseErrors>>> {
+        if let Some(ClientConnection::Client(res, _stream)) = self.data.client_socket.take() {
+            return res;
+        }
+        None
+    }
     pub fn get_id(&self) -> Uuid {
         self.id
     }
-    // pub fn take_policy(&mut self) -> Vec<Policy> {
-    //     self.policies.clone()
-    // }
+    pub fn take_policy(&mut self) -> Option<Policies> {
+        self.policies.take()
+    }
 }
 
 // #[derive(Debug)]

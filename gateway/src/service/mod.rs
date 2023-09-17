@@ -8,7 +8,6 @@ pub mod ws;
 pub mod wss;
 pub struct ServiceEventRequest {
     pub(crate) token: String,
-    pub(crate) acl: Option<String>,
     pub(crate) publish: Option<String>,
 }
 pub struct ServiceDataRequest {

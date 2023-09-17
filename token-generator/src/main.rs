@@ -23,20 +23,7 @@ fn main() -> Result<(), TokenGeneratorError> {
                 ) else {
                     return Err(TokenGeneratorError::TokenGenerationError); // unreachable
                 };
-                println!("Client Token: {}:{}\r\n{}", client.uid, client.name, ct);
-            }
-            TokenType::ClientPolicy(policy) => {
-                let Ok(ct) = jsonwebtoken::encode(
-                    &Header::new(Algorithm::default()),
-                    &policy,
-                    &EncodingKey::from_secret(&config.secret),
-                ) else {
-                    return Err(TokenGeneratorError::TokenGenerationError); // unreachable
-                };
-                println!(
-                    "Policy Token: {}:{}:{}\r\n{}",
-                    policy.uid, policy.name, policy.pid, ct
-                );
+                println!("{}:{}\r\n{}", client.uid, client.name, ct);
             }
             TokenType::Agent(agent) => {
                 let Ok(at) = jsonwebtoken::encode(
@@ -48,7 +35,7 @@ fn main() -> Result<(), TokenGeneratorError> {
                 ) else {
                     return Err(TokenGeneratorError::TokenGenerationError); // unreachable
                 };
-                println!("Agent Token: {}:{}\r\n{}", agent.uid, agent.name, at);
+                println!("{}:{}\r\n{}", agent.uid, agent.name, at);
             }
             TokenType::AgentPublish(publish_token) => {
                 let Ok(pt) = jsonwebtoken::encode(
@@ -60,10 +47,7 @@ fn main() -> Result<(), TokenGeneratorError> {
                 ) else {
                     return Err(TokenGeneratorError::TokenGenerationError); // unreachable
                 };
-                println!(
-                    "Publish Token: {}:{}\r\n{}",
-                    publish_token.uid, publish_token.name, pt
-                );
+                println!("{}:{}\r\n{}", publish_token.uid, publish_token.name, pt);
             }
         }
     }

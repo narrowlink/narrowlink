@@ -217,11 +217,6 @@ impl HyperService<Request<Body>> for WsService {
                     .get("NL-SESSION")
                     .and_then(|t| t.to_str().ok())
                     .map(|t| t.to_owned());
-                let acl = req
-                    .headers()
-                    .get("NL-ACL")
-                    .and_then(|t| t.to_str().ok())
-                    .map(|t| t.to_owned());
 
                 let connecting_address = req
                     .headers()
@@ -260,11 +255,7 @@ impl HyperService<Request<Body>> for WsService {
                     let (stream_sender, stream_receiver) = oneshot::channel();
                     (
                         InBound::EventRequest(
-                            ServiceEventRequest {
-                                token,
-                                acl,
-                                publish,
-                            },
+                            ServiceEventRequest { token, publish },
                             stream_receiver,
                             peer_addr,
                             forward_address,

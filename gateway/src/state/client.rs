@@ -6,7 +6,7 @@ use std::{
 use futures_util::{stream::SplitSink, SinkExt};
 use narrowlink_types::{
     client::{ConstSystemInfo, EventInBound, EventOutBound, SystemInfo},
-    policy::Policy,
+    policy::Policies,
     NatType,
 };
 
@@ -16,7 +16,7 @@ use uuid::Uuid;
 pub struct Client {
     pub name: String,
     session_id: Uuid,
-    policies: Vec<Policy>,
+    policies: Policies,
     socket_addr: SocketAddr,
     forward_addr: Option<String>,
     system_info: Option<SystemInfo>,
@@ -27,7 +27,7 @@ impl Client {
     pub fn new(
         name: String,
         session_id: Uuid,
-        policies: Vec<Policy>,
+        policies: Policies,
         socket_addr: SocketAddr,
         forward_addr: Option<String>,
         sender: SplitSink<NarrowEvent<EventInBound, EventOutBound>, EventInBound>,
@@ -55,7 +55,7 @@ impl Client {
     pub fn get_session_id(&self) -> Uuid {
         self.session_id
     }
-    pub fn get_policy(&self) -> Vec<Policy> {
+    pub fn get_policy(&self) -> Policies {
         self.policies.clone()
     }
     pub fn get_real_ip(&self) -> IpAddr {
