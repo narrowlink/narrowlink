@@ -17,7 +17,7 @@ tokens: # list of tokens
     exp: 1710227806 # expiration time in seconds since epoch
     pid: 1 # policy id, it must be the same as the policy id in the client token
     policy: # policies for this client
-      permit: true # whitelist mode
+      type: !WhiteList # !WhiteList or !BlackList
       policies: # list of policies
         - !Ip # policy based on the destination ip address
           - !Any # !Any means any agent, !Agent agent_name means the agent with the name agent_name

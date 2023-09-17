@@ -1,4 +1,4 @@
-use narrowlink_types::token::{AgentPublishToken, AgentToken, ClientToken,PolicyToken};
+use narrowlink_types::token::{AgentPublishToken, AgentToken, ClientToken, PolicyToken};
 use serde::{Deserialize, Serialize};
 use std::{env, fs::File, io::Read, path::PathBuf};
 

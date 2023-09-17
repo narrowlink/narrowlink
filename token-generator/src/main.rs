@@ -33,7 +33,10 @@ fn main() -> Result<(), TokenGeneratorError> {
                 ) else {
                     return Err(TokenGeneratorError::TokenGenerationError); // unreachable
                 };
-                println!("Policy Token: {}:{}:{}\r\n{}", policy.uid, policy.name, policy.pid, ct);
+                println!(
+                    "Policy Token: {}:{}:{}\r\n{}",
+                    policy.uid, policy.name, policy.pid, ct
+                );
             }
             TokenType::Agent(agent) => {
                 let Ok(at) = jsonwebtoken::encode(
@@ -57,7 +60,10 @@ fn main() -> Result<(), TokenGeneratorError> {
                 ) else {
                     return Err(TokenGeneratorError::TokenGenerationError); // unreachable
                 };
-                println!("Publish Token: {}:{}\r\n{}", publish_token.uid, publish_token.name, pt);
+                println!(
+                    "Publish Token: {}:{}\r\n{}",
+                    publish_token.uid, publish_token.name, pt
+                );
             }
         }
     }

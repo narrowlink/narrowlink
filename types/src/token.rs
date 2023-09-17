@@ -10,7 +10,7 @@ pub struct ClientToken {
     pub name: String,
     pub exp: usize,
     #[serde(skip_serializing_if = "<[_]>::is_empty")]
-    #[serde(default="Vec::new")]
+    #[serde(default = "Vec::new")]
     pub policies: Vec<u32>,
 }
 //Todo: replace to from/into if possible//Todo: replace to from/into if possible
