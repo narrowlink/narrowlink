@@ -205,10 +205,14 @@ async fn main() -> Result<(), ClientError> {
     let mut sleep_time = 0;
     let arg_commands = args.arg_commands.clone();
     let connections = Arc::new(Mutex::new(HashMap::new()));
-    let p2p_stream = Arc::new(RwLock::new(
-        None::<(QuicStream, (narrowlink_types::policy::Policies, String))>,
-    ));
+    let p2p_stream = Arc::new(RwLock::new(None::<QuicStream>));
     let p2p_status = Arc::new(AtomicU8::new(P2PStatus::Uninitialized as u8));
+
+    let acl = if conf.acl.is_empty() {
+        None
+    } else {
+        serde_json::to_string(&conf.acl).ok()
+    };
     loop {
         let arg_commands = arg_commands.clone();
         let conf = conf.clone();
@@ -474,7 +478,7 @@ async fn main() -> Result<(), ClientError> {
                         p2p_status.store(P2PStatus::Uninitialized as u8, Ordering::Relaxed);
                     }
 
-                    if let Some((stream, _policies)) = p2p_stream.read().await.as_ref() {
+                    if let Some(stream) = p2p_stream.read().await.as_ref() {
                         if let Ok(mut quic_socket) = stream.open_bi().await {
                             if narrowlink_network::p2p::Request::from(&connect)
                                 .write(&mut quic_socket)
@@ -584,50 +588,50 @@ async fn main() -> Result<(), ClientError> {
             if !matches!(args.arg_commands.as_ref(), ArgCommands::List(_)) {
                 info!("Connecting to gateway: {}", conf.gateway);
             }
-            let (event_stream, local_addr) = match WsConnection::new(
-                &conf.gateway,
-                HashMap::from([("NL-TOKEN", token.clone())]),
-                conf.protocol.clone(),
-            )
-            .await
-            {
-                Ok(es) => {
-                    if !matches!(args.arg_commands.as_ref(), ArgCommands::List(_)) {
-                        info!("Connection successful");
-                    }
-
-                    sleep_time = 0;
-                    es
-                }
-                Err(e) => {
-                    if let NetworkError::UnableToUpgrade(status) = e {
-                        match status {
-                            401 => {
-                                error!("Authentication failed");
-                                break;
-                            }
-                            403 => {
-                                error!("Access denied");
-                            }
-                            _ => {}
-                        }
-                    };
-                    error!("Unable to connect to the gateway: {}", e.to_string());
-                    if sleep_time == 0 {
-                        info!("Try again");
-                    } else if sleep_time == 35 {
-                        error!("Unable to connect");
-                        info!("Exit");
-                        break;
-                    } else {
-                        info!("Try again in {} secs", sleep_time);
-                    }
-                    time::sleep(Duration::from_secs(sleep_time)).await;
-                    sleep_time += 5;
-
-                    continue;
-                }
+            let headers = if let Some(acl) = acl.as_ref() {
+                HashMap::from([("NL-ACL", acl.clone()), ("NL-TOKEN", token.clone())])
+            } else {
+                HashMap::from([("NL-TOKEN", token.clone())])
             };
+            let (event_stream, local_addr) =
+                match WsConnection::new(&conf.gateway, headers, conf.protocol.clone()).await {
+                    Ok(es) => {
+                        if !matches!(args.arg_commands.as_ref(), ArgCommands::List(_)) {
+                            info!("Connection successful");
+                        }
+
+                        sleep_time = 0;
+                        es
+                    }
+                    Err(e) => {
+                        if let NetworkError::UnableToUpgrade(status) = e {
+                            match status {
+                                401 => {
+                                    error!("Authentication failed");
+                                    break;
+                                }
+                                403 => {
+                                    error!("Access denied");
+                                }
+                                _ => {}
+                            }
+                        };
+                        error!("Unable to connect to the gateway: {}", e.to_string());
+                        if sleep_time == 0 {
+                            info!("Try again");
+                        } else if sleep_time == 35 {
+                            error!("Unable to connect");
+                            info!("Exit");
+                            break;
+                        } else {
+                            info!("Try again in {} secs", sleep_time);
+                        }
+                        time::sleep(Duration::from_secs(sleep_time)).await;
+                        sleep_time += 5;
+
+                        continue;
+                    }
+                };
 
             let session_id = event_stream
                 .get_header("NL-SESSION")
@@ -697,10 +701,7 @@ async fn main() -> Result<(), ClientError> {
 
                                 if let Ok(qs) = QuicStream::new_client(peer, socket, p2p.cert).await
                                 {
-                                    p2p_stream
-                                        .write()
-                                        .await
-                                        .replace((qs, (p2p.policies, p2p.agent_name)));
+                                    p2p_stream.write().await.replace(qs);
                                     p2p_status.store(P2PStatus::Success as u8, Ordering::Relaxed);
                                 } else {
                                     p2p_status.store(P2PStatus::Failed as u8, Ordering::Relaxed);

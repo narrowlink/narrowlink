@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use hyper::{client::conn, http::HeaderValue, Body, Request, Response};
 use narrowlink_network::{error::NetworkError, UniversalStream};
-use narrowlink_types::policy::Policies;
+use narrowlink_types::policy::Policy;
 use tokio::{net::TcpStream, sync::oneshot};
 use tracing::{debug, Instrument};
 use uuid::Uuid;
@@ -16,7 +16,7 @@ pub struct Connection {
     pub id: Uuid,
     pub session_id: Option<Uuid>,
     pub data: ConnectionData,
-    pub policies: Option<Policies>,
+    pub policies: Vec<Policy>,
 }
 
 // #[derive(Debug)]
@@ -46,7 +46,7 @@ impl Connection {
         session_id: Option<Uuid>,
         client_socket: Option<ClientConnection>,
         agent_socket: Option<AgentConnection>,
-        policies: Option<Policies>,
+        policies: Vec<Policy>,
     ) -> Self {
         Self {
             id,
@@ -70,8 +70,8 @@ impl Connection {
     pub fn get_id(&self) -> Uuid {
         self.id
     }
-    pub fn take_policy(&mut self) -> Option<Policies> {
-        self.policies.take()
+    pub fn take_policy(&mut self) -> Vec<Policy> {
+        self.policies.clone()
     }
 }
 

@@ -2,16 +2,15 @@ use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{error::MessageError, policy::Policies, publish::PublishHost};
+use crate::{error::MessageError, policy::Policy, publish::PublishHost};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ClientToken {
     pub uid: Uuid,
     pub name: String,
     pub exp: usize,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(default)]
-    pub policies: Option<Policies>,
+    #[serde(skip_serializing_if = "<[_]>::is_empty")]
+    pub policies: Vec<u32>,
 }
 //Todo: replace to from/into if possible//Todo: replace to from/into if possible
 impl ClientToken {
@@ -33,9 +32,9 @@ impl ClientToken {
     }
 }
 
-impl Policies {
-    pub fn from_str(s: &str, token: &[u8]) -> Result<Policies, MessageError> {
-        Ok(jsonwebtoken::decode::<Policies>(
+impl Policy {
+    pub fn from_str(s: &str, token: &[u8]) -> Result<Policy, MessageError> {
+        Ok(jsonwebtoken::decode::<Policy>(
             s,
             &DecodingKey::from_secret(token),
             &Validation::new(Algorithm::default()),

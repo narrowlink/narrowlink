@@ -4,6 +4,7 @@ use std::{
     io::{self, IsTerminal},
     net::SocketAddr,
     str::FromStr,
+    sync::Arc,
     time::Duration,
 };
 mod args;
@@ -28,7 +29,7 @@ use narrowlink_types::{
         EventOutBound as AgentEventOutBound, EventRequest as AgentEventRequest,
     },
     generic::{self, Connect},
-    policy::Policies,
+    policy::Policy,
     ServiceType,
 };
 use sha3::{Digest, Sha3_256};
@@ -120,7 +121,10 @@ async fn start(args: Args) -> Result<(), AgentError> {
         error!("Invalid config, endpoint not found");
         return Ok(());
     };
-
+    let Ok(agent_name) = self_hosted_config.get_agent_name().map(Arc::new) else {
+        error!("Invalid Token");
+        return Ok(());
+    };
     let service_type = &self_hosted_config.protocol;
     let token = &self_hosted_config.token;
     let mut event_headers = HashMap::from([("NL-TOKEN", token.clone())]);
@@ -217,10 +221,11 @@ async fn start(args: Args) -> Result<(), AgentError> {
         match event.next().await {
             Some(Ok(AgentEventInBound::Connect(connection, connect, ip_policies))) => {
                 debug!("Connection to {:?} received", connect);
+                let agent_name = agent_name.clone();
                 tokio::spawn(async move {
                     if let Err(e) = data_connect(
                         &gateway,
-                        token.clone(),
+                        (token.clone(), &agent_name),
                         // session,
                         connection,
                         connect,
@@ -237,97 +242,57 @@ async fn start(args: Args) -> Result<(), AgentError> {
                 continue;
             }
             Some(Ok(AgentEventInBound::Peer2Peer(p2p))) => {
-                tokio::spawn(async {
-                    let (socket, _) = match narrowlink_network::p2p::udp_punched_socket(
-                        &p2p,
-                        &Sha3_256::digest(&p2p.cert)[0..6],
-                        false,
-                        false,
-                    )
-                    .await
-                    {
-                        Ok(s) => s,
-                        Err(e) => {
-                            warn!("Unable to create peer to peer channel: {}", e);
-                            return;
-                        }
-                    };
-                    info!("Peer to peer channel created");
-                    let Ok(con) = QuicStream::new_server(socket, p2p.cert, p2p.key).await else {
-                        warn!("Unable to create peer to peer channel");
-                        return;
-                    };
-                    let policies = p2p.policies;
-                    let agent_name = p2p.agent_name;
-                    loop {
-                        let policies = policies.clone();
-                        let agent_name = agent_name.clone();
-                        let mut s = match con.accept_bi().await {
+                tokio::spawn({
+                    let agent_name = agent_name.clone();
+                    async move {
+                        let (socket, _) = match narrowlink_network::p2p::udp_punched_socket(
+                            &p2p,
+                            &Sha3_256::digest(&p2p.cert)[0..6],
+                            false,
+                            false,
+                        )
+                        .await
+                        {
                             Ok(s) => s,
                             Err(e) => {
-                                warn!("Unable to accept peer to peer channel: {}", e);
-                                break;
+                                warn!("Unable to create peer to peer channel: {}", e);
+                                return;
                             }
                         };
-
-                        tokio::spawn(async move {
-                            let Ok(r) = narrowlink_network::p2p::Request::read(&mut s).await else {
-                                warn!("Unable to read request");
-                                return;
-                            };
-                            let con = Into::<Connect>::into(&r);
-                            if !policies.permit(Some(&agent_name), &con) {
-                                warn!(
-                                    "Access denied to {}:{}, peer: {}",
-                                    con.host, con.port, p2p.peer_ip
-                                );
-                                if narrowlink_network::p2p::Response::write(
-                                    &narrowlink_network::p2p::Response::AccessDenied,
-                                    &mut s,
-                                )
-                                .await
-                                .is_err()
-                                {
-                                    warn!("Unable to write response");
+                        info!("Peer to peer channel created");
+                        let Ok(con) = QuicStream::new_server(socket, p2p.cert, p2p.key).await
+                        else {
+                            warn!("Unable to create peer to peer channel");
+                            return;
+                        };
+                        let policies = p2p.policies;
+                        loop {
+                            let policies = policies.clone();
+                            let agent_name = agent_name.clone();
+                            let mut s = match con.accept_bi().await {
+                                Ok(s) => s,
+                                Err(e) => {
+                                    warn!("Unable to accept peer to peer channel: {}", e);
+                                    break;
                                 }
-                                return;
-                            }
-                            // dbg!(&con);
-                            trace!("Connecting to {}", con.host);
-                            let Ok(remote_addr) =
-                                SocketAddr::from_str(&format!("{}:{}", con.host, con.port))
-                            else {
-                                warn!("Unable to resolve {}", con.host);
-                                return;
-                            };
-                            let socket = if matches!(con.protocol, generic::Protocol::UDP) {
-                                UdpStream::connect(remote_addr)
-                                    .await
-                                    .map(|s| Box::new(s) as Box<dyn AsyncSocket>)
-                            } else {
-                                TcpStream::connect(remote_addr)
-                                    .await
-                                    .map(|s| Box::new(s) as Box<dyn AsyncSocket>)
                             };
 
-                            let stream = match socket {
-                                Ok(stream) => {
+                            tokio::spawn(async move {
+                                let Ok(r) = narrowlink_network::p2p::Request::read(&mut s).await
+                                else {
+                                    warn!("Unable to read request");
+                                    return;
+                                };
+                                let con = Into::<Connect>::into(&r);
+
+                                if !policies.into_iter().any(|p| p.permit(&agent_name, &con)) {
+                                    // todo: verify
+                                    warn!(
+                                        "Access denied to {}:{}, peer: {}",
+                                        con.host, con.port, p2p.peer_ip
+                                    );
                                     if narrowlink_network::p2p::Response::write(
-                                        &narrowlink_network::p2p::Response::Success,
-                                        &mut s,
-                                    )
-                                    .await
-                                    .is_err()
-                                    {
-                                        warn!("Unable to write response");
-                                        return;
-                                    }
-                                    stream
-                                }
-                                Err(_e) => {
-                                    warn!("Unable to connect to {}", _e);
-                                    if narrowlink_network::p2p::Response::write(
-                                        &narrowlink_network::p2p::Response::Failed,
+                                        &narrowlink_network::p2p::Response::AccessDenied,
                                         &mut s,
                                     )
                                     .await
@@ -337,11 +302,57 @@ async fn start(args: Args) -> Result<(), AgentError> {
                                     }
                                     return;
                                 }
-                            };
-                            if let Err(_e) = async_forward(s, stream).await {
-                                trace!("Data channel closed: {}", _e.to_string());
-                            }
-                        });
+                                // dbg!(&con);
+                                trace!("Connecting to {}", con.host);
+                                let Ok(remote_addr) =
+                                    SocketAddr::from_str(&format!("{}:{}", con.host, con.port))
+                                else {
+                                    warn!("Unable to resolve {}", con.host);
+                                    return;
+                                };
+                                let socket = if matches!(con.protocol, generic::Protocol::UDP) {
+                                    UdpStream::connect(remote_addr)
+                                        .await
+                                        .map(|s| Box::new(s) as Box<dyn AsyncSocket>)
+                                } else {
+                                    TcpStream::connect(remote_addr)
+                                        .await
+                                        .map(|s| Box::new(s) as Box<dyn AsyncSocket>)
+                                };
+
+                                let stream = match socket {
+                                    Ok(stream) => {
+                                        if narrowlink_network::p2p::Response::write(
+                                            &narrowlink_network::p2p::Response::Success,
+                                            &mut s,
+                                        )
+                                        .await
+                                        .is_err()
+                                        {
+                                            warn!("Unable to write response");
+                                            return;
+                                        }
+                                        stream
+                                    }
+                                    Err(_e) => {
+                                        warn!("Unable to connect to {}", _e);
+                                        if narrowlink_network::p2p::Response::write(
+                                            &narrowlink_network::p2p::Response::Failed,
+                                            &mut s,
+                                        )
+                                        .await
+                                        .is_err()
+                                        {
+                                            warn!("Unable to write response");
+                                        }
+                                        return;
+                                    }
+                                };
+                                if let Err(_e) = async_forward(s, stream).await {
+                                    trace!("Data channel closed: {}", _e.to_string());
+                                }
+                            });
+                        }
                     }
                 });
             }
@@ -380,14 +391,15 @@ async fn start(args: Args) -> Result<(), AgentError> {
 
 async fn data_connect(
     gateway_addr: &str,
-    token: String,
+    token: (String, &str),
     // session: Uuid,
     connection: Uuid,
     req: generic::Connect,
-    ip_policies: Option<Policies>,
+    ip_policies: Option<Policy>,
     key: Option<&(String, KeyPolicy)>,
     service_type: ServiceType,
 ) -> Result<(), AgentError> {
+    let (token, agent_name) = token;
     let addr = format!("{}:{}", req.host, req.port);
     let address = match SocketAddr::from_str(&addr) {
         Ok(addr) => addr,
@@ -401,7 +413,7 @@ async fn data_connect(
         let mut connect = req.clone();
         connect.host = address.ip().to_string();
         connect.port = req.port;
-        if !p.permit(None, &connect) {
+        if !p.permit(agent_name, &connect) {
             trace!("IP policies denied");
             return Err(AgentError::AccessDenied);
         }

@@ -1,4 +1,5 @@
-use narrowlink_types::ServiceType;
+use base64::Engine;
+use narrowlink_types::{token::AgentToken, ServiceType};
 use serde::{Deserialize, Serialize};
 use std::{env, fs::File, io::Read, path::PathBuf, vec};
 use tracing::warn;
@@ -140,5 +141,21 @@ impl Config {
                         .unwrap_or(vec![]),
                 })
             })
+    }
+}
+
+impl SelfHosted {
+    pub fn get_agent_name(&self) -> Result<String, AgentError> {
+        self.token
+            .split('.')
+            .nth(1)
+            .and_then(|c| {
+                base64::engine::general_purpose::STANDARD_NO_PAD
+                    .decode(c)
+                    .ok()
+            })
+            .and_then(|v| serde_json::from_slice::<AgentToken>(&v).ok())
+            .ok_or(AgentError::InvalidToken)
+            .map(|t| t.name)
     }
 }

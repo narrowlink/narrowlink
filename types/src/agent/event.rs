@@ -3,15 +3,13 @@ use std::str::FromStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{
-    error::MessageError, generic::Connect, policy::Policies, GetResponse, Peer2PeerRequest,
-};
+use crate::{error::MessageError, generic::Connect, policy::Policy, GetResponse, Peer2PeerRequest};
 
 use super::{ConstSystemInfo, DynSystemInfo};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum InBound {
-    Connect(Uuid, Connect, Option<Policies>),
+    Connect(Uuid, Connect, Option<Policy>),
     IsReachable(Uuid, Connect),
     Response(usize, Response),
     Ping(u64),

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use narrowlink_types::{
     agent::AgentPublishInfo,
     generic::{AgentInfo, Connect},
-    policy::Policies,
+    policy::Policy,
     NatType,
 };
 use uuid::Uuid;
@@ -294,7 +294,7 @@ impl Users {
         }
         ret
     }
-    pub fn get_client_policy(&self, user_id: Uuid, session: Uuid) -> Option<Policies> {
+    pub fn get_client_policy(&self, user_id: Uuid, session: Uuid) -> Option<Vec<Policy>> {
         self.users
             .get(&user_id)
             .and_then(|u| u.get_client(session))

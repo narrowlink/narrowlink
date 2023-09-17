@@ -23,6 +23,7 @@ use narrowlink_types::{
         EventOutBound as ClientEventOutBound, EventRequest as ClientEventRequest,
         EventResponse as ClientEventResponse,
     },
+    policy::Policy,
 };
 use narrowlink_types::{
     token::{AgentPublishToken, AgentToken, ClientToken},
@@ -164,7 +165,6 @@ impl State {
                                         };
                                         let _ = client.send(ClientEventInBound::Response(request_id,ClientEventResponse::Ok)).await;
                                         let policies = client.get_policy();
-                                        let agent_name = agent.name();
                                         let port = rand::thread_rng().gen_range((49152+seq)..(65535-seq));
                                         let _ = agent.send(AgentEventInBound::Peer2Peer(Peer2PeerRequest {
                                             peer_ip: client_ip,
@@ -175,7 +175,6 @@ impl State {
                                             cert:cert.clone(),
                                             key,
                                             policies:policies.clone(),
-                                            agent_name: agent_name.clone(),
                                         })).await;
                                         let _ = client.send(ClientEventInBound::Peer2Peer(Peer2PeerRequest {
                                             peer_ip: agent_ip,
@@ -186,7 +185,6 @@ impl State {
                                             cert,
                                             key: Vec::new(),
                                             policies,
-                                            agent_name
                                         })).await;
 
                                     }
@@ -261,6 +259,7 @@ impl State {
                         Some(InBound::EventRequest(
                             ServiceEventRequest {
                                 token,
+                                acl,
                                 publish,
                             },
                             stream_receiver,
@@ -278,9 +277,19 @@ impl State {
                                 let client_event_span = tracing::span!(tracing::Level::TRACE, "client", user_id = %client_token.uid, client_name = %client_token.name);
                                 let _client_event_gaurd = client_event_span.enter();
                                 trace!("Client Token Verification Success");
-                                let Some(policies) = client_token.policies else
-                                {
-                                    trace!("client token does not have any policy");
+                                // if client_token.policies.
+                                let mut policies = Vec::new();
+
+                                let p = acl.and_then(|a|serde_json::from_str::<Vec<String>>(&a).ok()).and_then(|a|a.into_iter().map(|p|Policy::from_str(&p, &self.client_token).ok()).collect::<Option<Vec<Policy>>>());
+                                for pid in &client_token.policies{ // important to keep order
+                                    for policy in p.as_ref().unwrap_or(&Vec::new()){
+                                        if &policy.id == pid{
+                                            policies.push(policy.clone());
+                                        }
+                                    }
+                                }
+                                if client_token.policies.len() != policies.len(){
+                                    trace!("Client {}:{} policies not match",client_token.uid,client_token.name);
                                     let _ = response.send(Err(ResponseErrors::Unauthorized));
                                     continue
                                 };
@@ -410,13 +419,14 @@ impl State {
                                     continue
                                 };
 
-                                if !client_policy.permit(Some(&agent_name), &connect){
+                                if !client_policy.iter().any(|p|p.permit(&agent_name, &connect)){ // todo: verify
                                     debug!("Client {}:{} connect to {}:{:?} forbidden",client_token.uid,session,agent_name,connect);
-                                    debug!("{:?}",client_policy);
+                                    debug!("{:?}",&client_policy);
                                     let _ = response.send(Err(ResponseErrors::Forbidden));
                                     continue
                                 };
-                                debug!("Client policy: {:?}",client_policy);
+
+                                debug!("Client policy: {:?}",&client_policy);
 
                                 let Some(agent) = users.get_mut_agent(client_token.uid,agent_name.clone()) else{
                                     debug!("Agent {}:{} not found",client_token.uid,agent_name);
@@ -434,7 +444,7 @@ impl State {
                                 };
 
 
-                                let connection = connection::Connection::new(connection_id, Some(session), Some(connection::ClientConnection::Client(response,socket_receiver)), None,Some(client_policy));
+                                let connection = connection::Connection::new(connection_id, Some(session), Some(connection::ClientConnection::Client(response,socket_receiver)), None,client_policy);
 
                                 debug!("Connection to {}:{} with agent {} added to pool",connect.host,connect.port, agent_name);
                                 let _ = agent.send(AgentEventInBound::Connect(connection_id, connect, None)).await;
@@ -467,18 +477,19 @@ impl State {
                                     let _ = response.send(Err(ResponseErrors::NotFound(Some("The requested connection could not be found"))));
                                     continue
                                 };
-                                if let Some(policy) = requested_connection.take_policy(){
-                                    debug!("Connection policy: {:?}",policy);
-                                    if !policy.permit(Some(&agent_token.name), &connected_address){
-                                        let _ = response.send(Err(ResponseErrors::Forbidden));
-                                        if let Some(client_response) = requested_connection.take_client_socket(){
-                                            let _ = client_response.send(Err(ResponseErrors::Forbidden));
-                                        }
-                                        trace!("Access denied due to policy violation");
-                                        //todo client event notify
-                                        continue
+                                let policy = requested_connection.take_policy();
+                                debug!("Connection policy: {:?}",policy);
+
+                                if !policy.into_iter().any(|p|p.permit(&agent_token.name, &connected_address)){ // todo: verify
+                                    let _ = response.send(Err(ResponseErrors::Forbidden));
+                                    if let Some(client_response) = requested_connection.take_client_socket(){
+                                        let _ = client_response.send(Err(ResponseErrors::Forbidden));
                                     }
+                                    trace!("Access denied due to policy violation");
+                                    //todo client event notify
+                                    continue
                                 }
+
                                 let response = if CONNECTION_ORIANTED {
                                     if response.send(Ok(ResponseHeaders{session:requested_connection.session_id,connection:Some(connection)})).is_err(){
                                             continue
@@ -504,7 +515,7 @@ impl State {
                                     let connection = Uuid::new_v4();
                                     debug!("HttpTransparent Connection ({}) Request to {} with {} address Received", connection,domain_name,peer_addr);
                                     let _ = agent.send(AgentEventInBound::Connect(connection, connect, None)).await;
-                                    users.add_connection(user_id, connection::Connection::new(connection,None,Some(connection::ClientConnection::HttpTransparent(request,peer_addr,response)),None,None));
+                                    users.add_connection(user_id, connection::Connection::new(connection,None,Some(connection::ClientConnection::HttpTransparent(request,peer_addr,response)),None,Vec::new()));
                                 }
                                 None | Some(Err(()))=>{
                                     debug!("Unoccupied HttpTransparent Connection Request to {} with {} address Rejected", domain_name,peer_addr);
@@ -518,7 +529,7 @@ impl State {
                                     let connection = Uuid::new_v4();
                                     debug!("TlsTransparent Connection ({}) Request to {} with {:?} address Received", connection,sni,stream.peer_addr());
                                     let _ = agent.send(AgentEventInBound::Connect(connection, connect, None)).await;
-                                    users.add_connection(user_id, connection::Connection::new(connection,None,Some(connection::ClientConnection::TlsTransparent(stream)),None,None));
+                                    users.add_connection(user_id, connection::Connection::new(connection,None,Some(connection::ClientConnection::TlsTransparent(stream)),None,Vec::new()));
                                     continue
                                 }
                             }

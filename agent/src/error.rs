@@ -13,6 +13,7 @@ pub enum AgentError {
     KeyNotFound,
     ConfigNotFound,
     InvalidConfig,
+    InvalidToken,
     UnableToResolve,
     // Invalid(&'static str),
 }
@@ -42,6 +43,7 @@ impl fmt::Display for AgentError {
             AgentError::KeyNotFound => write!(f, "Key Not Found"),
             AgentError::InvalidConfig => write!(f, "Invalid Config"),
             AgentError::ConfigNotFound => write!(f, "Config Not Found"),
+            AgentError::InvalidToken => write!(f, "Invalid Token"),
             AgentError::UnableToResolve => write!(f, "Unable To Resolve"),
             // AgentError::Invalid(msg) => write!(f, "Invalid {}", msg),
         }
