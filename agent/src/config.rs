@@ -17,6 +17,7 @@ pub struct SelfHosted {
     pub gateway: String,
     pub token: String,
     pub publish: Option<Vec<String>>,
+    #[serde(default = "ServiceType::default")]
     pub protocol: ServiceType,
 }
 

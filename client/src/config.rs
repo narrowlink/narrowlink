@@ -11,6 +11,7 @@ pub struct SelfHosted {
     pub token: String,
     #[serde(default = "Vec::new")]
     pub acl: Vec<String>,
+    #[serde(default = "ServiceType::default")]
     pub protocol: ServiceType,
 }
 
