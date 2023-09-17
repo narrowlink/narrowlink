@@ -4,7 +4,6 @@ use std::{
     io::{self, IsTerminal},
     net::SocketAddr,
     str::FromStr,
-    sync::Arc,
     time::Duration,
 };
 mod args;
@@ -121,10 +120,6 @@ async fn start(args: Args) -> Result<(), AgentError> {
         error!("Invalid config, endpoint not found");
         return Ok(());
     };
-    let Ok(agent_name) = self_hosted_config.get_agent_name().map(Arc::new) else {
-        error!("Invalid Token");
-        return Ok(());
-    };
     let service_type = &self_hosted_config.protocol;
     let token = &self_hosted_config.token;
     let mut event_headers = HashMap::from([("NL-TOKEN", token.clone())]);
@@ -221,11 +216,10 @@ async fn start(args: Args) -> Result<(), AgentError> {
         match event.next().await {
             Some(Ok(AgentEventInBound::Connect(connection, connect, ip_policies))) => {
                 debug!("Connection to {:?} received", connect);
-                let agent_name = agent_name.clone();
                 tokio::spawn(async move {
                     if let Err(e) = data_connect(
                         &gateway,
-                        (token.clone(), &agent_name),
+                        token.clone(),
                         // session,
                         connection,
                         connect,
@@ -243,7 +237,6 @@ async fn start(args: Args) -> Result<(), AgentError> {
             }
             Some(Ok(AgentEventInBound::Peer2Peer(p2p))) => {
                 tokio::spawn({
-                    let agent_name = agent_name.clone();
                     async move {
                         let (socket, _) = match narrowlink_network::p2p::udp_punched_socket(
                             (&p2p).into(),
@@ -268,7 +261,6 @@ async fn start(args: Args) -> Result<(), AgentError> {
                         let policies = p2p.policies;
                         loop {
                             let policies = policies.clone();
-                            let agent_name = agent_name.clone();
                             let mut s = match con.accept_bi().await {
                                 Ok(s) => s,
                                 Err(e) => {
@@ -286,7 +278,7 @@ async fn start(args: Args) -> Result<(), AgentError> {
                                 let con = Into::<Connect>::into(&r);
 
                                 if !policies.is_empty()
-                                    && !policies.into_iter().any(|p| p.permit(&agent_name, &con))
+                                    && !policies.into_iter().any(|p| p.permit(&con))
                                 {
                                     // todo: verify
                                     warn!(
@@ -406,7 +398,7 @@ async fn start(args: Args) -> Result<(), AgentError> {
 
 async fn data_connect(
     gateway_addr: &str,
-    token: (String, &str),
+    token: String,
     // session: Uuid,
     connection: Uuid,
     req: generic::Connect,
@@ -414,7 +406,6 @@ async fn data_connect(
     key: Option<&(String, KeyPolicy)>,
     service_type: ServiceType,
 ) -> Result<(), AgentError> {
-    let (token, agent_name) = token;
     let addr = format!("{}:{}", req.host, req.port);
     let address = match SocketAddr::from_str(&addr) {
         Ok(addr) => addr,
@@ -428,11 +419,7 @@ async fn data_connect(
     connect.host = address.ip().to_string();
     connect.port = req.port;
 
-    if !ip_policies.is_empty()
-        && !ip_policies
-            .into_iter()
-            .any(|p| p.permit(agent_name, &connect))
-    {
+    if !ip_policies.is_empty() && !ip_policies.into_iter().any(|p| p.permit(&connect)) {
         trace!("IP policies denied");
         return Err(AgentError::AccessDenied);
     }

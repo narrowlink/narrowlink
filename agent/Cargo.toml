@@ -47,7 +47,7 @@ tracing-subscriber = { version = "0.3.17", default-features = false, features = 
 ] }
 tracing-appender = { version = "0.2.2" }
 clap_lex = { version = "0.5.1", default-features = false }
-base64 = { version = "0.21.0", default-features = false }
+# base64 = { version = "0.21.0", default-features = false }
 
 narrowlink-types = { version = "0.2.0-git" }
 narrowlink-network = { version = "0.2.0-git" }

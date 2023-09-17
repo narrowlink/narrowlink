@@ -905,7 +905,6 @@ dependencies = [
 name = "narrowlink-agent"
 version = "0.2.0-git"
 dependencies = [
- "base64 0.21.4",
  "clap_lex",
  "daemonize",
  "dirs",

@@ -271,6 +271,7 @@ impl Users {
         if let Some(user) = self.users.get(&user_id) {
             let agents = user.agents.values();
             for agent in agents {
+                // self.
                 let mut publish_info = Vec::new();
                 for (host, connect) in agent.publish_map.iter() {
                     for (src_port, connect) in connect.iter() {
@@ -294,11 +295,22 @@ impl Users {
         }
         ret
     }
-    pub fn get_client_policy(&self, user_id: Uuid, session: Uuid) -> Option<Vec<Policy>> {
+    // pub fn get_client_policy(&self, user_id: Uuid, session: Uuid) -> Option<Vec<Policy>> {
+    //     self.users
+    //         .get(&user_id)
+    //         .and_then(|u| u.get_client(session))
+    //         .map(|c| c.get_policy())
+    // }
+    pub fn get_client_policy_for_agent(
+        &self,
+        user_id: Uuid,
+        session: Uuid,
+        agent_name: &str,
+    ) -> Option<Vec<Policy>> {
         self.users
             .get(&user_id)
             .and_then(|u| u.get_client(session))
-            .map(|c| c.get_policy())
+            .map(|c| c.get_agent_policy(agent_name))
     }
     // pub fn check_client_policy(
     //     &self,

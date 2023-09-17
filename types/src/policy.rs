@@ -32,11 +32,8 @@ pub struct Policy {
 }
 
 impl Policy {
-    pub fn permit(&self, peer_agent_name: &str, con: &Connect) -> bool {
-        let contains = self
-            .policies
-            .iter()
-            .any(|p| p.contains(peer_agent_name, con));
+    pub fn permit(&self, con: &Connect) -> bool {
+        let contains = self.policies.iter().any(|p| p.contains(con));
         match self.policy_type {
             PolicyType::BlackList => !contains,
             PolicyType::WhiteList => contains,
@@ -55,6 +52,23 @@ impl Policy {
         self.policies
             .retain(|p| matches!(p, PolicyItem::Ip(_, _, _, _)));
     }
+    pub fn agent_policies(&self, peer_agent_name: &str) -> Self {
+        Self {
+            policy_type: self.policy_type.clone(),
+            policies: self
+                .policies
+                .iter()
+                .filter(|p| {
+                    let target = match p {
+                        PolicyItem::Domain(t, _, _, _) => t,
+                        PolicyItem::Ip(t, _, _, _) => t,
+                    };
+                    target == &Target::Any || target == &Target::Agent(peer_agent_name.to_string())
+                })
+                .cloned()
+                .collect(),
+        }
+    }
 }
 
 impl Validate for Policy {
@@ -67,17 +81,15 @@ impl Validate for Policy {
 }
 
 impl PolicyItem {
-    pub fn contains(&self, peer_agent_name: &str, con: &Connect) -> bool {
-        let (target, address_status, policy_port, protocol) = match self {
-            Self::Domain(target, domain, policy_port, protocol) => (
+    pub fn contains(&self, con: &Connect) -> bool {
+        let (address_status, policy_port, protocol) = match self {
+            Self::Domain(_, domain, policy_port, protocol) => (
                 // todo: check ip address of domain
-                target,
                 WildMatch::new(domain).matches(&con.host),
                 policy_port,
                 protocol,
             ),
-            Self::Ip(target, ip, port, protocol) => (
-                target,
+            Self::Ip(_, ip, port, protocol) => (
                 if let Ok(state) = con.host.parse::<IpAddr>().map(|addr| ip.contains(&addr)) {
                     state
                 } else {
@@ -88,8 +100,7 @@ impl PolicyItem {
             ),
         };
 
-        (target == &Target::Any || target == &Target::Agent(peer_agent_name.to_string()))
-            && address_status
+        address_status
             && (policy_port == &con.port || policy_port == &0)
             && protocol == &con.protocol
     }

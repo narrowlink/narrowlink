@@ -55,8 +55,16 @@ impl Client {
     pub fn get_session_id(&self) -> Uuid {
         self.session_id
     }
-    pub fn get_policy(&self) -> Vec<Policy> {
-        self.policies.clone()
+    // pub fn get_policy(&self) -> Vec<Policy> {
+    //     self.policies.clone()
+    // }
+    pub fn get_agent_policy(&self, agent_name: &str) -> Vec<Policy> {
+        self.policies
+            .clone()
+            .into_iter()
+            .map(|p| p.agent_policies(agent_name))
+            .filter(|p| p.policies.is_empty())
+            .collect()
     }
     pub fn get_real_ip(&self) -> IpAddr {
         if let Some(addr) = self
