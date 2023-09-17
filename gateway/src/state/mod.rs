@@ -419,7 +419,7 @@ impl State {
                                     continue
                                 };
 
-                                if !client_policy.iter().any(|p|p.permit(&agent_name, &connect)){ // todo: verify
+                                if !client_policy.is_empty() && !client_policy.iter().any(|p|p.permit(&agent_name, &connect)){ // todo: verify
                                     debug!("Client {}:{} connect to {}:{:?} forbidden",client_token.uid,session,agent_name,connect);
                                     debug!("{:?}",&client_policy);
                                     let _ = response.send(Err(ResponseErrors::Forbidden));
@@ -447,7 +447,7 @@ impl State {
                                 let connection = connection::Connection::new(connection_id, Some(session), Some(connection::ClientConnection::Client(response,socket_receiver)), None,client_policy);
 
                                 debug!("Connection to {}:{} with agent {} added to pool",connect.host,connect.port, agent_name);
-                                let _ = agent.send(AgentEventInBound::Connect(connection_id, connect, None)).await;
+                                let _ = agent.send(AgentEventInBound::Connect(connection_id, connect, vec![])).await;
                                 users.add_connection(client_token.uid,connection);
                             } else {
                                 //Agent Data
@@ -480,7 +480,7 @@ impl State {
                                 let policy = requested_connection.take_policy();
                                 debug!("Connection policy: {:?}",policy);
 
-                                if !policy.into_iter().any(|p|p.permit(&agent_token.name, &connected_address)){ // todo: verify
+                                if !policy.is_empty() && !policy.into_iter().any(|p|p.permit(&agent_token.name, &connected_address)){ // todo: verify
                                     let _ = response.send(Err(ResponseErrors::Forbidden));
                                     if let Some(client_response) = requested_connection.take_client_socket(){
                                         let _ = client_response.send(Err(ResponseErrors::Forbidden));
@@ -514,7 +514,7 @@ impl State {
                                 Some(Ok((user_id,agent,connect)))=>{
                                     let connection = Uuid::new_v4();
                                     debug!("HttpTransparent Connection ({}) Request to {} with {} address Received", connection,domain_name,peer_addr);
-                                    let _ = agent.send(AgentEventInBound::Connect(connection, connect, None)).await;
+                                    let _ = agent.send(AgentEventInBound::Connect(connection, connect, vec![])).await;
                                     users.add_connection(user_id, connection::Connection::new(connection,None,Some(connection::ClientConnection::HttpTransparent(request,peer_addr,response)),None,Vec::new()));
                                 }
                                 None | Some(Err(()))=>{
@@ -528,7 +528,7 @@ impl State {
                                 if connect.protocol == narrowlink_types::generic::Protocol::TCP{
                                     let connection = Uuid::new_v4();
                                     debug!("TlsTransparent Connection ({}) Request to {} with {:?} address Received", connection,sni,stream.peer_addr());
-                                    let _ = agent.send(AgentEventInBound::Connect(connection, connect, None)).await;
+                                    let _ = agent.send(AgentEventInBound::Connect(connection, connect, vec![])).await;
                                     users.add_connection(user_id, connection::Connection::new(connection,None,Some(connection::ClientConnection::TlsTransparent(stream)),None,Vec::new()));
                                     continue
                                 }

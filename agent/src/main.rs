@@ -285,7 +285,9 @@ async fn start(args: Args) -> Result<(), AgentError> {
                                 };
                                 let con = Into::<Connect>::into(&r);
 
-                                if !policies.into_iter().any(|p| p.permit(&agent_name, &con)) {
+                                if !policies.is_empty()
+                                    && !policies.into_iter().any(|p| p.permit(&agent_name, &con))
+                                {
                                     // todo: verify
                                     warn!(
                                         "Access denied to {}:{}, peer: {}",
@@ -395,7 +397,7 @@ async fn data_connect(
     // session: Uuid,
     connection: Uuid,
     req: generic::Connect,
-    ip_policies: Option<Policy>,
+    ip_policies: Vec<Policy>,
     key: Option<&(String, KeyPolicy)>,
     service_type: ServiceType,
 ) -> Result<(), AgentError> {
@@ -408,15 +410,18 @@ async fn data_connect(
             None => return Err(AgentError::UnableToResolve),
         },
     };
-    if let Some(p) = ip_policies {
-        trace!("Checking IP policies");
-        let mut connect = req.clone();
-        connect.host = address.ip().to_string();
-        connect.port = req.port;
-        if !p.permit(agent_name, &connect) {
-            trace!("IP policies denied");
-            return Err(AgentError::AccessDenied);
-        }
+
+    let mut connect = req.clone();
+    connect.host = address.ip().to_string();
+    connect.port = req.port;
+
+    if !ip_policies.is_empty()
+        && !ip_policies
+            .into_iter()
+            .any(|p| p.permit(&agent_name, &connect))
+    {
+        trace!("IP policies denied");
+        return Err(AgentError::AccessDenied);
     }
 
     let protocol = req.protocol.clone();

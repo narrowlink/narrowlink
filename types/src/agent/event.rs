@@ -9,7 +9,7 @@ use super::{ConstSystemInfo, DynSystemInfo};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum InBound {
-    Connect(Uuid, Connect, Option<Policy>),
+    Connect(Uuid, Connect, Vec<Policy>),
     IsReachable(Uuid, Connect),
     Response(usize, Response),
     Ping(u64),
