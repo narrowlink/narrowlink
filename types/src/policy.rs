@@ -18,24 +18,48 @@ pub enum PolicyItem {
     Domain(Target, String, u16, Protocol),
     Ip(Target, ipnet::IpNet, u16, Protocol),
 }
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum PolicyType {
+    BlackList,
+    WhiteList,
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Policy {
-    pub permit: bool,
+    pub policy_type: PolicyType,
     pub policies: Vec<PolicyItem>,
 }
 
 impl Policy {
     pub fn permit(&self, peer_agent_name: &str, con: &Connect) -> bool {
-        if self
-            .policies
-            .iter()
-            .any(|p| p.contains(peer_agent_name, con))
-        {
-            self.permit
-        } else {
-            !self.permit
+        match self.policy_type {
+            PolicyType::BlackList => !self
+                .policies
+                .iter()
+                .all(|p| p.contains(peer_agent_name, con)),
+            PolicyType::WhiteList => self
+                .policies
+                .iter()
+                .any(|p| p.contains(peer_agent_name, con)),
         }
+        // if self.permit {
+        //     self.policies
+        //         .iter()
+        //         .any(|p| p.contains(peer_agent_name, con))
+        // } else {
+        //     self.policies
+        //         .iter()
+        //         .any(|p| p.contains(peer_agent_name, con))
+        // };
+        // if self
+        //     .policies
+        //     .iter()
+        //     .any(|p| p.contains(peer_agent_name, con))
+        // {
+        //     self.permit
+        // } else {
+        //     !self.permit
+        // }
     }
     pub fn is_agent_visible(&self, peer_agent_name: &str) -> bool {
         self.policies.iter().any(|p| {
@@ -76,7 +100,7 @@ impl PolicyItem {
             // }
             Self::Domain(target, domain, policy_port, protocol) => (
                 target,
-                WildMatch::new(domain).matches(domain),
+                WildMatch::new(domain).matches(&con.host),
                 policy_port,
                 protocol,
             ),

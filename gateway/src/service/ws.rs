@@ -219,7 +219,7 @@ impl HyperService<Request<Body>> for WsService {
                     .map(|t| t.to_owned());
                 let acl = req
                     .headers()
-                    .get("NL-SESSION")
+                    .get("NL-ACL")
                     .and_then(|t| t.to_str().ok())
                     .map(|t| t.to_owned());
 
