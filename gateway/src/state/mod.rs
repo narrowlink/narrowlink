@@ -418,7 +418,7 @@ impl State {
                                     let _ = response.send(Err(ResponseErrors::NotAcceptable(Some("Event connection is lost"))));
                                     continue
                                 };
-                                if !client_policy.is_empty() && !client_policy.iter().any(|p|p.permit(&agent_name, &connect)){ // todo: verify
+                                if !client_policy.is_empty() && !client_policy.iter().any(|p|p.permit(&agent_name, &connect)){
                                     debug!("Client {}:{} connect to {}:{:?} forbidden",client_token.uid,session,agent_name,connect);
                                     debug!("{:?}",&client_policy);
                                     let _ = response.send(Err(ResponseErrors::Forbidden));
@@ -476,10 +476,11 @@ impl State {
                                     let _ = response.send(Err(ResponseErrors::NotFound(Some("The requested connection could not be found"))));
                                     continue
                                 };
-                                let policy = requested_connection.take_policy();
-                                debug!("Connection policy: {:?}",policy);
+
                                 // strict policy check todo
-                                // if !policy.is_empty() && !policy.into_iter().any(|p|p.permit(&agent_token.name, &connected_address)){ // todo: verify
+                                // let policy = requested_connection.take_policy();
+                                // debug!("Connection policy: {:?}",policy);
+                                // if !policy.is_empty() && !policy.into_iter().any(|p|p.permit(&agent_token.name, &connected_address)){
                                 //     let _ = response.send(Err(ResponseErrors::Forbidden));
                                 //     if let Some(client_response) = requested_connection.take_client_socket(){
                                 //         let _ = client_response.send(Err(ResponseErrors::Forbidden));

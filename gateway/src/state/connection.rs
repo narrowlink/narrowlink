@@ -70,9 +70,9 @@ impl Connection {
     pub fn get_id(&self) -> Uuid {
         self.id
     }
-    pub fn take_policy(&mut self) -> Vec<Policy> {
-        self.policies.clone()
-    }
+    // pub fn take_policy(&mut self) -> Vec<Policy> {
+    //     self.policies.clone()
+    // }
 }
 
 // #[derive(Debug)]

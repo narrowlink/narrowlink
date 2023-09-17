@@ -26,6 +26,7 @@ pub enum PolicyType {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Policy {
+    #[serde(rename = "type")]
     pub policy_type: PolicyType,
     pub policies: Vec<PolicyItem>,
 }
