@@ -418,7 +418,7 @@ async fn data_connect(
     if !ip_policies.is_empty()
         && !ip_policies
             .into_iter()
-            .any(|p| p.permit(&agent_name, &connect))
+            .any(|p| p.permit(agent_name, &connect))
     {
         trace!("IP policies denied");
         return Err(AgentError::AccessDenied);

@@ -21,7 +21,6 @@ pub enum PolicyItem {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Policy {
-    pub id: u32,
     pub permit: bool,
     pub policies: Vec<PolicyItem>,
 }

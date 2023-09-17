@@ -23,7 +23,7 @@ use narrowlink_types::{
         EventOutBound as ClientEventOutBound, EventRequest as ClientEventRequest,
         EventResponse as ClientEventResponse,
     },
-    policy::Policy,
+    token::PolicyToken,
 };
 use narrowlink_types::{
     token::{AgentPublishToken, AgentToken, ClientToken},
@@ -280,11 +280,11 @@ impl State {
                                 // if client_token.policies.
                                 let mut policies = Vec::new();
 
-                                let p = acl.and_then(|a|serde_json::from_str::<Vec<String>>(&a).ok()).and_then(|a|a.into_iter().map(|p|Policy::from_str(&p, &self.client_token).ok()).collect::<Option<Vec<Policy>>>());
+                                let p = acl.and_then(|a|serde_json::from_str::<Vec<String>>(&a).ok()).and_then(|a|a.into_iter().map(|p|PolicyToken::from_str(&p, &self.client_token).ok()).collect::<Option<Vec<PolicyToken>>>());
                                 for pid in &client_token.policies{ // important to keep order
-                                    for policy in p.as_ref().unwrap_or(&Vec::new()){
-                                        if &policy.id == pid{
-                                            policies.push(policy.clone());
+                                    for policy_token in p.as_ref().unwrap_or(&Vec::new()){
+                                        if &policy_token.pid == pid && policy_token.name == client_token.name && policy_token.uid == client_token.uid {
+                                            policies.push(policy_token.policy.clone());
                                         }
                                     }
                                 }

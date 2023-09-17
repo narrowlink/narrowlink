@@ -9,6 +9,7 @@ use crate::error::ClientError;
 pub struct SelfHosted {
     pub gateway: String,
     pub token: String,
+    #[serde(default = "Vec::new")]
     pub acl: Vec<String>,
     pub protocol: ServiceType,
 }

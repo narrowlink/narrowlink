@@ -32,10 +32,18 @@ impl ClientToken {
         )?)
     }
 }
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PolicyToken {
+    pub uid: Uuid,
+    pub name: String,
+    pub exp: usize,
+    pub pid: u32,
+    pub policy: Policy,
+}
 
-impl Policy {
-    pub fn from_str(s: &str, token: &[u8]) -> Result<Policy, MessageError> {
-        Ok(jsonwebtoken::decode::<Policy>(
+impl PolicyToken {
+    pub fn from_str(s: &str, token: &[u8]) -> Result<Self, MessageError> {
+        Ok(jsonwebtoken::decode::<PolicyToken>(
             s,
             &DecodingKey::from_secret(token),
             &Validation::new(Algorithm::default()),

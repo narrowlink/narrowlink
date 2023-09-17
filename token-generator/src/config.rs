@@ -1,4 +1,4 @@
-use narrowlink_types::token::{AgentPublishToken, AgentToken, ClientToken};
+use narrowlink_types::token::{AgentPublishToken, AgentToken, ClientToken,PolicyToken};
 use serde::{Deserialize, Serialize};
 use std::{env, fs::File, io::Read, path::PathBuf};
 
@@ -6,8 +6,9 @@ use crate::error::TokenGeneratorError;
 
 #[derive(Deserialize, Debug, Serialize)]
 pub enum TokenType {
-    Agent(AgentToken),
     Client(ClientToken),
+    ClientPolicy(PolicyToken),
+    Agent(AgentToken),
     AgentPublish(AgentPublishToken),
 }
 
