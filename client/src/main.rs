@@ -38,6 +38,7 @@ use narrowlink_types::{
     generic, GetResponse,
 };
 use proxy_stream::ProxyStream;
+use rand::Rng;
 use sha3::{Digest, Sha3_256};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
@@ -312,7 +313,17 @@ async fn main() -> Result<(), ClientError> {
                         let _ = req
                             .request(ClientEventOutBound::Request(
                                 0,
-                                ClientEventRequest::Peer2Peer(agent_name.clone()),
+                                ClientEventRequest::Peer2Peer(
+                                    narrowlink_types::client::Peer2PeerRequest {
+                                        agent_name: agent_name.clone(),
+                                        easy_seed_port: rand::thread_rng()
+                                            .gen_range((49152 + 2)..(65535 - 2)),
+                                        easy_seq: 2,
+                                        hard_seed_port: rand::thread_rng()
+                                            .gen_range((49152 + 255)..(65535 - 255)),
+                                        hard_seq: 255,
+                                    },
+                                ),
                             ))
                             .await;
                     }
@@ -673,7 +684,7 @@ async fn main() -> Result<(), ClientError> {
                                 p2p_status.store(P2PStatus::Pending as u8, Ordering::Relaxed);
                                 let (socket, peer) =
                                     match narrowlink_network::p2p::udp_punched_socket(
-                                        &p2p,
+                                        (&p2p).into(),
                                         &Sha3_256::digest(&p2p.cert)[0..6],
                                         true,
                                         false,

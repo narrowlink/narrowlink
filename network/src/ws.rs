@@ -93,7 +93,8 @@ impl WsConnection {
             .header(
                 "Sec-WebSocket-Key",
                 tungstenite::handshake::client::generate_key(),
-            );
+            )
+            .header("NL-VERSION", env!("CARGO_PKG_VERSION"));
         for (key, value) in headers.iter() {
             if let Ok(header_value) = HeaderValue::from_str(value) {
                 request

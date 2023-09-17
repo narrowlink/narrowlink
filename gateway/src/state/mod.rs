@@ -1,5 +1,4 @@
 use futures_util::StreamExt;
-use rand::Rng;
 use rcgen::{CertificateParams, DistinguishedName};
 use std::{net::SocketAddr, str::FromStr};
 use uuid::Uuid;
@@ -17,17 +16,18 @@ use narrowlink_types::{
     agent::{
         EventInBound as AgentEventInBound, EventOutBound as AgentEventOutBound,
         EventRequest as AgentEventRequest, EventResponse as AgentEventResponse,
+        Peer2PeerInstruction as AgentPeer2PeerInstruction,
     },
     client::{
         DataOutBound as ClientDataOutBound, EventInBound as ClientEventInBound,
         EventOutBound as ClientEventOutBound, EventRequest as ClientEventRequest,
-        EventResponse as ClientEventResponse,
+        EventResponse as ClientEventResponse, Peer2PeerInstruction as ClientPeer2PeerInstruction,
     },
     token::PolicyToken,
 };
 use narrowlink_types::{
     token::{AgentPublishToken, AgentToken, ClientToken},
-    NatType, Peer2PeerRequest,
+    NatType,
 };
 use tokio::{
     io::AsyncWriteExt,
@@ -38,7 +38,7 @@ use tokio::{
         oneshot,
     },
 };
-use tracing::{debug, info, instrument, trace, Instrument};
+use tracing::{debug, info, instrument, trace, warn, Instrument};
 
 pub struct State {
     #[allow(dead_code)]
@@ -124,12 +124,21 @@ impl State {
                                         continue
                                     }
                                 }
-                                ClientEventRequest::Peer2Peer(agent_name) =>{
+                                ClientEventRequest::Peer2Peer(req) =>{
+                                    trace!("Client Peer2Peer Request: {:?}",req);
                                     let Some(user) = users.get_mut_user(uid) else {
                                         continue
                                     };
-                                     if let (Some(c),Some(a)) = (user.client_nat_type(session),user.agent_nat_type(&agent_name)){
-                                        let Some((client,agent)) = user.get_mut_pair(session,&agent_name) else {
+                                    if req.easy_seed_port < 1+req.easy_seq || req.easy_seed_port > 65535-req.easy_seq || req.hard_seed_port < 1+req.hard_seq || req.hard_seed_port > 65535-req.hard_seq{
+                                        if let Some(c) = user.get_mut_client(session){
+                                            warn!("Client {}:{} Peer2Peer Request: {:?} failed due to invalid seed port selection",uid,session,req);
+                                            c.send(ClientEventInBound::Response(request_id,ClientEventResponse::Failed)).await.ok();
+                                        }
+                                        continue
+                                    }
+                                    // if req.easy_seed_port
+                                     if let (Some(c),Some(a)) = (user.client_nat_type(session),user.agent_nat_type(&req.agent_name)){
+                                        let Some((client,agent)) = user.get_mut_pair(session,&req.agent_name) else {
                                             if let Some(c) = user.get_mut_client(session){
                                                 c.send(ClientEventInBound::Response(request_id,ClientEventResponse::Failed)).await.ok();
                                             }
@@ -141,9 +150,9 @@ impl State {
                                             let _ = client.send(ClientEventInBound::Response(request_id,ClientEventResponse::Failed)).await;
                                             continue
                                         } else if c == NatType::Easy && a == NatType::Easy{
-                                            2
+                                            req.easy_seq
                                         } else {
-                                            255
+                                            req.hard_seq
                                         };
 
                                         if client_ip == agent_ip{
@@ -153,7 +162,7 @@ impl State {
                                             };
                                             client_ip = cip.ip();
                                             agent_ip = aip.ip();
-                                            seq = 2;
+                                            seq = req.easy_seq;
                                         }
 
                                         let mut params = CertificateParams::new(vec![agent_ip.to_string()]);
@@ -165,10 +174,10 @@ impl State {
                                         };
                                         let _ = client.send(ClientEventInBound::Response(request_id,ClientEventResponse::Ok)).await;
                                         let policies = client.get_policy();
-                                        let port = rand::thread_rng().gen_range((49152+seq)..(65535-seq));
-                                        let _ = agent.send(AgentEventInBound::Peer2Peer(Peer2PeerRequest {
+
+                                        let _ = agent.send(AgentEventInBound::Peer2Peer(AgentPeer2PeerInstruction {
                                             peer_ip: client_ip,
-                                            seed_port: port,
+                                            seed_port: req.easy_seed_port,
                                             seq,
                                             peer_nat: c,
                                             nat: a,
@@ -176,15 +185,13 @@ impl State {
                                             key,
                                             policies:policies.clone(),
                                         })).await;
-                                        let _ = client.send(ClientEventInBound::Peer2Peer(Peer2PeerRequest {
+                                        let _ = client.send(ClientEventInBound::Peer2Peer(ClientPeer2PeerInstruction {
                                             peer_ip: agent_ip,
-                                            seed_port: port,
+                                            seed_port: req.easy_seed_port,
                                             seq,
                                             peer_nat: a,
                                             nat: c,
                                             cert,
-                                            key: Vec::new(),
-                                            policies,
                                         })).await;
 
                                     }

@@ -246,7 +246,7 @@ async fn start(args: Args) -> Result<(), AgentError> {
                     let agent_name = agent_name.clone();
                     async move {
                         let (socket, _) = match narrowlink_network::p2p::udp_punched_socket(
-                            &p2p,
+                            (&p2p).into(),
                             &Sha3_256::digest(&p2p.cert)[0..6],
                             false,
                             false,

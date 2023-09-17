@@ -6,8 +6,11 @@ pub use data::InBound as DataInBound;
 pub use data::OutBound as DataOutBound;
 pub use event::InBound as EventInBound;
 pub use event::OutBound as EventOutBound;
+pub use event::Peer2PeerInstruction;
+pub use event::Peer2PeerRequest;
 pub use event::Request as EventRequest;
 pub use event::Response as EventResponse;
+
 use serde::Deserialize;
 use serde::Serialize;
 

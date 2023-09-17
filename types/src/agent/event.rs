@@ -1,9 +1,14 @@
-use std::str::FromStr;
+use std::{net::IpAddr, str::FromStr};
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{error::MessageError, generic::Connect, policy::Policy, GetResponse, Peer2PeerRequest};
+use crate::{
+    error::MessageError,
+    generic::Connect,
+    policy::{self, Policy},
+    GetResponse, NatType,
+};
 
 use super::{ConstSystemInfo, DynSystemInfo};
 
@@ -13,7 +18,7 @@ pub enum InBound {
     IsReachable(Uuid, Connect),
     Response(usize, Response),
     Ping(u64),
-    Peer2Peer(Peer2PeerRequest),
+    Peer2Peer(Peer2PeerInstruction),
     Shutdown,
 }
 
@@ -58,6 +63,31 @@ impl GetResponse for InBound {
             Some(response.to_owned())
         } else {
             None
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Peer2PeerInstruction {
+    // Todo: policy
+    pub peer_ip: IpAddr,
+    pub seed_port: u16,
+    pub seq: u16,
+    pub peer_nat: NatType, // peer nat type
+    pub nat: NatType,      // nat type
+    pub cert: Vec<u8>,
+    pub key: Vec<u8>,
+    pub policies: Vec<policy::Policy>,
+}
+
+impl From<&Peer2PeerInstruction> for crate::Peer2PeerInstruction {
+    fn from(instruction: &Peer2PeerInstruction) -> Self {
+        crate::Peer2PeerInstruction {
+            peer_ip: instruction.peer_ip,
+            seed_port: instruction.seed_port,
+            seq: instruction.seq,
+            peer_nat: instruction.peer_nat,
+            nat: instruction.nat,
         }
     }
 }

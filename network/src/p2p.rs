@@ -8,7 +8,7 @@ use std::{
 use async_recursion::async_recursion;
 use narrowlink_types::{
     generic::{Connect, CryptographicAlgorithm, Protocol, SigningAlgorithm},
-    NatType, Peer2PeerRequest,
+    NatType, Peer2PeerInstruction,
 };
 use quinn::{ClientConfig, Connection, Endpoint, EndpointConfig, RecvStream, SendStream};
 use tokio::{
@@ -425,7 +425,7 @@ impl AsyncWrite for QuicBiSocket {
 
 #[async_recursion]
 pub async fn udp_punched_socket(
-    p2p: &Peer2PeerRequest,
+    p2p: Peer2PeerInstruction,
     handshake_key: &[u8],
     left: bool,
     inner: bool,
