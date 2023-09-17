@@ -2,4 +2,7 @@ endpoints:
   - !SelfHosted # Self hosted endpoint, more options coming soon
     gateway: gateway.domain.tld:443 # address of the gateway
     token: eyJ0eX....kNHYQ_4 # token for authentication
+    # acl: # Access control list that linked to the token (optional if token does not have acl)
+    #   - eyJ0eX....kNHYQ_4 # acl token
+    #   - eyJ0eX....kNHYQ_4 # acl token
     protocol: Wss # Wss or Ws (default: Wss)

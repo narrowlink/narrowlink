@@ -9,6 +9,8 @@ use crate::error::ClientError;
 pub struct SelfHosted {
     pub gateway: String,
     pub token: String,
+    #[serde(default = "Vec::new")]
+    pub acl: Vec<String>,
     pub protocol: ServiceType,
 }
 
@@ -100,6 +102,7 @@ impl Config {
                     endpoints: vec![Endpoint::SelfHosted(SelfHosted {
                         gateway: old_config.gateway,
                         token: old_config.token,
+                        acl: Vec::new(),
                         protocol: old_config.service_type,
                     })],
                 })
