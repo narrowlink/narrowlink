@@ -478,16 +478,16 @@ impl State {
                                 };
                                 let policy = requested_connection.take_policy();
                                 debug!("Connection policy: {:?}",policy);
-
-                                if !policy.is_empty() && !policy.into_iter().any(|p|p.permit(&agent_token.name, &connected_address)){ // todo: verify
-                                    let _ = response.send(Err(ResponseErrors::Forbidden));
-                                    if let Some(client_response) = requested_connection.take_client_socket(){
-                                        let _ = client_response.send(Err(ResponseErrors::Forbidden));
-                                    }
-                                    trace!("Access denied due to policy violation");
-                                    //todo client event notify
-                                    continue
-                                }
+                                // strict policy check todo
+                                // if !policy.is_empty() && !policy.into_iter().any(|p|p.permit(&agent_token.name, &connected_address)){ // todo: verify
+                                //     let _ = response.send(Err(ResponseErrors::Forbidden));
+                                //     if let Some(client_response) = requested_connection.take_client_socket(){
+                                //         let _ = client_response.send(Err(ResponseErrors::Forbidden));
+                                //     }
+                                //     trace!("Access denied due to policy violation");
+                                //     //todo client event notify
+                                //     continue
+                                // }
 
                                 let response = if CONNECTION_ORIANTED {
                                     if response.send(Ok(ResponseHeaders{session:requested_connection.session_id,connection:Some(connection)})).is_err(){

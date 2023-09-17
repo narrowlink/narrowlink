@@ -59,14 +59,14 @@ impl Connection {
     pub fn set_agent_socket(&mut self, socket: AgentConnection) {
         self.data.agent_socket = Some(socket);
     }
-    pub fn take_client_socket(
-        &mut self,
-    ) -> Option<oneshot::Sender<Result<ResponseHeaders, ResponseErrors>>> {
-        if let Some(ClientConnection::Client(res, _stream)) = self.data.client_socket.take() {
-            return res;
-        }
-        None
-    }
+    // pub fn take_client_socket(
+    //     &mut self,
+    // ) -> Option<oneshot::Sender<Result<ResponseHeaders, ResponseErrors>>> {
+    //     if let Some(ClientConnection::Client(res, _stream)) = self.data.client_socket.take() {
+    //         return res;
+    //     }
+    //     None
+    // }
     pub fn get_id(&self) -> Uuid {
         self.id
     }

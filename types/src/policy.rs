@@ -26,41 +26,20 @@ pub enum PolicyType {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Policy {
-    #[serde(rename = "type")]
     pub policy_type: PolicyType,
     pub policies: Vec<PolicyItem>,
 }
 
 impl Policy {
     pub fn permit(&self, peer_agent_name: &str, con: &Connect) -> bool {
+        let contains = self
+            .policies
+            .iter()
+            .any(|p| p.contains(peer_agent_name, con));
         match self.policy_type {
-            PolicyType::BlackList => !self
-                .policies
-                .iter()
-                .all(|p| p.contains(peer_agent_name, con)),
-            PolicyType::WhiteList => self
-                .policies
-                .iter()
-                .any(|p| p.contains(peer_agent_name, con)),
+            PolicyType::BlackList => !contains,
+            PolicyType::WhiteList => contains,
         }
-        // if self.permit {
-        //     self.policies
-        //         .iter()
-        //         .any(|p| p.contains(peer_agent_name, con))
-        // } else {
-        //     self.policies
-        //         .iter()
-        //         .any(|p| p.contains(peer_agent_name, con))
-        // };
-        // if self
-        //     .policies
-        //     .iter()
-        //     .any(|p| p.contains(peer_agent_name, con))
-        // {
-        //     self.permit
-        // } else {
-        //     !self.permit
-        // }
     }
     pub fn is_agent_visible(&self, peer_agent_name: &str) -> bool {
         self.policies.iter().any(|p| {
@@ -88,18 +67,9 @@ impl Validate for Policy {
 
 impl PolicyItem {
     pub fn contains(&self, peer_agent_name: &str, con: &Connect) -> bool {
-        // let (addr, port) = &con.addr;
         let (target, address_status, policy_port, protocol) = match self {
-            // Self::Any(agent_name, policy_type) => {
-            //     if peer_agent_name == agent_name.as_ref().map(|an| an.as_str())
-            //         || agent_name.is_none()
-            //     {
-            //         return *policy_type;
-            //     } else {
-            //         return false;
-            //     }
-            // }
             Self::Domain(target, domain, policy_port, protocol) => (
+                // todo: check ip address of domain
                 target,
                 WildMatch::new(domain).matches(&con.host),
                 policy_port,
