@@ -16,6 +16,8 @@ Narrowlink is a self-hosted platform that allows you to establish secure remote 
 
 -   **Covert Communications:** Narrowlink disguises traffic as regular web browsing using the WebSocket over HTTP/S protocol, enhancing privacy and bypassing firewalls.
     
+-   **Peer to Peer Connectivity:** Establish direct, peer-to-peer connections between clients and agents (when possible) using the QUIC protocol to increase performance by avoiding traffic routing through the gateway.
+    
 -   **Fine-Grained Access Control:** Control access to agents and services based on IP addresses, domains, and agent names, allowing you to implement zero trust network access (ZTNA) policies.
     
 -   **End-to-End Encryption:** Secure your communications with end-to-end encryption using the Xchacha20-Poly1305 cipher and HMAC-SHA256 for tamper-proofing.
