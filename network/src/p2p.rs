@@ -200,6 +200,7 @@ pub enum Response {
     Success = 0x00,
     InvalidRequest = 0x01,
     AccessDenied = 0x02,
+    UnableToResolve = 0x03,
     Failed = 0xFF,
 }
 
@@ -209,6 +210,7 @@ impl ToString for Response {
             Self::Success => "Success".to_owned(),
             Self::InvalidRequest => "InvalidRequest".to_owned(),
             Self::AccessDenied => "AccessDenied".to_owned(),
+            Self::UnableToResolve => "UnableToResolve".to_owned(),
             Self::Failed => "Failed".to_owned(),
         }
     }

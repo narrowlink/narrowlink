@@ -306,9 +306,22 @@ async fn start(args: Args) -> Result<(), AgentError> {
                                 }
                                 // dbg!(&con);
                                 trace!("Connecting to {}", con.host);
-                                let Ok(remote_addr) =
-                                    SocketAddr::from_str(&format!("{}:{}", con.host, con.port))
+                                let Some(remote_addr) =
+                                    tokio::net::lookup_host(&format!("{}:{}", con.host, con.port))
+                                        .await
+                                        .ok()
+                                        .and_then(|mut s| s.next())
                                 else {
+                                    if narrowlink_network::p2p::Response::write(
+                                        &narrowlink_network::p2p::Response::UnableToResolve,
+                                        &mut s,
+                                    )
+                                    .await
+                                    .is_err()
+                                    {
+                                        warn!("Unable to write response");
+                                        return;
+                                    }
                                     warn!("Unable to resolve {}", con.host);
                                     return;
                                 };
