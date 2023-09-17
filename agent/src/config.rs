@@ -43,6 +43,7 @@ pub enum E2EE {
 #[derive(Deserialize, Serialize)]
 pub struct Config {
     pub endpoints: Vec<Endpoint>,
+    #[serde(default = "Vec::new")]
     pub e2ee: Vec<E2EE>,
 }
 
