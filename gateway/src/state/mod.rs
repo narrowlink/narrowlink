@@ -346,7 +346,7 @@ impl State {
                                 let (sender, receiver) = stream.split();
 
 
-                                let p = publish.and_then(|a|serde_json::from_str::<Vec<String>>(&a).ok()).and_then(|a|a.into_iter().map(|p|AgentPublishToken::from_str(&p, &self.client_token).ok()).collect::<Option<Vec<AgentPublishToken>>>());
+                                let p = publish.and_then(|a|serde_json::from_str::<Vec<String>>(&a).ok()).and_then(|a|a.into_iter().map(|p|AgentPublishToken::from_str(&p, &self.agent_token).ok()).collect::<Option<Vec<AgentPublishToken>>>());
                                 let mut publish_hosts = Vec::new();
                                 for publish_token in p.unwrap_or(Vec::new()){
                                     if publish_token.name == agent_token.name && publish_token.uid == agent_token.uid {
