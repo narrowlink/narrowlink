@@ -2,8 +2,9 @@ endpoints:
   - !SelfHosted # Self hosted endpoint, more options coming soon
     gateway: gateway.domain.tld:443 # address of the gateway
     token: eyJ0eX....kNHYQ_4 # token for authentication
-    publish: eyJ0eX....kNHYQ_4 # token for publishing webserver (optional)
-    protocol: Wss # Wss or Ws (default: Wss)
+    publish:
+      - eyJ0eX....kNHYQ_4 # token for publishing webserver (optional)
+    #protocol: Wss # Wss or Ws (default: Wss)
 e2ee:
   - !PassPhrase # Enabling end to end encryption (optional)
     phrase: "your_key" # key for end to end encryption
