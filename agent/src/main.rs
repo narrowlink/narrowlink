@@ -123,7 +123,10 @@ async fn start(args: Args) -> Result<(), AgentError> {
     let service_type = &self_hosted_config.protocol;
     let token = &self_hosted_config.token;
     let mut event_headers = HashMap::from([("NL-TOKEN", token.clone())]);
-    if let Some(publish_token) = self_hosted_config.publish.as_ref().and_then(|p| p.first()) {
+    if let Some(publish_token) = self_hosted_config
+        .publish
+        .and_then(|p| serde_json::to_string(&p).ok())
+    {
         event_headers.insert("NL-PUBLISH", publish_token.to_owned());
     }
     let mut event_connection = None;

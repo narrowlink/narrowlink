@@ -346,18 +346,24 @@ impl State {
                                 let (sender, receiver) = stream.split();
 
 
+                                let p = publish.and_then(|a|serde_json::from_str::<Vec<String>>(&a).ok()).and_then(|a|a.into_iter().map(|p|AgentPublishToken::from_str(&p, &self.client_token).ok()).collect::<Option<Vec<AgentPublishToken>>>());
                                 let mut publish_hosts = Vec::new();
-
-                                if let Some(publish_token) = publish.and_then(|publish_token| {
-                                    AgentPublishToken::from_str(&publish_token, &self.agent_token).ok()
-                                }) {
-                                    trace!("Publish Token Verification");
-                                    if publish_token.uid == agent_token.uid && publish_token.name == agent_token.name{
-                                        trace!("Publish Token Verification Success");
-                                        debug!("Publish token address {:?}",publish_token.publish_hosts);
+                                for publish_token in p.unwrap_or(Vec::new()){
+                                    if publish_token.name == agent_token.name && publish_token.uid == agent_token.uid {
                                         publish_hosts.extend(publish_token.publish_hosts);
                                     }
-                                };
+                                }
+
+                                // if let Some(publish_token) = publish.and_then(|publish_token| {
+                                //     AgentPublishToken::from_str(&publish_token, &self.agent_token).ok()
+                                // }) {
+                                //     trace!("Publish Token Verification");
+                                //     if publish_token.uid == agent_token.uid && publish_token.name == agent_token.name{
+                                //         trace!("Publish Token Verification Success");
+                                //         debug!("Publish token address {:?}",publish_token.publish_hosts);
+                                //         publish_hosts.extend(publish_token.publish_hosts);
+                                //     }
+                                // };
                                 if !publish_hosts.is_empty() {
                                     if let Some(cm_sender) = certificate_manager.as_ref() {
                                         let cert_required_connect = publish_hosts.iter().filter(|ph|matches!(ph.connect.protocol, narrowlink_types::generic::Protocol::HTTP | narrowlink_types::generic::Protocol::HTTPS | narrowlink_types::generic::Protocol::QUIC));
