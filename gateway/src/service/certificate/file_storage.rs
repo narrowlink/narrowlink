@@ -121,13 +121,39 @@ impl CertificateStorage for CertificateFileStorage {
                 // serde_json::de::from_reader(BufReader::new(acme_account_file))
             })
     }
-    async fn set_fail(&self, account: &str, service: &str) -> Result<(), GatewayError> {
+    async fn set_failed(&self, account: &str, service: &str) -> Result<(), GatewayError> {
         let mut final_path = self.path.clone();
         final_path.push(account);
         fs::create_dir_all(&final_path).await?;
         final_path.push(service);
-        final_path.set_extension("fail");
+        let mut pending_path = final_path.clone();
+        final_path.set_extension("failed");
+        pending_path.set_extension("pending");
+        Ok(fs::rename(pending_path, final_path).await.map(|_| ())?)
+    }
+    async fn is_failed(&self, account: &str, service: &str) -> Result<bool, GatewayError> {
+        let mut final_path = self.path.clone();
+        final_path.push(account);
+        fs::create_dir_all(&final_path).await?;
+        final_path.push(service);
+        final_path.set_extension("failed");
+        Ok(final_path.is_file())
+    }
+    async fn set_pending(&self, account: &str, service: &str) -> Result<(), GatewayError> {
+        let mut final_path = self.path.clone();
+        final_path.push(account);
+        fs::create_dir_all(&final_path).await?;
+        final_path.push(service);
+        final_path.set_extension("pending");
 
         Ok(fs::File::create(final_path).await.map(|_| ())?)
+    }
+    async fn is_pending(&self, account: &str, service: &str) -> Result<bool, GatewayError> {
+        let mut final_path = self.path.clone();
+        final_path.push(account);
+        fs::create_dir_all(&final_path).await?;
+        final_path.push(service);
+        final_path.set_extension("pending");
+        Ok(final_path.is_file())
     }
 }
