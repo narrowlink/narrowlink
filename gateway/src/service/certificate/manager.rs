@@ -60,7 +60,6 @@ impl CertificateStore {
     pub fn remove(&mut self, uid: String, agent_name: String) {
         for (domain, agent_set) in self.domain_map.iter_mut() {
             if agent_set.remove(&(uid.clone(), agent_name.clone())) {
-                // todo: remove certificate from memory if no other agent is using it
                 if !agent_set.iter().any(|(set_uid, _)| set_uid == &uid) {
                     let _ = self.certificates.remove(&(uid.clone(), domain.to_owned()));
                 }
@@ -78,7 +77,7 @@ impl CertificateStore {
                         .get(domain)?
                         .iter()
                         .next()
-                        .map(|(uid, _agent)| (uid.to_owned(), domain.to_string()))?, // m.0 is uid
+                        .map(|(uid, _agent)| (uid.to_owned(), domain.to_string()))?,
                 )?
                 .config
                 .clone(),
@@ -257,10 +256,10 @@ impl CertificateManager {
         domain: String,
         suggested_private_key: Option<PrivateKey>,
     ) -> Result<(), GatewayError> {
-        if self.storage.is_failed(uid, agent_name).await? {
+        if self.storage.is_failed(uid, &domain).await? {
             return Err(GatewayError::ACMEFailed);
         };
-        if self.storage.is_pending(uid, agent_name).await? {
+        if self.storage.is_pending(uid, &domain).await? {
             return Err(GatewayError::ACMEPending);
         } else {
             self.storage.set_pending(uid, &domain).await?;
