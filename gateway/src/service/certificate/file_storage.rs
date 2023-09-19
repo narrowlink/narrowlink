@@ -63,11 +63,19 @@ impl CertificateStorage for CertificateFileStorage {
             )
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
         }
+        let mut failed_path = final_path.clone();
+        let mut pending_path = final_path.clone();
         final_path.set_extension("pem");
         fs::File::create(final_path)
             .await?
             .write_all(pem::encode_many(&cert).as_bytes())
             .await?;
+        failed_path.set_extension("failed");
+        pending_path.set_extension("pending");
+
+        _ = fs::remove_file(failed_path).await;
+        _ = fs::remove_file(pending_path).await?;
+
         Ok(())
     }
     async fn get(
