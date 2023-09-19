@@ -6,7 +6,7 @@ use std::{
 
 use instant_acme::Account;
 use rustls::{PrivateKey, ServerConfig};
-use tracing::{debug, error, instrument, span, trace, Instrument, Span};
+use tracing::{debug, error, instrument, span, trace, warn, Instrument, Span};
 
 use tokio::{
     sync::{
@@ -163,6 +163,8 @@ impl CertificateManager {
             async move {
                 let sender: UnboundedSender<CertificateServiceMessage> = sender.clone();
                 let mut interval = time::interval(Duration::from_secs(60 * 60 * 6)); // every six hours
+                let mut pending_interval = time::interval(Duration::from_secs(60)); // every one minute
+                let mut pendings = HashSet::new();
                 loop {
                     tokio::select! {
                         Some(msg) = receiver.recv() =>{
@@ -178,11 +180,17 @@ impl CertificateManager {
                                         if let Err(e) =
                                             cm.issue(&uid, &agent_name, &domains, None).instrument(span.clone()).await
                                         {
+                                            if matches!(e,GatewayError::ACMEPending) {
+                                                warn!("pending acme request for: {:?} : {}", &domains, e.to_string());
+                                                pendings.insert((uid,agent_name,domains));
+                                                continue;
+                                            }
                                             error!(
                                                 "unable to issue certificate for: {:?} : {}",
                                                 &domains,
                                                 e.to_string()
                                             );
+                                            continue;
                                         }
                                         trace!("load certificate to memory");
                                         let _ = cm.load_to_memory(&uid, &agent_name, &domains).instrument(span.clone()).await;
@@ -193,6 +201,11 @@ impl CertificateManager {
                                     trace!("unload certificate from memory");
                                     cm.unload_from_memory(&uid, &agent_name).instrument(span).await;
                                 }
+                            }
+                        }
+                        _ = pending_interval.tick() =>{
+                            for (uid,agent_name,domains) in pendings.drain() {
+                                let _ = sender.send(CertificateServiceMessage::Load(uid,agent_name,domains));
                             }
                         }
                         _ = interval.tick() =>{
@@ -225,6 +238,14 @@ impl CertificateManager {
         domains: &Vec<String>,
         suggested_private_key: Option<PrivateKey>,
     ) -> Result<(), GatewayError> {
+        if self.storage.is_failed(uid, agent_name).await? {
+            return Err(GatewayError::ACMEFailed);
+        };
+        if self.storage.is_pending(uid, agent_name).await? {
+            return Err(GatewayError::ACMEPending);
+        } else {
+            self.storage.set_pending(uid, agent_name).await?;
+        };
         debug!("start to issue acme certificate for {:?}", &domains);
         // we can create acme account for each agent later
         let (Some(acme_account), Some(challenge_type)) = (
@@ -304,6 +325,7 @@ impl CertificateManager {
         if success {
             Ok(())
         } else {
+            self.storage.set_failed(&uid, &agent_name).await?;
             Err(GatewayError::ACMEFailed)
         }
     }
