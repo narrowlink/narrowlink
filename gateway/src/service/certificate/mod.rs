@@ -12,7 +12,7 @@ use pem::Pem;
 
 pub(crate) use acme::ACMEChallengeType;
 use rustls::ServerConfig;
-use x509_parser::prelude::{FromDer, GeneralName, X509Certificate};
+use x509_parser::prelude::{FromDer, X509Certificate};
 
 use crate::error::GatewayError;
 
@@ -28,34 +28,30 @@ pub trait CertificateStorage {
     async fn put(
         &self,
         account: &str,
-        service: &str,
+        domain: &str,
         acme_account: Option<AccountCredentials>,
         pems: Vec<Pem>,
     ) -> Result<(), GatewayError>;
     async fn get(
         &self,
         account: &str,
-        service: &str,
+        domain: &str,
     ) -> Result<(Certificate, Option<AccountCredentials>), GatewayError>;
     async fn get_acme_account_credentials(
         &self,
         account: &str,
-        service: &str,
+        domain: &str,
     ) -> Option<AccountCredentials>;
-    async fn set_failed(&self, account: &str, service: &str) -> Result<(), GatewayError>;
-    async fn is_failed(&self, account: &str, service: &str) -> Result<bool, GatewayError>;
-    async fn set_pending(&self, account: &str, service: &str) -> Result<(), GatewayError>;
-    async fn is_pending(&self, account: &str, service: &str) -> Result<bool, GatewayError>;
+    async fn set_failed(&self, account: &str, domain: &str) -> Result<(), GatewayError>;
+    async fn is_failed(&self, account: &str, domain: &str) -> bool;
+    async fn set_pending(&self, account: &str, domain: &str) -> Result<(), GatewayError>;
+    async fn is_pending(&self, account: &str, domain: &str) -> bool;
     async fn get_default_account(&self) -> Result<Account, GatewayError> {
         let account_credentials = self.get_default_account_credentials().await?;
         Ok(Account::from_credentials(account_credentials).await?)
     }
-    async fn get_acme_account(
-        &self,
-        account: &str,
-        service: &str,
-    ) -> Result<Account, GatewayError> {
-        let account_credentials = self.get_acme_account_credentials(account, service).await;
+    async fn get_acme_account(&self, account: &str, domain: &str) -> Result<Account, GatewayError> {
+        let account_credentials = self.get_acme_account_credentials(account, domain).await;
         if let Some(account_credentials) = account_credentials {
             Ok(Account::from_credentials(account_credentials).await?)
         } else {
@@ -129,26 +125,26 @@ impl Certificate {
         }
         false
     }
-    pub fn domains(&self) -> Option<Vec<String>> {
-        let mut domains = Vec::new();
-        for certificate in self.certificate_chain.iter() {
-            let (_, cert) = X509Certificate::from_der(certificate.as_ref()).ok()?;
-            if cert.is_ca() {
-                continue;
-            }
-            if let Ok(Some(san)) = cert.subject_alternative_name() {
-                for name in &san.value.general_names {
-                    if let GeneralName::DNSName(domain_name) = name {
-                        domains.push(domain_name.to_string());
-                    }
-                }
-            }
-        }
-        if domains.is_empty() {
-            return None;
-        }
-        Some(domains)
-    }
+    // pub fn domains(&self) -> Option<Vec<String>> {
+    //     let mut domains = Vec::new();
+    //     for certificate in self.certificate_chain.iter() {
+    //         let (_, cert) = X509Certificate::from_der(certificate.as_ref()).ok()?;
+    //         if cert.is_ca() {
+    //             continue;
+    //         }
+    //         if let Ok(Some(san)) = cert.subject_alternative_name() {
+    //             for name in &san.value.general_names {
+    //                 if let GeneralName::DNSName(domain_name) = name {
+    //                     domains.push(domain_name.to_string());
+    //                 }
+    //             }
+    //         }
+    //     }
+    //     if domains.is_empty() {
+    //         return None;
+    //     }
+    //     Some(domains)
+    // }
     pub fn get_config(&self) -> Arc<ServerConfig> {
         self.config.clone()
     }

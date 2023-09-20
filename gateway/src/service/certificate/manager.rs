@@ -28,8 +28,8 @@ pub enum CertificateServiceMessage {
 }
 
 pub struct CertificateStore {
-    certificates: HashMap<(String, String), Certificate>,
-    domain_map: HashMap<String, HashSet<(String, String)>>,
+    certificates: HashMap<(String, String), Certificate>, // (uid, domain) -> certificate
+    domain_map: HashMap<String, HashSet<(String, String)>>, // domain -> (uid, agent_name)
 }
 
 impl CertificateStore {
@@ -43,25 +43,30 @@ impl CertificateStore {
         &mut self,
         uid: String,
         agent_name: String,
-        domains: &Vec<String>,
+        domain: &str,
         certificate: Certificate,
     ) {
         self.certificates
-            .insert((uid.clone(), agent_name.clone()), certificate);
-        for domain in domains {
-            if let Some(agent_set) = self.domain_map.get_mut(domain) {
-                agent_set.insert((uid.clone(), agent_name.clone()));
-            } else {
-                let mut agent_set = HashSet::new();
-                agent_set.insert((uid.clone(), agent_name.clone()));
-                self.domain_map.insert(domain.to_string(), agent_set);
-            }
+            .insert((uid.clone(), domain.to_owned()), certificate);
+
+        if let Some(agent_set) = self.domain_map.get_mut(domain) {
+            agent_set.insert((uid.clone(), agent_name.clone()));
+        } else {
+            let mut agent_set = HashSet::new();
+            agent_set.insert((uid.clone(), agent_name.clone()));
+            self.domain_map.insert(domain.to_string(), agent_set);
         }
     }
     pub fn remove(&mut self, uid: String, agent_name: String) {
-        let _ = self.certificates.remove(&(uid.clone(), agent_name.clone()));
-        for (_, agent_set) in self.domain_map.iter_mut() {
-            let _ = agent_set.remove(&(uid.clone(), agent_name.clone()));
+        for (domain, agent_set) in self.domain_map.iter_mut() {
+            if agent_set.remove(&(uid.clone(), agent_name.clone()))
+                && !agent_set.iter().any(|(set_uid, _)| set_uid == &uid)
+            {
+                // if agent_set.remove(&(uid.clone(), agent_name.clone())) {
+                //     if !agent_set.iter().any(|(set_uid, _)| set_uid == &uid) {
+                let _ = self.certificates.remove(&(uid.clone(), domain.to_owned()));
+            }
+            // }
         }
         self.domain_map.retain(|_, v| !v.is_empty());
         trace!("domain map: {:?}", self.domain_map);
@@ -69,18 +74,32 @@ impl CertificateStore {
     pub fn get_config(&self, domain: &str) -> Option<Arc<ServerConfig>> {
         Some(
             self.certificates
-                .get(self.domain_map.get(domain)?.iter().next()?)?
+                .get(
+                    &self
+                        .domain_map
+                        .get(domain)?
+                        .iter()
+                        .next()
+                        .map(|(uid, _agent)| (uid.to_owned(), domain.to_string()))?,
+                )?
                 .config
                 .clone(),
         )
     }
-    pub fn renew_needed(&self) -> Vec<(String, String, Vec<String>)> {
+    pub fn renew_needed(&self) -> Vec<(String, String, String)> {
         let mut list_of_agents = Vec::new();
-        for ((uid, agent_name), cert) in self.certificates.iter() {
+        for ((uid, domain), cert) in self.certificates.iter() {
             if cert.renew_needed() {
-                if let Some(domains) = cert.domains() {
-                    list_of_agents.push((uid.to_owned(), agent_name.to_owned(), domains));
-                }
+                // if let Some(domains) = cert.domains() {
+                if let Some(agents) = self.domain_map.get(domain) {
+                    for (uid, agent_name) in agents.iter().filter(|(u, _)| u == uid) {
+                        list_of_agents.push((
+                            uid.to_owned(),
+                            agent_name.to_owned(),
+                            domain.to_owned(),
+                        ));
+                    }
+                };
             }
         }
         list_of_agents
@@ -171,29 +190,31 @@ impl CertificateManager {
                             match msg {
                                 CertificateServiceMessage::Load(uid, agent_name, domains) => {
                                     let span = span!(tracing::Level::TRACE, "load_certificate", uid = %uid, agent_name = %agent_name, domains = ?domains);
-                                    if cm
-                                        .load_to_memory(&uid, &agent_name, &domains).instrument(span.clone())
-                                        .await
-                                        .is_err()
-                                        && cm.is_acme_enabled()
-                                    {
-                                        if let Err(e) =
-                                            cm.issue(&uid, &agent_name, &domains, None).instrument(span.clone()).await
+                                    for domain in &domains {
+                                        if cm
+                                            .load_to_memory(&uid, &agent_name, domain).instrument(span.clone())
+                                            .await
+                                            .is_err()
+                                            && cm.is_acme_enabled()
                                         {
-                                            if matches!(e,GatewayError::ACMEPending) {
-                                                warn!("pending acme request for: {:?} : {}", &domains, e.to_string());
-                                                pendings.insert((uid,agent_name,domains));
+                                            if let Err(e) =
+                                                cm.issue(&uid, &agent_name, domain.clone(), None).instrument(span.clone()).await
+                                            {
+                                                if matches!(e,GatewayError::ACMEPending) {
+                                                    warn!("pending acme request for: {:?} : {}", &domain, e.to_string());
+                                                    pendings.insert((uid.clone(),agent_name.clone(),domain.clone()));
+                                                    continue;
+                                                }
+                                                error!(
+                                                    "unable to issue certificate for: {:?} : {}",
+                                                    &domains,
+                                                    e.to_string()
+                                                );
                                                 continue;
                                             }
-                                            error!(
-                                                "unable to issue certificate for: {:?} : {}",
-                                                &domains,
-                                                e.to_string()
-                                            );
-                                            continue;
+                                            trace!("load certificate to memory");
+                                            let _ = cm.load_to_memory(&uid, &agent_name, domain).instrument(span.clone()).await;
                                         }
-                                        trace!("load certificate to memory");
-                                        let _ = cm.load_to_memory(&uid, &agent_name, &domains).instrument(span.clone()).await;
                                     }
                                 },
                                 CertificateServiceMessage::Unload(uid, agent_name) => {
@@ -205,13 +226,13 @@ impl CertificateManager {
                         }
                         _ = pending_interval.tick() =>{
                             for (uid,agent_name,domains) in pendings.drain() {
-                                let _ = sender.send(CertificateServiceMessage::Load(uid,agent_name,domains));
+                                let _ = sender.send(CertificateServiceMessage::Load(uid,agent_name,vec![domains]));
                             }
                         }
                         _ = interval.tick() =>{
-                            for (uid,agent_name,domains) in cm.certificate_store.read().await.renew_needed(){
-                                debug!("renew required for certificate {:?} in agent {}:{}", &domains, uid, agent_name);
-                                let _ = sender.send(CertificateServiceMessage::Load(uid,agent_name,domains));
+                            for (uid,agent_name,domain) in cm.certificate_store.read().await.renew_needed(){
+                                debug!("renew required for certificate {:?} in agent {}:{}", &domain, uid, agent_name);
+                                let _ = sender.send(CertificateServiceMessage::Load(uid,agent_name,vec![domain]));
                             }
                         }
                     }
@@ -235,22 +256,22 @@ impl CertificateManager {
         &self,
         uid: &str,
         agent_name: &str,
-        domains: &Vec<String>,
+        domain: String,
         suggested_private_key: Option<PrivateKey>,
     ) -> Result<(), GatewayError> {
-        if self.storage.is_failed(uid, agent_name).await? {
+        if self.storage.is_failed(uid, &domain).await {
             return Err(GatewayError::ACMEFailed);
         };
-        if self.storage.is_pending(uid, agent_name).await? {
+        if self.storage.is_pending(uid, &domain).await {
             return Err(GatewayError::ACMEPending);
         } else {
-            self.storage.set_pending(uid, agent_name).await?;
+            self.storage.set_pending(uid, &domain).await?;
         };
-        debug!("start to issue acme certificate for {:?}", &domains);
+        debug!("start to issue acme certificate for {:?}", &domain);
         // we can create acme account for each agent later
         let (Some(acme_account), Some(challenge_type)) = (
             self.storage
-                .get_acme_account(uid, agent_name)
+                .get_acme_account(uid, &domain)
                 .await
                 .ok()
                 .or(self.acme_account.clone()),
@@ -262,16 +283,21 @@ impl CertificateManager {
 
         let mut acme = Acme::from_account(acme_account.clone())?;
         trace!("place order");
-        if let Some(pem) = acme
-            .new_order(
-                domains.iter().map(|d| d.to_string()).collect(),
-                suggested_private_key.as_ref(),
-            )
+        let new_order = match acme
+            .new_order(vec![domain.clone()], suggested_private_key.as_ref())
             .in_current_span()
-            .await?
+            .await
         {
+            Ok(new_order) => new_order,
+            Err(e) => {
+                self.storage.set_failed(uid, &domain).await?;
+                return Err(e);
+            }
+        };
+
+        if let Some(pem) = new_order {
             trace!("order placed, withouth challenge");
-            self.storage.put(uid, agent_name, None, pem).await?;
+            self.storage.put(uid, &domain, None, pem).await?;
             return Ok(());
         }
         trace!("order placed, require challenge");
@@ -293,7 +319,7 @@ impl CertificateManager {
         }
 
         let uid = uid.to_owned();
-        let agent_name = agent_name.to_owned();
+        // let agent_name = agent_name.to_owned();
         let success = 'status: {
             trace!("check challenge status");
             let Ok(pem) = acme
@@ -303,12 +329,7 @@ impl CertificateManager {
             else {
                 break 'status false;
             };
-            if self
-                .storage
-                .put(&uid, &agent_name, None, pem)
-                .await
-                .is_err()
-            {
+            if self.storage.put(&uid, &domain, None, pem).await.is_err() {
                 break 'status false;
             };
 
@@ -325,7 +346,7 @@ impl CertificateManager {
         if success {
             Ok(())
         } else {
-            self.storage.set_failed(&uid, &agent_name).await?;
+            self.storage.set_failed(&uid, &domain).await?;
             Err(GatewayError::ACMEFailed)
         }
     }
@@ -334,9 +355,9 @@ impl CertificateManager {
         &self,
         uid: &str,
         agent_name: &str,
-        domains: &Vec<String>,
+        domain: &str,
     ) -> Result<(), GatewayError> {
-        let (cert, _) = self.storage.get(uid, agent_name).await?;
+        let (cert, _) = self.storage.get(uid, domain).await?;
         if cert.renew_needed() {
             trace!("certificate renewal required");
             return Err(GatewayError::CertificateRenewalRequired);
@@ -346,7 +367,7 @@ impl CertificateManager {
             self.certificate_store.write().await.insert(
                 uid.to_owned(),
                 agent_name.to_owned(),
-                domains,
+                domain,
                 cert,
             );
         }
