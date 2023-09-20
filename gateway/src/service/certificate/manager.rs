@@ -59,11 +59,14 @@ impl CertificateStore {
     }
     pub fn remove(&mut self, uid: String, agent_name: String) {
         for (domain, agent_set) in self.domain_map.iter_mut() {
-            if agent_set.remove(&(uid.clone(), agent_name.clone())) {
-                if !agent_set.iter().any(|(set_uid, _)| set_uid == &uid) {
-                    let _ = self.certificates.remove(&(uid.clone(), domain.to_owned()));
-                }
+            if agent_set.remove(&(uid.clone(), agent_name.clone()))
+                && !agent_set.iter().any(|(set_uid, _)| set_uid == &uid)
+            {
+                // if agent_set.remove(&(uid.clone(), agent_name.clone())) {
+                //     if !agent_set.iter().any(|(set_uid, _)| set_uid == &uid) {
+                let _ = self.certificates.remove(&(uid.clone(), domain.to_owned()));
             }
+            // }
         }
         self.domain_map.retain(|_, v| !v.is_empty());
         trace!("domain map: {:?}", self.domain_map);
