@@ -43,9 +43,9 @@ pub trait CertificateStorage {
         domain: &str,
     ) -> Option<AccountCredentials>;
     async fn set_failed(&self, account: &str, domain: &str) -> Result<(), GatewayError>;
-    async fn is_failed(&self, account: &str, domain: &str) -> Result<bool, GatewayError>;
+    async fn is_failed(&self, account: &str, domain: &str) -> bool;
     async fn set_pending(&self, account: &str, domain: &str) -> Result<(), GatewayError>;
-    async fn is_pending(&self, account: &str, domain: &str) -> Result<bool, GatewayError>;
+    async fn is_pending(&self, account: &str, domain: &str) -> bool;
     async fn get_default_account(&self) -> Result<Account, GatewayError> {
         let account_credentials = self.get_default_account_credentials().await?;
         Ok(Account::from_credentials(account_credentials).await?)

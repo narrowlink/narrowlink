@@ -1,6 +1,6 @@
 use std::{
     io::{BufReader, BufWriter},
-    path::Path,
+    time::SystemTime,
 };
 
 use askama::Result;
@@ -133,13 +133,21 @@ impl CertificateStorage for CertificateFileStorage {
         let pending_path = format!("{}/{}.pending", base_path, domain_hash);
         Ok(fs::rename(pending_path, failed_path).await.map(|_| ())?)
     }
-    async fn is_failed(&self, account: &str, domain: &str) -> Result<bool, GatewayError> {
+    async fn is_failed(&self, account: &str, domain: &str) -> bool {
         let domain_hash = Sha3_256::digest(domain.as_bytes())
             .iter()
             .map(|x| format!("{:02x}", x))
             .collect::<String>();
         let failed_path = format!("{}/{}/{}.failed", self.path, account, domain_hash);
-        Ok(Path::new(&failed_path).exists())
+        let ts = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        std::fs::read_to_string(failed_path)
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .filter(|v| *v + 60 * 60 > ts) // 1 hour
+            .is_some()
     }
     async fn set_pending(&self, account: &str, domain: &str) -> Result<(), GatewayError> {
         let domain_hash = Sha3_256::digest(domain.as_bytes())
@@ -148,15 +156,27 @@ impl CertificateStorage for CertificateFileStorage {
             .collect::<String>();
         let base_path = format!("{}/{}", self.path, account);
         let pending_path = format!("{}/{}.pending", base_path, domain_hash);
+        let ts = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
         fs::create_dir_all(&base_path).await?;
-        Ok(fs::File::create(pending_path).await.map(|_| ())?)
+        Ok(fs::write(pending_path, ts.to_string()).await.map(|_| ())?)
     }
-    async fn is_pending(&self, account: &str, domain: &str) -> Result<bool, GatewayError> {
+    async fn is_pending(&self, account: &str, domain: &str) -> bool {
         let domain_hash = Sha3_256::digest(domain.as_bytes())
             .iter()
             .map(|x| format!("{:02x}", x))
             .collect::<String>();
         let pending_path = format!("{}/{}/{}.pending", self.path, account, domain_hash);
-        Ok(Path::new(&pending_path).exists())
+        let ts = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        std::fs::read_to_string(pending_path)
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .filter(|v| *v + 120 > ts) // 120 seconds
+            .is_some()
     }
 }

@@ -259,10 +259,10 @@ impl CertificateManager {
         domain: String,
         suggested_private_key: Option<PrivateKey>,
     ) -> Result<(), GatewayError> {
-        if self.storage.is_failed(uid, &domain).await? {
+        if self.storage.is_failed(uid, &domain).await {
             return Err(GatewayError::ACMEFailed);
         };
-        if self.storage.is_pending(uid, &domain).await? {
+        if self.storage.is_pending(uid, &domain).await {
             return Err(GatewayError::ACMEPending);
         } else {
             self.storage.set_pending(uid, &domain).await?;
@@ -283,11 +283,19 @@ impl CertificateManager {
 
         let mut acme = Acme::from_account(acme_account.clone())?;
         trace!("place order");
-        if let Some(pem) = acme
+        let new_order = match acme
             .new_order(vec![domain.clone()], suggested_private_key.as_ref())
             .in_current_span()
-            .await?
+            .await
         {
+            Ok(new_order) => new_order,
+            Err(e) => {
+                self.storage.set_failed(uid, &domain).await?;
+                return Err(e);
+            }
+        };
+
+        if let Some(pem) = new_order {
             trace!("order placed, withouth challenge");
             self.storage.put(uid, &domain, None, pem).await?;
             return Ok(());
