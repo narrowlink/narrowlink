@@ -979,6 +979,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
+ "sha3",
  "tokio",
  "tokio-rustls",
  "tracing",
