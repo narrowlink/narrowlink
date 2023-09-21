@@ -15,6 +15,6 @@ Options:
   -l, --local=      The local address and port to bind
   -s, --silent      Do not check whether the target address and port reachable or not
   -k, --key=        The secret key for end-to-end encryption
-  -u, --udp=        Use UDP instead of TCP
+  -u, --udp         Use UDP instead of TCP
       --p2p         Use P2P mode
 
