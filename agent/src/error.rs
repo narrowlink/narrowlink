@@ -1,61 +1,28 @@
-use core::fmt;
-
 use narrowlink_network::error::NetworkError;
+use thiserror::Error;
 
+#[derive(Error, Debug)]
 pub enum AgentError {
-    IoError(std::io::Error),
-    NetworkError(NetworkError),
+    #[error("IO Error: {0}")]
+    IoError(#[from] std::io::Error),
+    #[error("Network Error: {0}")]
+    NetworkError(#[from] NetworkError),
+    #[error("Error: argument {0} is required")]
     RequiredValue(&'static str),
+    #[error("Error: illegal character\nTry 'narrowlink-agent --help' for more information")]
     Encoding,
+    #[error("Command Not Found")]
     CommandNotFound,
+    #[error("Invalid Config Path")]
     InvalidConfigPath,
+    #[error("Access Denied")]
     AccessDenied,
+    #[error("Key Not Found")]
     KeyNotFound,
+    #[error("Config Not Found")]
     ConfigNotFound,
+    #[error("Invalid Config")]
     InvalidConfig,
+    #[error("Unable To Resolve")]
     UnableToResolve,
-    // Invalid(&'static str),
-}
-
-impl core::fmt::Debug for AgentError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("AgentError")
-            .field("error_type", &self.to_string())
-            // .field("source", &self.source)
-            .finish()
-    }
-}
-
-impl fmt::Display for AgentError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            AgentError::IoError(source) => write!(f, "IO Error: {}", source),
-            AgentError::NetworkError(source) => write!(f, "Network Error: {}", source),
-            AgentError::RequiredValue(arg) => write!(f, "Error: argument \"{}\" is required", arg),
-            AgentError::Encoding => write!(
-                f,
-                "Error: illegal character\nTry 'narrowlink-agent --help' for more information."
-            ),
-            AgentError::CommandNotFound => write!(f, "Command Not Found"),
-            AgentError::InvalidConfigPath => write!(f, "Invalid Config Path"),
-            AgentError::AccessDenied => write!(f, "Access Denied"),
-            AgentError::KeyNotFound => write!(f, "Key Not Found"),
-            AgentError::InvalidConfig => write!(f, "Invalid Config"),
-            AgentError::ConfigNotFound => write!(f, "Config Not Found"),
-            AgentError::UnableToResolve => write!(f, "Unable To Resolve"),
-            // AgentError::Invalid(msg) => write!(f, "Invalid {}", msg),
-        }
-    }
-}
-
-impl From<std::io::Error> for AgentError {
-    fn from(err: std::io::Error) -> Self {
-        Self::IoError(err)
-    }
-}
-
-impl From<NetworkError> for AgentError {
-    fn from(err: NetworkError) -> Self {
-        Self::NetworkError(err)
-    }
 }

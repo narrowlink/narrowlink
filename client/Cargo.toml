@@ -24,6 +24,7 @@ path = "src/main.rs"
 
 [dependencies]
 clap_lex = { version = "0.5.1", default-features = false }
+thiserror = { version = "1.0.48", default-features = false }
 tokio = { version = "1.32.0", features = [
     "macros",
     "rt",

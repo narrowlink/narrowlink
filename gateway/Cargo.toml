@@ -60,6 +60,7 @@ rcgen = { version = "0.11.1", default-features = false, features = [
 x509-parser = { version = "0.15.1", default-features = false }
 clap_lex = { version = "0.5.1", default-features = false }
 sha3 = { version = "0.10.8", default-features = false }
+thiserror = { version = "1.0.48", default-features = false }
 
 narrowlink-types = { version = "0.2.0-git" }
 narrowlink-network = { version = "0.2.0-git" }
