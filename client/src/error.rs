@@ -37,14 +37,3 @@ pub enum ClientError {
     #[error("IO Error: {0}")]
     IoError(#[from] std::io::Error),
 }
-
-// impl From<NetworkError> for ClientError {
-//     fn from(e: NetworkError) -> Self {
-//         ClientError::NetworkError(e)
-//     }
-// }
-// impl From<std::io::Error> for ClientError {
-//     fn from(e: std::io::Error) -> Self {
-//         ClientError::IoError(e)
-//     }
-// }

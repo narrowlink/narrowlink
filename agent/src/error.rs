@@ -26,15 +26,3 @@ pub enum AgentError {
     #[error("Unable To Resolve")]
     UnableToResolve,
 }
-
-// impl From<std::io::Error> for AgentError {
-//     fn from(err: std::io::Error) -> Self {
-//         Self::IoError(err)
-//     }
-// }
-
-// impl From<NetworkError> for AgentError {
-//     fn from(err: NetworkError) -> Self {
-//         Self::NetworkError(err)
-//     }
-// }
