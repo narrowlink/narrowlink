@@ -46,6 +46,7 @@ quinn = { version = "0.10.2", default-features = false, features = [
 async-recursion = { version = "1.0.5", default-features = false }
 tracing = { version = "0.1.37", default-features = false }
 tokio-native-tls = { version = "0.3.1", optional = true, default-features = false }
+thiserror = { version = "1.0.48", default-features = false }
 
 narrowlink-types = { version = "0.2.0-git" }
 

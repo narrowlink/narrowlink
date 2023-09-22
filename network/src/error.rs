@@ -1,97 +1,113 @@
-use core::fmt;
-use std::error::Error;
+use thiserror::Error;
 
+#[derive(Error, Debug)]
 pub enum NetworkError {
-    IoError(std::io::Error),
-    HttpError(hyper::http::Error),
-    HyperError(hyper::Error),
-    Tungstenite(tungstenite::Error),
+    #[error("IO Error: {0}")]
+    IoError(#[from] std::io::Error),
+    #[error("Network Error: {0}")]
+    HttpError(#[from] hyper::http::Error),
+    #[error("Network Error: {0}")]
+    HyperError(#[from] hyper::Error),
+    #[error("Network Error: {0}")]
+    Tungstenite(#[from] tungstenite::Error),
+    #[error("TLS Error")]
     TlsError,
+    #[error("Unable To Upgrade: {0}")]
     UnableToUpgrade(u16),
+    #[error("Request Canceled")]
     RequestCanceled,
+    #[error("Quic Error")]
     QuicError,
+    #[error("P2P Invalid Command")]
     P2PInvalidCommand,
+    #[error("P2P Invalid Domain")]
     P2PInvalidDomain,
+    #[error("P2P Invalid Crypto")]
     P2PInvalidCrypto,
+    #[error("P2P Timeout")]
     P2PTimeout,
+    #[error("P2P Failed")]
     P2PFailed,
-    JsonSerializationError(serde_json::Error),
+    #[error("Json Serialization Error: {0}")]
+    JsonSerializationError(#[from] serde_json::Error),
+    #[error("Cryptography Failure: {0}")]
     XChaCha20Poly1305(chacha20poly1305::Error),
+    #[error("Invalid: {0}")]
     Invalid(&'static str),
 }
 
-impl Error for NetworkError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            NetworkError::IoError(e) => Some(e),
-            NetworkError::HttpError(e) => Some(e),
-            NetworkError::HyperError(e) => Some(e),
-            NetworkError::Tungstenite(e) => Some(e),
-            NetworkError::JsonSerializationError(e) => Some(e),
-            _ => None,
-        }
-    }
-}
+// impl Error for NetworkError {
+//     fn source(&self) -> Option<&(dyn Error + 'static)> {
+//         match self {
+//             NetworkError::IoError(e) => Some(e),
+//             NetworkError::HttpError(e) => Some(e),
+//             NetworkError::HyperError(e) => Some(e),
+//             NetworkError::Tungstenite(e) => Some(e),
+//             NetworkError::JsonSerializationError(e) => Some(e),
+//             _ => None,
+//         }
+//     }
+// }
 
-impl core::fmt::Debug for NetworkError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("NetworkError")
-            .field("error_type", &self.to_string())
-            // .field("source", &self.source)
-            .finish()
-    }
-}
+// impl core::fmt::Debug for NetworkError {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         f.debug_struct("NetworkError")
+//             .field("error_type", &self.to_string())
+//             // .field("source", &self.source)
+//             .finish()
+//     }
+// }
 
-impl fmt::Display for NetworkError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            NetworkError::IoError(e) => write!(f, "E-Io:{}", e),
-            NetworkError::HttpError(e) => write!(f, "E-Hyper:{}", e),
-            NetworkError::HyperError(e) => write!(f, "E-Hyper:{}", e),
-            NetworkError::Tungstenite(e) => write!(f, "E-Tungstenite:{}", e),
-            NetworkError::TlsError => write!(f, "E-Tls"),
-            NetworkError::UnableToUpgrade(code) => write!(f, "E-UnableToUpgrade, Error({})", code),
-            NetworkError::RequestCanceled => write!(f, "E-RequestCanceled::Error"),
-            NetworkError::QuicError => write!(f, "E-QuicError::Error"),
-            NetworkError::P2PInvalidCommand => write!(f, "E-P2PInvalidCommand::Error"),
-            NetworkError::P2PInvalidDomain => write!(f, "E-P2PInvalidDomain::Error"),
-            NetworkError::P2PInvalidCrypto => write!(f, "E-P2PInvalidCrypto::Error"),
-            NetworkError::P2PTimeout => write!(f, "E-P2PTimeout::Error"),
-            NetworkError::P2PFailed => write!(f, "E-P2PFailed::Error"),
-            NetworkError::JsonSerializationError(e) => {
-                write!(f, "E-JsonSerialization:{}", e)
-            }
-            NetworkError::XChaCha20Poly1305(e) => write!(f, "Cryptography Failure :{}", e),
-            NetworkError::Invalid(msg) => write!(f, "Invalid {}", msg),
-        }
-    }
-}
+// impl fmt::Display for NetworkError {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         match self {
+//             NetworkError::IoError(e) => write!(f, "E-Io:{}", e),
+//             NetworkError::HttpError(e) => write!(f, "E-Hyper:{}", e),
+//             NetworkError::HyperError(e) => write!(f, "E-Hyper:{}", e),
+//             NetworkError::Tungstenite(e) => write!(f, "E-Tungstenite:{}", e),
+//             NetworkError::TlsError => write!(f, "E-Tls"),
+//             NetworkError::UnableToUpgrade(code) => write!(f, "E-UnableToUpgrade, Error({})", code),
+//             NetworkError::RequestCanceled => write!(f, "E-RequestCanceled::Error"),
+//             NetworkError::QuicError => write!(f, "E-QuicError::Error"),
+//             NetworkError::P2PInvalidCommand => write!(f, "E-P2PInvalidCommand::Error"),
+//             NetworkError::P2PInvalidDomain => write!(f, "E-P2PInvalidDomain::Error"),
+//             NetworkError::P2PInvalidCrypto => write!(f, "E-P2PInvalidCrypto::Error"),
+//             NetworkError::P2PTimeout => write!(f, "E-P2PTimeout::Error"),
+//             NetworkError::P2PFailed => write!(f, "E-P2PFailed::Error"),
+//             NetworkError::JsonSerializationError(e) => {
+//                 write!(f, "E-JsonSerialization:{}", e)
+//             }
+//             NetworkError::XChaCha20Poly1305(e) => write!(f, "Cryptography Failure :{}", e),
+//             NetworkError::Invalid(msg) => write!(f, "Invalid {}", msg),
+//         }
+//     }
+// }
 
-impl From<std::io::Error> for NetworkError {
-    fn from(err: std::io::Error) -> Self {
-        Self::IoError(err)
-    }
-}
-impl From<tungstenite::Error> for NetworkError {
-    fn from(err: tungstenite::Error) -> Self {
-        Self::Tungstenite(err)
-    }
-}
-impl From<hyper::http::Error> for NetworkError {
-    fn from(err: hyper::http::Error) -> Self {
-        Self::HttpError(err)
-    }
-}
-impl From<hyper::Error> for NetworkError {
-    fn from(err: hyper::Error) -> Self {
-        Self::HyperError(err)
-    }
-}
-impl From<serde_json::Error> for NetworkError {
-    fn from(err: serde_json::Error) -> Self {
-        Self::JsonSerializationError(err)
-    }
-}
+// impl From<std::io::Error> for NetworkError {
+//     fn from(err: std::io::Error) -> Self {
+//         Self::IoError(err)
+//     }
+// }
+// impl From<tungstenite::Error> for NetworkError {
+//     fn from(err: tungstenite::Error) -> Self {
+//         Self::Tungstenite(err)
+//     }
+// }
+// impl From<hyper::http::Error> for NetworkError {
+//     fn from(err: hyper::http::Error) -> Self {
+//         Self::HttpError(err)
+//     }
+// }
+// impl From<hyper::Error> for NetworkError {
+//     fn from(err: hyper::Error) -> Self {
+//         Self::HyperError(err)
+//     }
+// }
+// impl From<serde_json::Error> for NetworkError {
+//     fn from(err: serde_json::Error) -> Self {
+//         Self::JsonSerializationError(err)
+//     }
+// }
 
 impl From<chacha20poly1305::Error> for NetworkError {
     fn from(err: chacha20poly1305::Error) -> Self {

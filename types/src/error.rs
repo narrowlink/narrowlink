@@ -1,34 +1,19 @@
-use core::fmt;
+use thiserror::Error;
 
+#[derive(Error, Debug)]
 pub enum MessageError {
-    JwtError(jsonwebtoken::errors::Error),
-    SerdeJsonError(serde_json::Error),
+    #[error("JWT Error: {0}")]
+    JwtError(#[from] jsonwebtoken::errors::Error),
+    #[error("SerdeJson Error: {0}")]
+    SerdeJsonError(#[from] serde_json::Error),
     // ValidationErrors(),
 }
 
-impl core::fmt::Debug for MessageError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("MessageError")
-            .field("error_type", &self.to_string())
-            // .field("source", &self.source)
-            .finish()
-    }
-}
-
-impl fmt::Display for MessageError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            MessageError::JwtError(e) => write!(f, "E-Jwt: {}", e),
-            MessageError::SerdeJsonError(e) => write!(f, "E-SerdeJson: {}", e),
-        }
-    }
-}
-
-impl From<jsonwebtoken::errors::Error> for MessageError {
-    fn from(err: jsonwebtoken::errors::Error) -> Self {
-        Self::JwtError(err)
-    }
-}
+// impl From<jsonwebtoken::errors::Error> for MessageError {
+//     fn from(err: jsonwebtoken::errors::Error) -> Self {
+//         Self::JwtError(err)
+//     }
+// }
 // impl From<toml::de::Error> for GatewayError {
 //     fn from(err: toml::de::Error) -> Self {
 //         Self::TomlDeError(err)
@@ -57,11 +42,11 @@ impl From<jsonwebtoken::errors::Error> for MessageError {
 //     }
 // }
 
-impl From<serde_json::Error> for MessageError {
-    fn from(err: serde_json::Error) -> Self {
-        Self::SerdeJsonError(err)
-    }
-}
+// impl From<serde_json::Error> for MessageError {
+//     fn from(err: serde_json::Error) -> Self {
+//         Self::SerdeJsonError(err)
+//     }
+// }
 
 // #[derive(Debug)]
 // pub struct MessageError {
