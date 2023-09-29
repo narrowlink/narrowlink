@@ -5,6 +5,7 @@ Usage:
 
 Description:
   Creates a TUN interface to connect to a remote endpoint
+   ***   This command is for testing purposes only   ***
 
 Examples:
   narrowlink tunnel -n <agent name>

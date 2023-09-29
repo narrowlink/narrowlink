@@ -18,6 +18,7 @@ mod args;
 mod error;
 use args::{ArgCommands, Args};
 mod config;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod tun;
 use error::ClientError;
 use futures_util::stream::StreamExt;
@@ -54,10 +55,10 @@ use tracing_subscriber::{
     util::SubscriberInitExt,
     Layer,
 };
-use tun::TunListener;
 use udp_stream::UdpListener;
 
-use crate::tun::TunStream;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+use tun::{TunListener, TunStream};
 
 pub enum P2PStatus {
     Uninitialized = 0x0,
@@ -71,6 +72,7 @@ pub enum Listener {
     None,
     Tcp(TcpListener),
     Udp(UdpListener),
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     Tun(TunListener),
 }
 
@@ -186,7 +188,14 @@ async fn main() -> Result<(), ClientError> {
         }
         ArgCommands::Tunnel(tunnel_args) => {
             p2p = tunnel_args.p2p;
-            socket_listener = Listener::Tun(TunListener::new());
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            {
+                socket_listener = Listener::Tun(TunListener::new());
+            }
+            #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+            {
+                socket_listener = Listener::None
+            }
         }
         ArgCommands::Proxy(proxy_args) => {
             p2p = proxy_args.p2p;
@@ -352,6 +361,7 @@ async fn main() -> Result<(), ClientError> {
                                 let (s, a) = tcp_listen.accept().await?;
                                 (Box::new(s), a, false)
                             }
+                            #[cfg(any(target_os = "linux", target_os = "macos"))]
                             Listener::Tun(ref mut tun_listen) => {
                                 let (s, a) = tun_listen.accept().await?;
                                 match s {
