@@ -22,9 +22,9 @@ pub enum TunStream {
     Tcp(TunTcpStream),
     // Udp(UdpStream),
 }
-
 pub struct TunListener {
     device: AsyncDevice,
+    #[allow(clippy::all)]
     tcp_streams: HashMap<(SocketAddr, SocketAddr, bool), mpsc::Sender<(TcpHeader, Vec<u8>)>>,
     // udp_streams: HashMap<(SocketAddr, SocketAddr, bool), mpsc::Sender<Packet>>,
     packet_receiver: mpsc::Receiver<Vec<u8>>,
@@ -79,7 +79,7 @@ impl TunListener {
                                 return Ok((TunStream::Tcp(tcp_stream),packet.get_dst_address()));
                             }
                         },
-                        Transport::Udp(udp) => {
+                        Transport::Udp(_udp) => {
                             dbg!("todo");
                             continue
                         }
@@ -88,7 +88,7 @@ impl TunListener {
                 bytes = self.packet_receiver.recv() => {
                     match bytes{
                         Some(msg) => {
-                            self.device.write(&msg).await.unwrap();
+                            self.device.write_all(&msg).await.unwrap();
                         }
                         None => {
                             todo!();
@@ -97,6 +97,12 @@ impl TunListener {
                 }
             };
         }
+    }
+}
+
+impl Default for TunListener {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -256,23 +262,23 @@ impl AsyncWrite for TunTcpStream {
         match send {
             std::task::Poll::Ready(Ok(_)) => {
                 self.send_seq.nxt += plen as u32;
-                return std::task::Poll::Ready(Ok(buf.len()));
+                std::task::Poll::Ready(Ok(buf.len()))
             }
             std::task::Poll::Ready(Err(_)) => todo!(),
-            std::task::Poll::Pending => return std::task::Poll::Pending,
+            std::task::Poll::Pending => std::task::Poll::Pending,
         }
     }
 
     fn poll_flush(
         self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
+        _cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<(), std::io::Error>> {
         std::task::Poll::Ready(Ok(()))
     }
 
     fn poll_shutdown(
         self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
+        _cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<(), std::io::Error>> {
         std::task::Poll::Ready(Ok(()))
     }
@@ -340,8 +346,8 @@ pub struct Packet {
 impl Packet {
     pub fn new_tcp(src: SocketAddr, dst: SocketAddr) -> Self {
         let mut tcp = TcpHeader::default();
-        tcp.source_port = src.port() as u16;
-        tcp.destination_port = dst.port() as u16;
+        tcp.source_port = src.port();
+        tcp.destination_port = dst.port();
         let mut ip = Ipv4Header::default();
         ip.time_to_live = 20;
         match (src.ip(), dst.ip()) {
@@ -393,37 +399,32 @@ impl Packet {
         }
     }
     pub fn is_tcp(&self) -> bool {
-        match &self.transport {
-            Transport::Tcp(_) => true,
-            _ => false,
-        }
+        matches!(&self.transport, Transport::Tcp(_))
     }
-
+    #[allow(dead_code)]
     pub fn udp(&self) -> Option<&UdpHeader> {
         match &self.transport {
             Transport::Udp(udp) => Some(udp),
             _ => None,
         }
     }
+    #[allow(dead_code)]
     pub fn is_udp(&self) -> bool {
-        match &self.transport {
-            Transport::Udp(_) => true,
-            _ => false,
-        }
+        matches!(&self.transport, Transport::Udp(_))
     }
     pub fn get_src_address(&self) -> SocketAddr {
         let port = match &self.transport {
             Transport::Tcp(tcp) => tcp.source_port,
             Transport::Udp(udp) => udp.source_port,
         };
-        SocketAddr::new(self.ip.source(), port.into())
+        SocketAddr::new(self.ip.source(), port)
     }
     pub fn get_dst_address(&self) -> SocketAddr {
         let port = match &self.transport {
             Transport::Tcp(tcp) => tcp.destination_port,
             Transport::Udp(udp) => udp.destination_port,
         };
-        SocketAddr::new(self.ip.destination(), port.into())
+        SocketAddr::new(self.ip.destination(), port)
     }
     pub fn get_network_tuple(&self) -> (SocketAddr, SocketAddr, bool) {
         (
@@ -435,7 +436,7 @@ impl Packet {
     pub fn as_bytes(&mut self) -> Vec<u8> {
         let mut buf = vec![0u8; MTU];
         let mut cursor = Cursor::new(&mut buf[..]);
-        std::io::Write::write(&mut cursor, &vec![0x00, 0x00, 0x00, 0x02]).unwrap();
+        std::io::Write::write(&mut cursor, &[0x00, 0x00, 0x00, 0x02]).unwrap();
         let ip = match &mut self.ip {
             Ip::Ipv4(ip) => {
                 match &self.transport {
@@ -451,12 +452,12 @@ impl Packet {
         // self.ip.write(&mut cursor).unwrap();
         match &mut self.transport {
             Transport::Tcp(ref mut tcp) => {
-                let checksum = tcp.calc_checksum_ipv4(&ip, &self.payload).unwrap();
+                let checksum = tcp.calc_checksum_ipv4(ip, &self.payload).unwrap();
                 tcp.checksum = checksum;
                 tcp.write(&mut cursor).unwrap()
             }
             Transport::Udp(ref mut udp) => {
-                let checksum = udp.calc_checksum_ipv4(&ip, &self.payload).unwrap();
+                let checksum = udp.calc_checksum_ipv4(ip, &self.payload).unwrap();
                 udp.checksum = checksum;
                 udp.write(&mut cursor).unwrap()
             }
@@ -470,6 +471,7 @@ impl Packet {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct SendSequence {
     una: u32, // unacknowledged sequence number
     nxt: u32, // next sequence number to be sent
@@ -486,6 +488,7 @@ pub struct RecvSequence {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum ConnectionState {
     Listen,
     SynSent,
