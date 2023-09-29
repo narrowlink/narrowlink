@@ -18,7 +18,7 @@ mod args;
 mod error;
 use args::{ArgCommands, Args};
 mod config;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
 mod tun;
 use error::ClientError;
 use futures_util::stream::StreamExt;
@@ -56,7 +56,7 @@ use tracing_subscriber::{
 };
 use udp_stream::UdpListener;
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
 use tun::{TunListener, TunStream};
 
 pub enum P2PStatus {
@@ -71,7 +71,7 @@ pub enum Listener {
     None,
     Tcp(TcpListener),
     Udp(UdpListener),
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
     Tun(TunListener),
 }
 
@@ -185,13 +185,14 @@ async fn main() -> Result<(), ClientError> {
 
             socket_listener = listener;
         }
+        #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
         ArgCommands::Tunnel(tunnel_args) => {
             p2p = tunnel_args.p2p;
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
             {
                 socket_listener = Listener::Tun(TunListener::new());
             }
-            #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+            #[cfg(not(all(any(target_os = "linux", target_os = "macos"), debug_assertions)))]
             {
                 socket_listener = Listener::None
             }
@@ -360,7 +361,10 @@ async fn main() -> Result<(), ClientError> {
                                 let (s, a) = tcp_listen.accept().await?;
                                 (Box::new(s), a, false)
                             }
-                            #[cfg(any(target_os = "linux", target_os = "macos"))]
+                            #[cfg(all(
+                                any(target_os = "linux", target_os = "macos"),
+                                debug_assertions
+                            ))]
                             Listener::Tun(ref mut tun_listen) => {
                                 let (s, a) = tun_listen.accept().await?;
                                 match s {
@@ -412,6 +416,10 @@ async fn main() -> Result<(), ClientError> {
                         ArgCommands::List(_) => {
                             unreachable!()
                         }
+                        #[cfg(all(
+                            any(target_os = "linux", target_os = "macos"),
+                            debug_assertions
+                        ))]
                         ArgCommands::Tunnel(_) => generic::Connect {
                             host: "127.0.0.1".to_string(), //addr.ip().to_string()
                             port: addr.port(),

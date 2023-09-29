@@ -8,6 +8,7 @@ static LIST_HELP: &str = include_str!("../list.help.arg");
 static FORWARD_HELP: &str = include_str!("../forward.help.arg");
 static PROXY_HELP: &str = include_str!("../proxy.help.arg");
 static CONNECT_HELP: &str = include_str!("../connect.help.arg");
+#[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
 static TUNNEL_HELP: &str = include_str!("../tunnel.help.arg");
 
 pub fn extract_addr(addr: &str, local: bool) -> Result<(String, u16), ClientError> {
@@ -70,6 +71,7 @@ pub struct ConnectArgs {
     pub remote_addr: (String, u16),   //<Local>
 }
 
+#[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
 #[derive(Debug, Clone)]
 pub struct TunnelArgs {
     pub agent_name: String,           //i name
@@ -83,6 +85,7 @@ enum SubCommands {
     Forward,
     List,
     Connect,
+    #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
     Tunnel,
     Proxy,
 }
@@ -94,6 +97,7 @@ impl SubCommands {
             ("list", 0),
             ("proxy", 0),
             ("connect", 0),
+            #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
             ("tunnel", 0),
         ]);
         for (i, c) in arg.chars().enumerate() {
@@ -122,6 +126,7 @@ impl SubCommands {
             "list" => Ok(Self::List),
             "connect" => Ok(Self::Connect),
             "proxy" => Ok(Self::Proxy),
+            #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
             "tunnel" => Ok(Self::Tunnel),
             _ => Err(ClientError::CommandNotFound),
         }
@@ -228,6 +233,7 @@ impl Args {
                     }
                     Ok(ArgCommands::List(sub))
                 }
+                #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
                 SubCommands::Tunnel => {
                     let mut sub = TunnelArgs {
                         agent_name: String::new(),
@@ -814,6 +820,7 @@ pub enum ArgCommands {
     List(ListArgs),
     Proxy(ProxyArgs),
     Connect(ConnectArgs),
+    #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
     Tunnel(TunnelArgs),
 }
 
@@ -823,6 +830,7 @@ impl ArgCommands {
             ArgCommands::Forward(args) => Some(&args.agent_name),
             ArgCommands::Proxy(args) => Some(&args.agent_name),
             ArgCommands::Connect(args) => Some(&args.agent_name),
+            #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
             ArgCommands::Tunnel(args) => Some(&args.agent_name),
             _ => None,
         }
@@ -839,6 +847,7 @@ impl ArgCommands {
             ArgCommands::Forward(args) => args.cryptography.clone(),
             ArgCommands::Proxy(args) => args.cryptography.clone(),
             ArgCommands::Connect(args) => args.cryptography.clone(),
+            #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
             ArgCommands::Tunnel(args) => args.cryptography.clone(),
             _ => None,
         }
