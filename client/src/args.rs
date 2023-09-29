@@ -8,6 +8,7 @@ static LIST_HELP: &str = include_str!("../list.help.arg");
 static FORWARD_HELP: &str = include_str!("../forward.help.arg");
 static PROXY_HELP: &str = include_str!("../proxy.help.arg");
 static CONNECT_HELP: &str = include_str!("../connect.help.arg");
+static TUNNEL_HELP: &str = include_str!("../tunnel.help.arg");
 
 pub fn extract_addr(addr: &str, local: bool) -> Result<(String, u16), ClientError> {
     match addr.parse::<SocketAddr>() {
@@ -69,18 +70,32 @@ pub struct ConnectArgs {
     pub remote_addr: (String, u16),   //<Local>
 }
 
+#[derive(Debug, Clone)]
+pub struct TunnelArgs {
+    pub agent_name: String,           //i name
+    pub cryptography: Option<String>, //k key
+    pub p2p: bool,                    //p p2p
+                                      // pub remote_addr: String,          //<Local>
+}
+
 #[derive(Debug)]
 enum SubCommands {
     Forward,
     List,
     Connect,
+    Tunnel,
     Proxy,
 }
 
 impl SubCommands {
     pub fn new(arg: &str) -> Result<Self, ClientError> {
-        let mut types: HashMap<&str, usize> =
-            HashMap::from([("forward", 0), ("list", 0), ("proxy", 0), ("connect", 0)]);
+        let mut types: HashMap<&str, usize> = HashMap::from([
+            ("forward", 0),
+            ("list", 0),
+            ("proxy", 0),
+            ("connect", 0),
+            ("tunnel", 0),
+        ]);
         for (i, c) in arg.chars().enumerate() {
             for (type_name, type_value) in types.iter_mut() {
                 if *type_value == i && arg.len() <= type_name.len() {
@@ -107,6 +122,7 @@ impl SubCommands {
             "list" => Ok(Self::List),
             "connect" => Ok(Self::Connect),
             "proxy" => Ok(Self::Proxy),
+            "tunnel" => Ok(Self::Tunnel),
             _ => Err(ClientError::CommandNotFound),
         }
     }
@@ -211,6 +227,116 @@ impl Args {
                         }
                     }
                     Ok(ArgCommands::List(sub))
+                }
+                SubCommands::Tunnel => {
+                    let mut sub = TunnelArgs {
+                        agent_name: String::new(),
+                        cryptography: None,
+                        p2p: false,
+                        // remote_addr: ("".to_string(), 0),
+                    };
+                    while let Some(arg) = raw.next(&mut cursor) {
+                        if let Some((long, value)) = arg.to_long() {
+                            match long {
+                                Ok("p2p") => {
+                                    sub.p2p = true;
+                                }
+                                Ok("name") => {
+                                    sub.agent_name = value
+                                        .ok_or(ClientError::RequiredValue("name"))?
+                                        .to_str()
+                                        .ok_or(ClientError::Encoding)?
+                                        .to_string();
+                                }
+                                Ok("key") => {
+                                    sub.cryptography = Some(
+                                        value
+                                            .ok_or(ClientError::RequiredValue("key"))?
+                                            .to_str()
+                                            .ok_or(ClientError::Encoding)?
+                                            .to_string(),
+                                    );
+                                }
+                                Ok("help") => {
+                                    print!("{}", TUNNEL_HELP);
+                                    process::exit(0x0);
+                                }
+                                _ => {}
+                            }
+                        } else if let Some(mut shorts) = arg.to_short() {
+                            while let Some(short) = shorts.next_flag() {
+                                match short {
+                                    Ok('n') => {
+                                        sub.agent_name = if let Some(v) = shorts.next_value_os() {
+                                            v.to_str()
+                                        } else if let Some(v) = raw.next_os(&mut cursor) {
+                                            v.to_str().and_then(|v| {
+                                                if v.is_empty() || v.find('-') == Some(0) {
+                                                    None
+                                                } else {
+                                                    Some(v)
+                                                }
+                                            })
+                                        } else {
+                                            None
+                                        }
+                                        .ok_or(ClientError::Encoding)?
+                                        .to_string();
+                                    }
+                                    Ok('k') => {
+                                        let next_value = if let Some(v) = shorts.next_value_os() {
+                                            v.to_str()
+                                        } else if let Some(v) = raw.next_os(&mut cursor) {
+                                            v.to_str().and_then(|v| {
+                                                if v.is_empty() || v.find('-') == Some(0) {
+                                                    None
+                                                } else {
+                                                    Some(v)
+                                                }
+                                            })
+                                        } else {
+                                            None
+                                        };
+
+                                        sub.cryptography = Some(
+                                            next_value
+                                                .ok_or(ClientError::RequiredValue("key"))?
+                                                .to_string(),
+                                        );
+                                    }
+
+                                    Ok('h') => {
+                                        print!("{}", TUNNEL_HELP);
+                                        process::exit(0x0);
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        } else {
+                            // sub.remote_addr = extract_addr(
+                            //     arg.to_value_os()
+                            //         .to_str()
+                            //         .and_then(|v| {
+                            //             if v.is_empty() || v.find('-') == Some(0) {
+                            //                 None
+                            //             } else {
+                            //                 Some(v)
+                            //             }
+                            //         })
+                            //         .ok_or(ClientError::Encoding)?,
+                            //     false,
+                            // )?;
+                        }
+                    }
+                    Ok(ArgCommands::Tunnel(sub))
+                    // if sub.remote_addr.0.is_empty() {
+                    //     Err(ClientError::RequiredValue("remote"))
+                    // } else {
+                    //     // if sub.agent_name.is_empty() {
+                    //     //     sub.agent_name = lookup_one(gateway_address.clone(), token.clone()).await?
+                    //     // }
+                    //     Ok(ArgCommands::Tunnel(sub))
+                    // }
                 }
                 SubCommands::Forward => {
                     let mut sub = ForwardArgs {
@@ -688,6 +814,7 @@ pub enum ArgCommands {
     List(ListArgs),
     Proxy(ProxyArgs),
     Connect(ConnectArgs),
+    Tunnel(TunnelArgs),
 }
 
 impl ArgCommands {
@@ -696,6 +823,7 @@ impl ArgCommands {
             ArgCommands::Forward(args) => Some(&args.agent_name),
             ArgCommands::Proxy(args) => Some(&args.agent_name),
             ArgCommands::Connect(args) => Some(&args.agent_name),
+            ArgCommands::Tunnel(args) => Some(&args.agent_name),
             _ => None,
         }
         .cloned()
@@ -711,6 +839,7 @@ impl ArgCommands {
             ArgCommands::Forward(args) => args.cryptography.clone(),
             ArgCommands::Proxy(args) => args.cryptography.clone(),
             ArgCommands::Connect(args) => args.cryptography.clone(),
+            ArgCommands::Tunnel(args) => args.cryptography.clone(),
             _ => None,
         }
     }

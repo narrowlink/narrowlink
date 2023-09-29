@@ -61,6 +61,9 @@ rand = { version = "0.8.5", default-features = false }
 dirs = { version = "5.0.1", default-features = false }
 uuid = { version = "1.4.1", features = ["v4"], default-features = false }
 chrono = { version = "0.4.30", default-features = false }
+etherparse = {version = "0.13", default-features = false }
+tun = { version = "0.5", features = ["async"] }
+
 
 narrowlink-types = { version = "0.2.0-git" }
 narrowlink-network = { version = "0.2.0-git" }

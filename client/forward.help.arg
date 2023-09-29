@@ -1,4 +1,4 @@
-Create a tunnel
+Create a forward tunnel
 
 Usage:
   narrowlink forward [OPTIONS]

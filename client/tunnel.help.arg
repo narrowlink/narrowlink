@@ -1,0 +1,17 @@
+Create a TUN tunnel
+
+Usage:
+  narrowlink tunnel [OPTIONS]
+
+Description:
+  Creates a TUN interface to connect to a remote endpoint
+
+Examples:
+  narrowlink tunnel -n <agent name>
+  narrowlink t -n <agent name> -k <key>
+
+Options:
+  -n, --name=       The name of the agent
+  -k, --key=        The secret key for end-to-end encryption
+      --p2p         Use P2P mode
+

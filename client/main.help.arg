@@ -8,6 +8,9 @@ Available Commands:
   forward       Create a port forwarding tunnel
   connect       Connect to a remote end node like netcat
   proxy         Create a local socks5 proxy server
+  tunnel        Create a TUN interface to connect to a remote end node
+
+* This command is experimental and currently only works on Linux and macOS
 
 Options:
   -c, --config=    Specify a config file

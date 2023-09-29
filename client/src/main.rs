@@ -6,7 +6,7 @@ use std::{
     collections::HashMap,
     env,
     io::{self, IsTerminal},
-    net::{IpAddr, SocketAddr},
+    net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4},
     sync::{
         atomic::{AtomicBool, AtomicU8, Ordering},
         Arc,
@@ -18,7 +18,7 @@ mod args;
 mod error;
 use args::{ArgCommands, Args};
 mod config;
-use either::Either;
+mod tun;
 use error::ClientError;
 use futures_util::stream::StreamExt;
 use hmac::Mac;
@@ -54,7 +54,10 @@ use tracing_subscriber::{
     util::SubscriberInitExt,
     Layer,
 };
+use tun::TunListener;
 use udp_stream::UdpListener;
+
+use crate::tun::TunStream;
 
 pub enum P2PStatus {
     Uninitialized = 0x0,
@@ -62,6 +65,13 @@ pub enum P2PStatus {
     Pending = 0x2,
     Closed = 0x3,
     Failed = 0xff,
+}
+
+pub enum Listener {
+    None,
+    Tcp(TcpListener),
+    Udp(UdpListener),
+    Tun(TunListener),
 }
 
 #[tokio::main]
@@ -139,7 +149,7 @@ async fn main() -> Result<(), ClientError> {
         >,
         tokio::task::JoinHandle<()>,
     )> = None;
-    let mut socket_listener = None;
+    let mut socket_listener = Listener::None;
     let arg_commands = args.arg_commands.clone();
     let mut p2p = false;
 
@@ -163,16 +173,20 @@ async fn main() -> Result<(), ClientError> {
                     .await
                     .and_then(|listener| Ok((listener.local_addr()?, listener)))
                     .map_err(|_| ClientError::UnableToBind)?;
-                (Either::Left(listener), local_addr)
+                (Listener::Udp(listener), local_addr)
             } else {
                 let (local_addr, listener) = TcpListener::bind(local_addr)
                     .await
                     .and_then(|listener| Ok((listener.local_addr()?, listener)))
                     .map_err(|_| ClientError::UnableToBind)?;
-                (Either::Right(listener), local_addr)
+                (Listener::Tcp(listener), local_addr)
             };
 
-            socket_listener = Some(listener);
+            socket_listener = listener;
+        }
+        ArgCommands::Tunnel(tunnel_args) => {
+            p2p = tunnel_args.p2p;
+            socket_listener = Listener::Tun(TunListener::new());
         }
         ArgCommands::Proxy(proxy_args) => {
             p2p = proxy_args.p2p;
@@ -184,22 +198,22 @@ async fn main() -> Result<(), ClientError> {
                     .map_err(|_| ClientError::InvalidLocalAddress)?,
                 proxy_args.local_addr.1,
             );
-            socket_listener = Some(Either::Right(
+            socket_listener = Listener::Tcp(
                 TcpListener::bind(local_addr)
                     .await
                     .map_err(|_| ClientError::UnableToBind)?,
-            ));
+            );
         }
     };
-    span.in_scope(|| {
-        trace!(
-            "Listen address: {:?}",
-            socket_listener.as_ref().map(|l| match l {
-                Either::Left(l) => l.local_addr(),
-                Either::Right(l) => l.local_addr(),
-            })
-        )
-    });
+    // span.in_scope(|| {
+    //     trace!(
+    //         "Listen address: {:?}",
+    //         socket_listener.as_ref().map(|l| match l {
+    //             Either::Left(l) => l.local_addr(),
+    //             Either::Right(l) => l.local_addr(),
+    //         })
+    //     )
+    // });
 
     let mut agents = Vec::new();
     let list_of_agents_refresh_required = Arc::new(AtomicBool::new(true));
@@ -253,7 +267,7 @@ async fn main() -> Result<(), ClientError> {
                 list_of_agents_refresh_required.store(false, Ordering::Relaxed);
             }
 
-            let (mut socket, agent_name) =
+            let (mut socket, agent_name, addr, is_tcp) =
                 if let ArgCommands::List(list_args) = arg_commands.as_ref() {
                     trace!("List of agents");
                     if agents.is_empty() {
@@ -297,6 +311,7 @@ async fn main() -> Result<(), ClientError> {
                     break;
                 } else {
                     trace!("Network connection to agent");
+                    // dbg!(&arg_commands);
                     let Some(agent_name) = arg_commands
                         .agent_name()
                         .clone()
@@ -327,21 +342,48 @@ async fn main() -> Result<(), ClientError> {
                             ))
                             .await;
                     }
-                    if let Some(ref listener) = socket_listener {
-                        trace!("Accept connection");
-                        let socket: Box<dyn AsyncSocket> = match listener {
-                            Either::Left(ref udp_listen) => Box::new(udp_listen.accept().await?.0),
-                            Either::Right(ref tcp_listen) => Box::new(tcp_listen.accept().await?.0),
+                    let (socket, addr, is_tcp): (Box<dyn AsyncSocket>, SocketAddr, bool) =
+                        match socket_listener {
+                            Listener::Udp(ref udp_listen) => {
+                                let (s, a) = udp_listen.accept().await?;
+                                (Box::new(s), a, false)
+                            }
+                            Listener::Tcp(ref tcp_listen) => {
+                                let (s, a) = tcp_listen.accept().await?;
+                                (Box::new(s), a, false)
+                            }
+                            Listener::Tun(ref mut tun_listen) => {
+                                let (s, a) = tun_listen.accept().await?;
+                                match s {
+                                    TunStream::Tcp(socket) => (Box::new(socket), a, true),
+                                }
+                            }
+                            Listener::None => (
+                                Box::<InputStream>::default(),
+                                SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0)),
+                                false,
+                            ),
                         };
-                        debug!("Connection accepted");
-                        (socket, agent_name)
-                    } else {
-                        trace!("Stdin/Stdout connection");
-                        (
-                            Box::<InputStream>::default() as Box<dyn AsyncSocket>,
-                            agent_name,
-                        )
-                    }
+                    (socket, agent_name, addr, is_tcp)
+                    // if let Some(ref listener) = socket_listener {
+                    //     trace!("Accept connection");
+                    //     let socket: Box<dyn AsyncSocket> = match listener {
+                    //         Listener::Udp(ref udp_listen) => Box::new(udp_listen.accept().await?.0),
+                    //         Listener::Tcp(ref tcp_listen) => Box::new(tcp_listen.accept().await?.0),
+                    //         // Listener::Tun(ref tun_listen) => match tun_listen.accept().await.unwrap(){
+                    //         //     TunStream::Tcp(socket, ) => Box::new(socket),
+                    //         // },
+                    //         _ => unreachable!(),
+                    //     };
+                    //     debug!("Connection accepted");
+                    //     (socket, agent_name)
+                    // } else {
+                    //     trace!("Stdin/Stdout connection");
+                    //     (
+                    //         Box::<InputStream>::default() as Box<dyn AsyncSocket>,
+                    //         agent_name,
+                    //     )
+                    // }
                 };
             // let agent_name: String = args
             //     .agent_name()
@@ -355,11 +397,23 @@ async fn main() -> Result<(), ClientError> {
                 debug!("Make a data stream to agent: {}", agent_name);
                 let arg_commands = arg_commands.clone();
                 let connections = connections.clone();
+                // dbg!(&addr);
                 async move {
                     let mut connect = match arg_commands.as_ref() {
                         ArgCommands::List(_) => {
                             unreachable!()
                         }
+                        ArgCommands::Tunnel(_) => generic::Connect {
+                            host: "127.0.0.1".to_string(), //addr.ip().to_string()
+                            port: addr.port(),
+                            protocol: if is_tcp {
+                                generic::Protocol::TCP
+                            } else {
+                                generic::Protocol::UDP
+                            },
+                            cryptography: None,
+                            sign: None,
+                        },
                         ArgCommands::Connect(connect_args) => {
                             if connect_args.p2p {
                                 for i in 0..120 {
