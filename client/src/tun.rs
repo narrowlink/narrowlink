@@ -60,7 +60,9 @@ impl TunListener {
                         Transport::Tcp(tcp) => match self.tcp_streams.entry(packet.get_network_tuple()) {
                             Entry::Occupied(s) => {
                                 if !tcp.syn {
-                                    s.get().send((tcp.clone(),packet.payload)).await.unwrap();
+                                    let ss = s.get();
+                                    // dbg!(ss.is_closed());
+                                    ss.send((tcp.clone(),packet.payload)).await.unwrap();
                                 }
                             },
                             Entry::Vacant(c) => {
@@ -220,6 +222,7 @@ impl AsyncRead for TunTcpStream {
                             let send = Box::pin(self.tun_sender.send(b)).poll_unpin(cx);
                             match send {
                                 std::task::Poll::Ready(Ok(_)) => {
+                                    dbg!(plen);
                                     self.recv_seq.nxt += plen as u32;
                                     return std::task::Poll::Ready(Ok(()));
                                 }
@@ -234,7 +237,10 @@ impl AsyncRead for TunTcpStream {
                                 .all(|v| v == &false)
                         {}
                     }
-                    std::task::Poll::Ready(None) => return std::task::Poll::Ready(Ok(())),
+                    std::task::Poll::Ready(None) => {
+                        dbg!("none");
+                        return std::task::Poll::Ready(Ok(()));
+                    }
                     std::task::Poll::Pending => return std::task::Poll::Pending,
                 }
             }
@@ -255,13 +261,23 @@ impl AsyncWrite for TunTcpStream {
         tcp.window_size = self.recv_seq.wnd;
         tcp.psh = true;
         tcp.ack = true;
-        packet.payload = buf.to_vec();
+
+        let re = MTU - (14 + 20 + 20);
+        let llen = if self.send_seq.wnd < re as u16 {
+            self.send_seq.wnd as usize
+        } else {
+            re
+        };
+
+        packet.payload = buf.to_vec().iter().take(llen).cloned().collect();
+        // dbg!(packet.payload.len());
         let b = packet.as_bytes();
         let plen = packet.payload.len();
         let send = Box::pin(self.tun_sender.send(b)).poll_unpin(cx);
         match send {
             std::task::Poll::Ready(Ok(_)) => {
                 self.send_seq.nxt += plen as u32;
+                // dbg!(plen);
                 std::task::Poll::Ready(Ok(buf.len()))
             }
             std::task::Poll::Ready(Err(_)) => todo!(),
@@ -273,6 +289,7 @@ impl AsyncWrite for TunTcpStream {
         self: std::pin::Pin<&mut Self>,
         _cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<(), std::io::Error>> {
+        // dbg!("flush");
         std::task::Poll::Ready(Ok(()))
     }
 
@@ -280,6 +297,7 @@ impl AsyncWrite for TunTcpStream {
         self: std::pin::Pin<&mut Self>,
         _cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<(), std::io::Error>> {
+        dbg!("shutdown");
         std::task::Poll::Ready(Ok(()))
     }
 }

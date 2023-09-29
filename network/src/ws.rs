@@ -318,7 +318,7 @@ impl futures_util::Sink<String> for WsConnection {
 
 pub struct WsConnectionBinary {
     ws_stream: WebSocketStream<Box<dyn AsyncSocket>>,
-    // remaining_bytes: Option<BytesMut>,
+    remaining_bytes: Option<BytesMut>,
     mode: WsMode,
 }
 
@@ -334,7 +334,7 @@ impl WsConnectionBinary {
 
         Self {
             ws_stream,
-            // remaining_bytes: None,
+            remaining_bytes: None,
             mode: WsMode::Server(tokio::time::interval(core::time::Duration::from_secs(
                 KEEP_ALIVE_TIME,
             ))),
@@ -412,7 +412,7 @@ impl WsConnectionBinary {
         .await;
         Ok(Self {
             ws_stream,
-            // remaining_bytes: None,
+            remaining_bytes: None,
             mode: WsMode::Client(response_headers, conn_handler),
         })
     }
@@ -494,5 +494,105 @@ impl futures_util::Sink<Vec<u8>> for WsConnectionBinary {
         cx: &mut Context<'_>,
     ) -> Poll<Result<(), Self::Error>> {
         self.ws_stream.poll_close_unpin(cx).map_err(|e| e.into())
+    }
+}
+
+impl AsyncRead for WsConnectionBinary {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        loop {
+            if let Some(remaining_buf) = self.remaining_bytes.as_mut() {
+                if buf.remaining() < remaining_buf.len() {
+                    let buffer = remaining_buf.split_to(buf.remaining());
+                    buf.put_slice(&buffer);
+                } else {
+                    buf.put_slice(remaining_buf);
+                    self.remaining_bytes = None::<BytesMut>;
+                }
+                return Poll::Ready(Ok(()));
+            }
+            match self.ws_stream.poll_next_unpin(cx) {
+                Poll::Ready(Some(Ok(msg))) => {
+                    if let Message::Binary(msg) = msg {
+                        if buf.remaining() < msg.len() {
+                            let mut bytes = BytesMut::with_capacity(msg.len() - buf.remaining());
+                            bytes.put(&msg[buf.remaining()..]);
+                            self.remaining_bytes = Some(bytes);
+                            buf.put_slice(&msg[..buf.remaining()]);
+                        } else {
+                            buf.put_slice(&msg);
+                        }
+                        return Poll::Ready(Ok(()));
+                    } else {
+                        continue;
+                    }
+                }
+                Poll::Ready(Some(Err(e))) => {
+                    return Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, e.to_string())))
+                }
+                Poll::Ready(None) => return Poll::Ready(Ok(())),
+                Poll::Pending => {
+                    if let WsMode::Server(interval) = &mut self.mode {
+                        match interval.poll_tick(cx) {
+                            Poll::Ready(_) => {
+                                match self.ws_stream.send(Message::Ping(vec![0])).poll_unpin(cx) {
+                                    Poll::Ready(Ok(_)) => continue,
+                                    Poll::Ready(Err(e)) => {
+                                        return Poll::Ready(Err(io::Error::new(
+                                            io::ErrorKind::Other,
+                                            e.to_string(),
+                                        )))
+                                    }
+                                    Poll::Pending => return Poll::Pending,
+                                }
+                            }
+                            Poll::Pending => return Poll::Pending,
+                        }
+                    } else {
+                        return Poll::Pending;
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl AsyncWrite for WsConnectionBinary {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<Result<usize, io::Error>> {
+        match self
+            .ws_stream
+            .poll_ready_unpin(cx)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?
+        {
+            Poll::Ready(()) => {
+                self.ws_stream
+                    .start_send_unpin(Message::binary(buf))
+                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+                Poll::Ready(Ok(buf.len()))
+            }
+            Poll::Pending => Poll::Pending,
+        }
+    }
+
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
+        self.ws_stream
+            .poll_flush_unpin(cx)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+    }
+
+    fn poll_shutdown(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), io::Error>> {
+        self.ws_stream
+            .poll_close_unpin(cx)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
     }
 }

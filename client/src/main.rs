@@ -28,9 +28,8 @@ use narrowlink_network::{
     error::NetworkError,
     event::{NarrowEvent, NarrowEventRequest},
     p2p::QuicStream,
-    stream_forward,
     ws::{WsConnection, WsConnectionBinary},
-    AsyncSocket, AsyncToStream, StreamCrypt, UniversalStream,
+    AsyncSocket, AsyncSocketCrypt,
 };
 
 use narrowlink_types::{
@@ -554,7 +553,11 @@ async fn main() -> Result<(), ClientError> {
                     }
 
                     if let Some(stream) = p2p_stream.read().await.as_ref() {
-                        if let Ok(mut quic_socket) = stream.open_bi().await {
+                        if let Ok(mut quic_socket) = stream
+                            .open_bi()
+                            .await
+                            .map(|v| Box::new(v) as Box<dyn AsyncSocket>)
+                        {
                             if narrowlink_network::p2p::Request::from(&connect)
                                 .write(&mut quic_socket)
                                 .await
@@ -565,7 +568,18 @@ async fn main() -> Result<(), ClientError> {
                                 {
                                     Ok(narrowlink_network::p2p::Response::Success) => {
                                         trace!("P2P connection established");
-
+                                        if let (Some(k), Some(n)) = (key, nonce) {
+                                            trace!("Creating cryptography stream");
+                                            quic_socket = Box::new(
+                                                AsyncSocketCrypt::new(
+                                                    k,
+                                                    n,
+                                                    Box::new(quic_socket),
+                                                    true,
+                                                )
+                                                .await,
+                                            );
+                                        }
                                         if let Err(_e) = async_forward(quic_socket, socket).await {
                                             debug!("connection closed {}", _e);
                                         }
@@ -607,40 +621,39 @@ async fn main() -> Result<(), ClientError> {
                         error!("Unable to serialize connect command"); // unreachable
                         return;
                     };
-                    let (mut data_stream, connection_id): (
-                        Box<dyn UniversalStream<Vec<u8>, NetworkError>>,
-                        Option<String>,
-                    ) = match WsConnectionBinary::new(
-                        &gateway_address,
-                        HashMap::from([
-                            ("NL-TOKEN", token.clone()),
-                            ("NL-SESSION", session_id.clone()),
-                            ("NL-COMMAND", cmd.clone()),
-                        ]),
-                        conf.protocol.clone(),
-                    )
-                    .await
-                    {
-                        Ok(data_stream) => {
-                            trace!("Connection successful");
-                            let connection_id = data_stream
-                                .get_header("NL-CONNECTION")
-                                .map(|c| c.to_string());
+                    let (mut data_stream, connection_id): (Box<dyn AsyncSocket>, Option<String>) =
+                        match WsConnectionBinary::new(
+                            &gateway_address,
+                            HashMap::from([
+                                ("NL-TOKEN", token.clone()),
+                                ("NL-SESSION", session_id.clone()),
+                                ("NL-COMMAND", cmd.clone()),
+                            ]),
+                            conf.protocol.clone(),
+                        )
+                        .await
+                        {
+                            Ok(data_stream) => {
+                                trace!("Connection successful");
+                                let connection_id = data_stream
+                                    .get_header("NL-CONNECTION")
+                                    .map(|c| c.to_string());
 
-                            (Box::new(data_stream), connection_id)
-                        }
-                        Err(_e) => {
-                            warn!("Unable to connect server: {}", _e);
-                            list_of_agents_refresh_required.store(true, Ordering::Relaxed);
-                            return;
-                        }
-                    };
+                                (Box::new(data_stream), connection_id)
+                            }
+                            Err(_e) => {
+                                warn!("Unable to connect server: {}", _e);
+                                list_of_agents_refresh_required.store(true, Ordering::Relaxed);
+                                return;
+                            }
+                        };
                     if let (Some(k), Some(n)) = (key, nonce) {
                         trace!("Creating cryptography stream");
-                        data_stream = Box::new(StreamCrypt::new(k, n, data_stream));
+                        data_stream =
+                            Box::new(AsyncSocketCrypt::new(k, n, data_stream, true).await);
                     }
 
-                    if let Err(e) = stream_forward(data_stream, AsyncToStream::new(socket)).await {
+                    if let Err(e) = async_forward(data_stream, socket).await {
                         if let Some(connection_id) = connection_id {
                             // Change 0.2: make connection_id mandatory
                             let reason = connections.lock().await.remove(&connection_id);

@@ -17,10 +17,9 @@ use narrowlink_network::{
     error::NetworkError,
     event::NarrowEvent,
     p2p::QuicStream,
-    stream_forward,
     transport::{StreamType, TlsConfiguration, UnifiedSocket},
     ws::{WsConnection, WsConnectionBinary},
-    AsyncSocket, AsyncToStream, StreamCrypt, UniversalStream,
+    AsyncSocket, AsyncSocketCrypt,
 };
 use narrowlink_types::{
     agent::{
@@ -264,14 +263,18 @@ async fn start(args: Args) -> Result<(), AgentError> {
                         let policies = p2p.policies;
                         loop {
                             let policies = policies.clone();
-                            let mut s = match con.accept_bi().await {
+                            let mut s = match con
+                                .accept_bi()
+                                .await
+                                .map(|s| Box::new(s) as Box<dyn AsyncSocket>)
+                            {
                                 Ok(s) => s,
                                 Err(e) => {
                                     warn!("Unable to accept peer to peer channel: {}", e);
                                     break;
                                 }
                             };
-
+                            let key = key.clone();
                             tokio::spawn(async move {
                                 let Ok(r) = narrowlink_network::p2p::Request::read(&mut s).await
                                 else {
@@ -299,6 +302,90 @@ async fn start(args: Args) -> Result<(), AgentError> {
                                     }
                                     return;
                                 }
+                                let nonce: Option<[u8; 24]> = con.get_cryptography_nonce();
+                                if (nonce.is_some() && key.is_none())
+                                    || nonce.is_none()
+                                        && key
+                                            .as_ref()
+                                            .filter(|(_, policy)| &KeyPolicy::Strict == policy)
+                                            .is_some()
+                                {
+                                    warn!(
+                                            "Access denied to {}:{}, peer: {} - Encryption is enforced, but request is not encrypted or key not found",
+                                            con.host, con.port, p2p.peer_ip
+                                        );
+                                    if narrowlink_network::p2p::Response::write(
+                                        &narrowlink_network::p2p::Response::AccessDenied,
+                                        &mut s,
+                                    )
+                                    .await
+                                    .is_err()
+                                    {
+                                        warn!("Unable to write response");
+                                    }
+                                    return;
+                                }
+
+                                let (k, n): (Option<[u8; 32]>, Option<[u8; 24]>) =
+                                    if let (Some((k, _)), Some(n)) = (key.as_ref(), nonce) {
+                                        let k = Sha3_256::digest(
+                                            k.as_bytes()
+                                                .iter()
+                                                .zip(n.iter().cycle())
+                                                .map(|(n, s)| n ^ s)
+                                                .collect::<Vec<u8>>(),
+                                        );
+                                        let Ok(mut mac) = generic::HmacSha256::new_from_slice(&k)
+                                        else {
+                                            warn!("Unable to create HMAC");
+                                            if narrowlink_network::p2p::Response::write(
+                                                &narrowlink_network::p2p::Response::AccessDenied,
+                                                &mut s,
+                                            )
+                                            .await
+                                            .is_err()
+                                            {
+                                                warn!("Unable to write response");
+                                            }
+                                            return;
+                                        };
+                                        mac.update(
+                                            &[
+                                                format!(
+                                                    "{}:{}:{}",
+                                                    &con.host,
+                                                    &con.port,
+                                                    con.protocol.clone() as u32
+                                                )
+                                                .as_bytes(),
+                                                &n,
+                                            ]
+                                            .concat(),
+                                        );
+
+                                        if (con.get_sign().and_then(|s| mac.verify_slice(&s).ok()))
+                                            .is_none()
+                                        {
+                                            warn!(
+                                                "Request signature verification failed, peer: {}",
+                                                p2p.peer_ip
+                                            );
+                                            if narrowlink_network::p2p::Response::write(
+                                                &narrowlink_network::p2p::Response::AccessDenied,
+                                                &mut s,
+                                            )
+                                            .await
+                                            .is_err()
+                                            {
+                                                warn!("Unable to write response");
+                                            }
+                                            return;
+                                        };
+
+                                        (Some(k.into()), Some(n))
+                                    } else {
+                                        (None, None)
+                                    };
                                 // dbg!(&con);
                                 trace!("Connecting to {}", con.host);
                                 let Some(remote_addr) =
@@ -320,6 +407,7 @@ async fn start(args: Args) -> Result<(), AgentError> {
                                     warn!("Unable to resolve {}", con.host);
                                     return;
                                 };
+
                                 let socket = if matches!(con.protocol, generic::Protocol::UDP) {
                                     UdpStream::connect(remote_addr)
                                         .await
@@ -358,6 +446,9 @@ async fn start(args: Args) -> Result<(), AgentError> {
                                         return;
                                     }
                                 };
+                                if let (Some(k), Some(n)) = (k, n) {
+                                    s = Box::new(AsyncSocketCrypt::new(k, n, s, false).await);
+                                }
                                 if let Err(_e) = async_forward(s, stream).await {
                                     trace!("Data channel closed: {}", _e.to_string());
                                 }
@@ -428,12 +519,14 @@ async fn data_connect(
     }
 
     let protocol = req.protocol.clone();
+
     let nonce: Option<[u8; 24]> = req.get_cryptography_nonce();
     if nonce.is_some() && key.is_none() {
         trace!("Key not found");
         return Err(AgentError::KeyNotFound);
     } else if nonce.is_none()
         && key
+            .as_ref()
             .filter(|(_, policy)| &KeyPolicy::Strict == policy)
             .is_some()
     {
@@ -513,14 +606,14 @@ async fn data_connect(
         headers.insert("NL-CONNECTING-ADDRESS", peer_address);
     }
     trace!("Connecting to gateway for Data channel: {}", gateway_addr);
-    let mut data_stream: Box<dyn UniversalStream<Vec<u8>, NetworkError>> =
+    let mut data_stream: Box<dyn AsyncSocket> =
         Box::new(WsConnectionBinary::new(gateway_addr, headers, service_type).await?);
     trace!("Connected to gateway for Data channel");
     if let (Some(k), Some(n)) = (k, n) {
-        data_stream = Box::new(StreamCrypt::new(k, n, data_stream));
+        data_stream = Box::new(AsyncSocketCrypt::new(k, n, data_stream, false).await);
     }
 
-    if let Err(_e) = stream_forward(data_stream, AsyncToStream::new(socket)).await {
+    if let Err(_e) = async_forward(data_stream, socket).await {
         trace!("Data channel closed: {}", _e.to_string());
         // dbg!(e);
     };
