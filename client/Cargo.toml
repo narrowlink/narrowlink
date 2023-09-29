@@ -24,7 +24,7 @@ path = "src/main.rs"
 
 [dependencies]
 clap_lex = { version = "0.5.1", default-features = false }
-thiserror = { version = "1.0.48", default-features = false }
+thiserror = { version = "1.0.49", default-features = false }
 tokio = { version = "1.32.0", features = [
     "macros",
     "rt",
@@ -37,10 +37,10 @@ futures-sink = { version = "0.3.28", features = [
     "alloc",
 ], default-features = false }
 futures-timer = { version = "3.0.2", default-features = false }
-tokio-tungstenite = { version = "0.20.0", default-features = false }
-tungstenite = { version = "0.20.0", default-features = false }
+tokio-tungstenite = { version = "0.20.1", default-features = false }
+tungstenite = { version = "0.20.1", default-features = false }
 serde = { version = "1.0.188", features = ["derive"], default-features = false }
-serde_json = { version = "1.0.106", default-features = false }
+serde_json = { version = "1.0.107", default-features = false }
 serde_yaml = { version = "0.9.25", default-features = false }
 udp-stream = { version = "0.0.9", default-features = false }
 regex = { version = "1.9.5", features = ["std"], default-features = false }
@@ -60,7 +60,7 @@ hmac = { version = "0.12.1", default-features = false }
 rand = { version = "0.8.5", default-features = false }
 dirs = { version = "5.0.1", default-features = false }
 uuid = { version = "1.4.1", features = ["v4"], default-features = false }
-chrono = { version = "0.4.30", default-features = false }
+chrono = { version = "0.4.31", default-features = false }
 
 
 narrowlink-types = { version = "0.2.0-git" }
