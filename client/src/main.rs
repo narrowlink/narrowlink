@@ -737,7 +737,8 @@ async fn main() -> Result<(), ClientError> {
                 };
             let local_addr = event_stream.local_addr();
             if let Some(r) = route_sender.as_ref() {
-                r.send(RouteCommand::Add(event_stream.peer_addr().ip())).unwrap();
+                r.send(RouteCommand::Add(event_stream.peer_addr().ip()))
+                    .unwrap();
             };
             // gateway_ip = Some(event_stream.peer_addr());
             let session_id = event_stream
