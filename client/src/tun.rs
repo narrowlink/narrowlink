@@ -28,9 +28,14 @@ pub struct TunListener {
     route: Option<TunRoute>,
 }
 
+pub enum RouteCommand {
+    Add(IpAddr),
+    Del(IpAddr),
+}
+
 pub struct TunRoute {
     _task: tokio::task::JoinHandle<Result<(), std::io::Error>>,
-    route_sender: UnboundedSender<IpAddr>,
+    route_sender: UnboundedSender<RouteCommand>,
 }
 
 impl TunRoute {
@@ -44,7 +49,7 @@ impl TunRoute {
         };
 
         let (tx, mut rx) = mpsc::unbounded_channel();
-        let (route_tx, mut route_rx) = mpsc::unbounded_channel();
+        let (route_tx, mut route_rx) = mpsc::unbounded_channel::<RouteCommand>();
         ctrlc::set_handler(move || tx.send(()).expect("Could not send signal on channel."))
             .expect("Error setting Ctrl-C handler");
         let task = tokio::spawn(async move {
@@ -59,7 +64,7 @@ impl TunRoute {
                         handle.add(&default_gw).await.unwrap();
                         std::process::exit(0x0)
                     },
-                    Some(ip) = route_rx.recv() =>{
+                    Some(cmd) = route_rx.recv() =>{
                         if !init {
                             handle.delete(&default_gw).await?;
                             let new_default_gateway =
@@ -68,9 +73,19 @@ impl TunRoute {
                             routes.push(new_default_gateway);
                             init = true;
                         }
-                        let r = Route::new(ip, 32).with_gateway(default_gw.gateway.unwrap());
-                        handle.add(&r).await.unwrap();
-                        routes.push(r);
+                        match cmd {
+                            RouteCommand::Add(ip) => {
+                                let r = Route::new(ip, 32).with_gateway(default_gw.gateway.unwrap());
+                                if handle.add(&r).await.is_ok(){
+                                    routes.push(r);
+                                }
+                            },
+                            RouteCommand::Del(ip) => {
+                                if let Some(index) = routes.iter().position(|x| x.destination == ip){
+                                    routes.remove(index);
+                                }
+                            }
+                        }
                         continue;
                     }
                 };
@@ -81,7 +96,7 @@ impl TunRoute {
             route_sender: route_tx,
         })
     }
-    pub fn get_sender(&self) -> UnboundedSender<IpAddr> {
+    pub fn get_sender(&self) -> UnboundedSender<RouteCommand> {
         self.route_sender.clone()
     }
 }
@@ -168,7 +183,7 @@ impl TunListener {
             }
         }
     }
-    pub fn route_sender(&self) -> Option<UnboundedSender<IpAddr>> {
+    pub fn route_sender(&self) -> Option<UnboundedSender<RouteCommand>> {
         self.route.as_ref().map(|f| f.get_sender())
     }
 }

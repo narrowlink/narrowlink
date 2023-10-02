@@ -60,6 +60,8 @@ use udp_stream::UdpListener;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use tun::{TunListener, TunStream};
 
+use crate::tun::RouteCommand;
+
 pub enum P2PStatus {
     Uninitialized = 0x0,
     Success = 0x1,
@@ -735,7 +737,7 @@ async fn main() -> Result<(), ClientError> {
                 };
             let local_addr = event_stream.local_addr();
             if let Some(r) = route_sender.as_ref() {
-                r.send(event_stream.peer_addr().ip()).unwrap();
+                r.send(RouteCommand::Add(event_stream.peer_addr().ip())).unwrap();
             };
             // gateway_ip = Some(event_stream.peer_addr());
             let session_id = event_stream
@@ -749,6 +751,7 @@ async fn main() -> Result<(), ClientError> {
             let sys_req = event.get_request();
             let (_event_tx, mut event_rx) = event.split();
             let connections = connections.clone();
+            let route_sender = route_sender.clone();
             let event_stream_task = tokio::spawn(async move {
                 while let Some(Ok(msg)) = event_rx.next().await {
                     debug!("Event: {:?}", msg);
@@ -764,6 +767,9 @@ async fn main() -> Result<(), ClientError> {
                                 .insert(connection_id.to_string(), msg);
                         }
                         narrowlink_types::client::EventInBound::Peer2Peer(p2p) => {
+                            if let Some(r) = route_sender.as_ref() {
+                                r.send(RouteCommand::Add(p2p.peer_ip)).unwrap();
+                            };
                             let p2p_status = p2p_status.clone();
                             let p2p_stream = p2p_stream.clone();
 
