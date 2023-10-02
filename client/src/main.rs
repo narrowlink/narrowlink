@@ -18,7 +18,7 @@ mod args;
 mod error;
 use args::{ArgCommands, Args};
 mod config;
-#[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod tun;
 use error::ClientError;
 use futures_util::stream::StreamExt;
@@ -37,6 +37,7 @@ use narrowlink_types::{
     client::EventOutBound as ClientEventOutBound, client::EventRequest as ClientEventRequest,
     generic, GetResponse,
 };
+
 use proxy_stream::ProxyStream;
 use rand::Rng;
 use sha3::{Digest, Sha3_256};
@@ -56,7 +57,7 @@ use tracing_subscriber::{
 };
 use udp_stream::UdpListener;
 
-#[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use tun::{TunListener, TunStream};
 
 pub enum P2PStatus {
@@ -71,7 +72,7 @@ pub enum Listener {
     None,
     Tcp(TcpListener),
     Udp(UdpListener),
-    #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     Tun(TunListener),
 }
 
@@ -153,6 +154,7 @@ async fn main() -> Result<(), ClientError> {
     let mut socket_listener = Listener::None;
     let arg_commands = args.arg_commands.clone();
     let mut p2p = false;
+    let mut route_sender = None;
 
     match arg_commands.as_ref() {
         ArgCommands::List(_) => {}
@@ -185,14 +187,16 @@ async fn main() -> Result<(), ClientError> {
 
             socket_listener = listener;
         }
-        #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         ArgCommands::Tunnel(tunnel_args) => {
             p2p = tunnel_args.p2p;
-            #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
             {
-                socket_listener = Listener::Tun(TunListener::new());
+                let tun = TunListener::new().await;
+                route_sender = tun.route_sender();
+                socket_listener = Listener::Tun(tun);
             }
-            #[cfg(not(all(any(target_os = "linux", target_os = "macos"), debug_assertions)))]
+            #[cfg(not(any(target_os = "linux", target_os = "macos")))]
             {
                 socket_listener = Listener::None
             }
@@ -369,6 +373,7 @@ async fn main() -> Result<(), ClientError> {
                                 let (s, a) = tun_listen.accept().await?;
                                 match s {
                                     TunStream::Tcp(socket) => (Box::new(socket), a, true),
+                                    TunStream::Udp(socket) => (Box::new(socket), a, false),
                                 }
                             }
                             Listener::None => (
@@ -421,7 +426,7 @@ async fn main() -> Result<(), ClientError> {
                             debug_assertions
                         ))]
                         ArgCommands::Tunnel(_) => generic::Connect {
-                            host: "127.0.0.1".to_string(), //addr.ip().to_string()
+                            host: addr.ip().to_string(), //addr.ip().to_string()
                             port: addr.port(),
                             protocol: if is_tcp {
                                 generic::Protocol::TCP
@@ -689,7 +694,7 @@ async fn main() -> Result<(), ClientError> {
             } else {
                 HashMap::from([("NL-TOKEN", token.clone())])
             };
-            let (event_stream, local_addr) =
+            let event_stream =
                 match WsConnection::new(&conf.gateway, headers, conf.protocol.clone()).await {
                     Ok(es) => {
                         if !matches!(args.arg_commands.as_ref(), ArgCommands::List(_)) {
@@ -728,7 +733,11 @@ async fn main() -> Result<(), ClientError> {
                         continue;
                     }
                 };
-
+            let local_addr = event_stream.local_addr();
+            if let Some(r) = route_sender.as_ref() {
+                r.send(event_stream.peer_addr().ip()).unwrap();
+            };
+            // gateway_ip = Some(event_stream.peer_addr());
             let session_id = event_stream
                 .get_header("NL-SESSION")
                 .ok_or(ClientError::InvalidConfig)?
