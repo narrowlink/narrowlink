@@ -53,7 +53,7 @@ impl TunRoute {
         let (route_tx, mut route_rx) = mpsc::unbounded_channel::<RouteCommand>();
         use signal_hook::consts::signal::{SIGABRT, SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGTSTP};
         let mut signals =
-            signal_hook_tokio::Signals::new(&[SIGTERM, SIGINT, SIGQUIT, SIGTSTP, SIGABRT, SIGHUP])?;
+            signal_hook_tokio::Signals::new([SIGTERM, SIGINT, SIGQUIT, SIGTSTP, SIGABRT, SIGHUP])?;
         let task = tokio::spawn(async move {
             let mut init = false;
             let mut routes = Vec::new();
