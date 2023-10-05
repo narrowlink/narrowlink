@@ -50,21 +50,23 @@ impl TunRoute {
             ));
         };
 
-        let (tx, mut rx) = mpsc::unbounded_channel();
         let (route_tx, mut route_rx) = mpsc::unbounded_channel::<RouteCommand>();
-        ctrlc::set_handler(move || tx.send(()).expect("Could not send signal on channel."))
-            .expect("Error setting Ctrl-C handler");
+        use signal_hook::consts::signal::{SIGABRT, SIGINT, SIGQUIT, SIGTERM, SIGTSTP};
+        let mut signals =
+            signal_hook_tokio::Signals::new(&[SIGTERM, SIGINT, SIGQUIT, SIGTSTP, SIGABRT])?;
         let task = tokio::spawn(async move {
             let mut init = false;
             let mut routes = Vec::new();
             loop {
                 tokio::select! {
-                    _ = rx.recv() => {
-                        for route in routes {
-                            handle.delete(&route).await.unwrap();
+                    Some(signal) = signals.next() => {
+                        if signal == SIGTERM || signal == SIGINT || signal == SIGQUIT || signal == SIGTSTP || signal == SIGABRT {
+                            for route in routes {
+                                handle.delete(&route).await.unwrap();
+                            }
+                            handle.add(&default_gw).await.unwrap();
+                            std::process::exit(0x0)
                         }
-                        handle.add(&default_gw).await.unwrap();
-                        std::process::exit(0x0)
                     },
                     Some(cmd) = route_rx.recv() =>{
                         if !init {
