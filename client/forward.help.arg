@@ -1,7 +1,7 @@
 Create a forward tunnel
 
 Usage:
-  narrowlink forward [OPTIONS]
+  narrowlink forward [OPTIONS] <remote_addr:remote_port>
 
 Description:
   Creates a tunnel between agent and client
@@ -11,10 +11,10 @@ Examples:
   narrowlink f -usn <agent name> <remote_addr:remote_port>
 
 Options:
-  -n, --name=       The name of the agent
-  -l, --local=      The local address and port to bind
-  -s, --silent      Do not check whether the target address and port reachable or not
-  -k, --key=        The secret key for end-to-end encryption
+  -d, --direct      Direct connection to the remote endpoint (peer-to-peer)
+  -r, --relay       Relay connection to the remote endpoint (peer-to-gateway-to-peer)
+  -s, --skip-check  Skip reachability check
   -u, --udp         Use UDP instead of TCP
-      --p2p         Use P2P mode
-
+  -n, --name=       The name of the agent (required)
+  -k, --key=        The secret key for end-to-end encryption
+  -l, --local=      The local address and port to bind

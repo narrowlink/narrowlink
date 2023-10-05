@@ -190,7 +190,7 @@ async fn main() -> Result<(), ClientError> {
             socket_listener = listener;
         }
         #[cfg(any(target_os = "linux", target_os = "macos"))]
-        ArgCommands::Tunnel(tunnel_args) => {
+        ArgCommands::Tun(tunnel_args) => {
             p2p = tunnel_args.p2p;
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             {
@@ -427,7 +427,7 @@ async fn main() -> Result<(), ClientError> {
                             any(target_os = "linux", target_os = "macos"),
                             debug_assertions
                         ))]
-                        ArgCommands::Tunnel(_) => generic::Connect {
+                        ArgCommands::Tun(_) => generic::Connect {
                             host: addr.ip().to_string(), //addr.ip().to_string()
                             port: addr.port(),
                             protocol: if is_tcp {

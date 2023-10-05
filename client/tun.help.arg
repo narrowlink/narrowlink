@@ -1,0 +1,22 @@
+Create a TUN tunnel
+
+Usage:
+  narrowlink tun [OPTIONS]
+
+Description:
+  Creates a TUN interface to connect to a remote endpoint
+   ***           For testing purposes only           ***
+
+Examples:
+  narrowlink tun -n <agent name>
+  narrowlink t -gdn <agent name> -k <key>
+
+Options:
+  -g, --gateway     Use as default gateway
+  -d, --direct      Direct connection to the remote endpoint (peer-to-peer)
+  -r, --relay       Relay connection to the remote endpoint (peer-to-gateway-to-peer)
+  -n, --name=       The name of the agent (required)
+  -k, --key=        The secret key for end-to-end encryption
+  -l, --local=      The local address to bind to
+  -r, --remote=     The remote address to connect to
+

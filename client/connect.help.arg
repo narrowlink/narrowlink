@@ -1,7 +1,7 @@
 Connect to a remote addr
 
 Usage:
-  narrowlink connect [OPTIONS]
+  narrowlink connect [OPTIONS] <remote_addr:remote_port>
 
 Description:
   Connect to a remote addr in the agent side
@@ -11,8 +11,9 @@ Examples:
   narrowlink c -usn <agent name> <remote_addr:remote_port>
 
 Options:
-  -n, --name=       The name of the agent
-  -s, --silent      Do not check whether the target address and port reachable or not
-  -k, --key=        The secret key for end-to-end encryption
+  -d, --direct      Direct connection to the remote endpoint (peer-to-peer)
+  -r, --relay       Relay connection to the remote endpoint (peer-to-gateway-to-peer)
+  -s, --skip-check  Skip reachability check
   -u, --udp         Use UDP instead of TCP
-      --p2p         Use P2P mode
+  -n, --name=       The name of the agent
+  -k, --key=        The secret key for end-to-end encryption

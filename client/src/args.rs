@@ -9,7 +9,7 @@ static FORWARD_HELP: &str = include_str!("../forward.help.arg");
 static PROXY_HELP: &str = include_str!("../proxy.help.arg");
 static CONNECT_HELP: &str = include_str!("../connect.help.arg");
 #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
-static TUNNEL_HELP: &str = include_str!("../tunnel.help.arg");
+static TUN_HELP: &str = include_str!("../tun.help.arg");
 
 pub fn extract_addr(addr: &str, local: bool) -> Result<(String, u16), ClientError> {
     match addr.parse::<SocketAddr>() {
@@ -46,7 +46,7 @@ pub struct ListArgs {
 pub struct ForwardArgs {
     pub agent_name: String,           //i name
     pub local_addr: (String, u16),    //l local
-    pub silent: bool,                 //s silent
+    pub skip_check: bool,             //s skip_check
     pub cryptography: Option<String>, //k key
     pub udp: bool,                    //u udp
     pub p2p: bool,                    //p p2p
@@ -64,7 +64,7 @@ pub struct ProxyArgs {
 #[derive(Debug, Clone)]
 pub struct ConnectArgs {
     pub agent_name: String,           //i name
-    pub silent: bool,                 //s silent
+    pub skip_check: bool,             //s skip_check
     pub cryptography: Option<String>, //k key
     pub udp: bool,                    //u udp
     pub p2p: bool,                    //p p2p
@@ -73,7 +73,7 @@ pub struct ConnectArgs {
 
 #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
 #[derive(Debug, Clone)]
-pub struct TunnelArgs {
+pub struct TunArgs {
     pub agent_name: String,           //i name
     pub cryptography: Option<String>, //k key
     pub p2p: bool,                    //p p2p
@@ -86,7 +86,7 @@ enum SubCommands {
     List,
     Connect,
     #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
-    Tunnel,
+    Tun,
     Proxy,
 }
 
@@ -98,7 +98,7 @@ impl SubCommands {
             ("proxy", 0),
             ("connect", 0),
             #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
-            ("tunnel", 0),
+            ("tun", 0),
         ]);
         for (i, c) in arg.chars().enumerate() {
             for (type_name, type_value) in types.iter_mut() {
@@ -127,7 +127,7 @@ impl SubCommands {
             "connect" => Ok(Self::Connect),
             "proxy" => Ok(Self::Proxy),
             #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
-            "tunnel" => Ok(Self::Tunnel),
+            "tun" => Ok(Self::Tun),
             _ => Err(ClientError::CommandNotFound),
         }
     }
@@ -234,8 +234,8 @@ impl Args {
                     Ok(ArgCommands::List(sub))
                 }
                 #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
-                SubCommands::Tunnel => {
-                    let mut sub = TunnelArgs {
+                SubCommands::Tun => {
+                    let mut sub = TunArgs {
                         agent_name: String::new(),
                         cryptography: None,
                         p2p: false,
@@ -264,7 +264,7 @@ impl Args {
                                     );
                                 }
                                 Ok("help") => {
-                                    print!("{}", TUNNEL_HELP);
+                                    print!("{}", TUN_HELP);
                                     process::exit(0x0);
                                 }
                                 _ => {}
@@ -312,7 +312,7 @@ impl Args {
                                     }
 
                                     Ok('h') => {
-                                        print!("{}", TUNNEL_HELP);
+                                        print!("{}", TUN_HELP);
                                         process::exit(0x0);
                                     }
                                     _ => {}
@@ -334,21 +334,21 @@ impl Args {
                             // )?;
                         }
                     }
-                    Ok(ArgCommands::Tunnel(sub))
+                    Ok(ArgCommands::Tun(sub))
                     // if sub.remote_addr.0.is_empty() {
                     //     Err(ClientError::RequiredValue("remote"))
                     // } else {
                     //     // if sub.agent_name.is_empty() {
                     //     //     sub.agent_name = lookup_one(gateway_address.clone(), token.clone()).await?
                     //     // }
-                    //     Ok(ArgCommands::Tunnel(sub))
+                    //     Ok(ArgCommands::Tun(sub))
                     // }
                 }
                 SubCommands::Forward => {
                     let mut sub = ForwardArgs {
                         agent_name: String::new(),
                         local_addr: ("127.0.0.1".to_string(), 0),
-                        silent: false,
+                        skip_check: false,
                         cryptography: None,
                         udp: false,
                         p2p: false,
@@ -360,8 +360,8 @@ impl Args {
                                 Ok("udp") => {
                                     sub.udp = true;
                                 }
-                                Ok("silent") => {
-                                    sub.silent = true;
+                                Ok("skip-check") => {
+                                    sub.skip_check = true;
                                 }
                                 Ok("p2p") => {
                                     sub.p2p = true;
@@ -420,7 +420,7 @@ impl Args {
                                         sub.udp = true;
                                     }
                                     Ok('s') => {
-                                        sub.silent = true;
+                                        sub.skip_check = true;
                                     }
                                     Ok('n') => {
                                         sub.agent_name = if let Some(v) = shorts.next_value_os() {
@@ -522,7 +522,7 @@ impl Args {
                     // };
                     let mut sub = ConnectArgs {
                         agent_name: String::new(),
-                        silent: false,
+                        skip_check: false,
                         cryptography: None,
                         udp: false,
                         p2p: false,
@@ -534,8 +534,8 @@ impl Args {
                                 Ok("udp") => {
                                     sub.udp = true;
                                 }
-                                Ok("silent") => {
-                                    sub.silent = true;
+                                Ok("skip-check") => {
+                                    sub.skip_check = true;
                                 }
                                 Ok("p2p") => {
                                     sub.p2p = true;
@@ -587,7 +587,7 @@ impl Args {
                                         sub.udp = true;
                                     }
                                     Ok('s') => {
-                                        sub.silent = true;
+                                        sub.skip_check = true;
                                     }
                                     Ok('n') => {
                                         sub.agent_name = if let Some(v) = shorts.next_value_os() {
@@ -821,7 +821,7 @@ pub enum ArgCommands {
     Proxy(ProxyArgs),
     Connect(ConnectArgs),
     #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
-    Tunnel(TunnelArgs),
+    Tun(TunArgs),
 }
 
 impl ArgCommands {
@@ -831,7 +831,7 @@ impl ArgCommands {
             ArgCommands::Proxy(args) => Some(&args.agent_name),
             ArgCommands::Connect(args) => Some(&args.agent_name),
             #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
-            ArgCommands::Tunnel(args) => Some(&args.agent_name),
+            ArgCommands::Tun(args) => Some(&args.agent_name),
             _ => None,
         }
         .cloned()
@@ -848,7 +848,7 @@ impl ArgCommands {
             ArgCommands::Proxy(args) => args.cryptography.clone(),
             ArgCommands::Connect(args) => args.cryptography.clone(),
             #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
-            ArgCommands::Tunnel(args) => args.cryptography.clone(),
+            ArgCommands::Tun(args) => args.cryptography.clone(),
             _ => None,
         }
     }
