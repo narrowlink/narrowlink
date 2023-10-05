@@ -161,10 +161,10 @@ async fn main() -> Result<(), ClientError> {
     match arg_commands.as_ref() {
         ArgCommands::List(_) => {}
         ArgCommands::Connect(connect_args) => {
-            p2p = connect_args.p2p;
+            p2p = connect_args.direct;
         }
         ArgCommands::Forward(forward_args) => {
-            p2p = forward_args.p2p;
+            p2p = forward_args.direct;
             let local_addr = SocketAddr::new(
                 forward_args
                     .local_addr
@@ -191,7 +191,7 @@ async fn main() -> Result<(), ClientError> {
         }
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         ArgCommands::Tun(tunnel_args) => {
-            p2p = tunnel_args.p2p;
+            p2p = tunnel_args.direct;
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             {
                 let tun = TunListener::new().await;
@@ -204,7 +204,7 @@ async fn main() -> Result<(), ClientError> {
             }
         }
         ArgCommands::Proxy(proxy_args) => {
-            p2p = proxy_args.p2p;
+            p2p = proxy_args.direct;
             let local_addr = SocketAddr::new(
                 proxy_args
                     .local_addr
@@ -439,7 +439,7 @@ async fn main() -> Result<(), ClientError> {
                             sign: None,
                         },
                         ArgCommands::Connect(connect_args) => {
-                            if connect_args.p2p {
+                            if connect_args.direct {
                                 for i in 0..120 {
                                     if p2p_status.load(Ordering::Relaxed)
                                         == P2PStatus::Success as u8

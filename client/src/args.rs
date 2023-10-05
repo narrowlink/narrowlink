@@ -44,40 +44,46 @@ pub struct ListArgs {
 
 #[derive(Debug, Clone)]
 pub struct ForwardArgs {
-    pub agent_name: String,           //i name
-    pub local_addr: (String, u16),    //l local
+    pub direct: bool,                 //d direct
+    pub relay: bool,                  //r relay
     pub skip_check: bool,             //s skip_check
-    pub cryptography: Option<String>, //k key
     pub udp: bool,                    //u udp
-    pub p2p: bool,                    //p p2p
+    pub agent_name: String,           //i name
+    pub cryptography: Option<String>, //k key
+    pub local_addr: (String, u16),    //l local
     pub remote_addr: (String, u16),   //<Remote>
 }
 
 #[derive(Debug, Clone)]
 pub struct ProxyArgs {
+    pub direct: bool,                 //d direct
+    pub relay: bool,                  //r relay
     pub agent_name: String,           //i name
     pub cryptography: Option<String>, //k key
-    pub p2p: bool,                    //p p2p
     pub local_addr: (String, u16),    //<Local>
 }
 
 #[derive(Debug, Clone)]
 pub struct ConnectArgs {
-    pub agent_name: String,           //i name
+    pub direct: bool,                 //d direct
+    pub relay: bool,                  //r relay
     pub skip_check: bool,             //s skip_check
-    pub cryptography: Option<String>, //k key
     pub udp: bool,                    //u udp
-    pub p2p: bool,                    //p p2p
+    pub agent_name: String,           //i name
+    pub cryptography: Option<String>, //k key
     pub remote_addr: (String, u16),   //<Local>
 }
 
 #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
 #[derive(Debug, Clone)]
 pub struct TunArgs {
-    pub agent_name: String,           //i name
-    pub cryptography: Option<String>, //k key
-    pub p2p: bool,                    //p p2p
-                                      // pub remote_addr: String,          //<Local>
+    pub gateway: bool,                      //g gateway
+    pub direct: bool,                       //d direct
+    pub relay: bool,                        //r relay
+    pub agent_name: String,                 //i name
+    pub cryptography: Option<String>,       //k key
+    pub local_addr: Option<(String, u16)>,  //l local - Todo: add
+    pub remote_addr: Option<(String, u16)>, //r remote - Todo: add
 }
 
 #[derive(Debug)]
@@ -238,14 +244,23 @@ impl Args {
                     let mut sub = TunArgs {
                         agent_name: String::new(),
                         cryptography: None,
-                        p2p: false,
-                        // remote_addr: ("".to_string(), 0),
+                        direct: false,
+                        gateway: false,
+                        relay: false,
+                        local_addr: None,
+                        remote_addr: None,
                     };
                     while let Some(arg) = raw.next(&mut cursor) {
                         if let Some((long, value)) = arg.to_long() {
                             match long {
-                                Ok("p2p") => {
-                                    sub.p2p = true;
+                                Ok("direct") => {
+                                    sub.direct = true;
+                                }
+                                Ok("gateway") => {
+                                    sub.gateway = true;
+                                }
+                                Ok("relay") => {
+                                    sub.relay = true;
                                 }
                                 Ok("name") => {
                                     sub.agent_name = value
@@ -288,6 +303,15 @@ impl Args {
                                         }
                                         .ok_or(ClientError::Encoding)?
                                         .to_string();
+                                    }
+                                    Ok('d') => {
+                                        sub.direct = true;
+                                    }
+                                    Ok('r') => {
+                                        sub.relay = true;
+                                    }
+                                    Ok('g') => {
+                                        sub.gateway = true;
                                     }
                                     Ok('k') => {
                                         let next_value = if let Some(v) = shorts.next_value_os() {
@@ -351,7 +375,8 @@ impl Args {
                         skip_check: false,
                         cryptography: None,
                         udp: false,
-                        p2p: false,
+                        direct: false,
+                        relay: false,
                         remote_addr: ("".to_string(), 0),
                     };
                     while let Some(arg) = raw.next(&mut cursor) {
@@ -363,8 +388,11 @@ impl Args {
                                 Ok("skip-check") => {
                                     sub.skip_check = true;
                                 }
-                                Ok("p2p") => {
-                                    sub.p2p = true;
+                                Ok("direct") => {
+                                    sub.direct = true;
+                                }
+                                Ok("relay") => {
+                                    sub.relay = true;
                                 }
                                 Ok("name") => {
                                     sub.agent_name = value
@@ -422,6 +450,13 @@ impl Args {
                                     Ok('s') => {
                                         sub.skip_check = true;
                                     }
+                                    Ok('d') => {
+                                        sub.direct = true;
+                                    }
+                                    Ok('r') => {
+                                        sub.relay = true;
+                                    }
+
                                     Ok('n') => {
                                         sub.agent_name = if let Some(v) = shorts.next_value_os() {
                                             v.to_str()
@@ -525,8 +560,9 @@ impl Args {
                         skip_check: false,
                         cryptography: None,
                         udp: false,
-                        p2p: false,
+                        direct: false,
                         remote_addr: ("".to_string(), 0),
+                        relay: false,
                     };
                     while let Some(arg) = raw.next(&mut cursor) {
                         if let Some((long, value)) = arg.to_long() {
@@ -537,8 +573,11 @@ impl Args {
                                 Ok("skip-check") => {
                                     sub.skip_check = true;
                                 }
-                                Ok("p2p") => {
-                                    sub.p2p = true;
+                                Ok("direct") => {
+                                    sub.direct = true;
+                                }
+                                Ok("relay") => {
+                                    sub.relay = true;
                                 }
                                 Ok("name") => {
                                     // sub.agent_name = lookup_by_name(
@@ -588,6 +627,12 @@ impl Args {
                                     }
                                     Ok('s') => {
                                         sub.skip_check = true;
+                                    }
+                                    Ok('d') => {
+                                        sub.direct = true;
+                                    }
+                                    Ok('r') => {
+                                        sub.relay = true;
                                     }
                                     Ok('n') => {
                                         sub.agent_name = if let Some(v) = shorts.next_value_os() {
@@ -691,7 +736,8 @@ impl Args {
                     let mut sub = ProxyArgs {
                         agent_name: String::new(),
                         cryptography: None,
-                        p2p: false,
+                        relay: false,
+                        direct: false,
                         local_addr: ("".to_string(), 0),
                     };
                     while let Some(arg) = raw.next(&mut cursor) {
@@ -715,8 +761,11 @@ impl Args {
                                     // )
                                     // .await?;
                                 }
-                                Ok("p2p") => {
-                                    sub.p2p = true;
+                                Ok("direct") => {
+                                    sub.direct = true;
+                                }
+                                Ok("relay") => {
+                                    sub.relay = true;
                                 }
                                 Ok("key") => {
                                     sub.cryptography = Some(
@@ -736,6 +785,12 @@ impl Args {
                         } else if let Some(mut shorts) = arg.to_short() {
                             while let Some(short) = shorts.next_flag() {
                                 match short {
+                                    Ok('d') => {
+                                        sub.direct = true;
+                                    }
+                                    Ok('r') => {
+                                        sub.relay = true;
+                                    }
                                     Ok('n') => {
                                         sub.agent_name = if let Some(v) = shorts.next_value_os() {
                                             v.to_str()
