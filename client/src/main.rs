@@ -59,9 +59,7 @@ use tracing_subscriber::{
 use udp_stream::UdpListener;
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-use tun::{TunListener, TunStream};
-
-use crate::tun::RouteCommand;
+use tun::{RouteCommand, TunListener, TunStream};
 
 pub enum P2PStatus {
     Uninitialized = 0x0,
@@ -159,6 +157,7 @@ async fn main() -> Result<(), ClientError> {
     let mut socket_listener = Listener::None;
     let arg_commands = args.arg_commands.clone();
     let mut p2p = false;
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     let mut route_sender = None;
 
     match arg_commands.as_ref() {
@@ -431,6 +430,7 @@ async fn main() -> Result<(), ClientError> {
                                 break;
                             } else {
                                 error!("Unable to establish a peer-to-peer channel, you can try again with the --relay option");
+                                #[cfg(any(target_os = "linux", target_os = "macos"))]
                                 if matches!(args.arg_commands.as_ref(), ArgCommands::Tun(_)) {
                                     if let Listener::Tun(ref tun) = socket_listener {
                                         tun.my_routes(false);
@@ -741,6 +741,7 @@ async fn main() -> Result<(), ClientError> {
                     }
                 };
             let local_addr = event_stream.local_addr();
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
             if let Some(r) = route_sender.as_ref() {
                 r.send(RouteCommand::Add(event_stream.peer_addr().ip()))
                     .unwrap();
@@ -763,6 +764,7 @@ async fn main() -> Result<(), ClientError> {
             let sys_req = event.get_request();
             let (_event_tx, mut event_rx) = event.split();
             let connections = connections.clone();
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
             let route_sender = route_sender.clone();
             let event_stream_task = tokio::spawn(async move {
                 while let Some(Ok(msg)) = event_rx.next().await {
@@ -779,6 +781,7 @@ async fn main() -> Result<(), ClientError> {
                                 .insert(connection_id.to_string(), msg);
                         }
                         narrowlink_types::client::EventInBound::Peer2Peer(p2p) => {
+                            #[cfg(any(target_os = "linux", target_os = "macos"))]
                             if let Some(r) = route_sender.as_ref() {
                                 r.send(RouteCommand::Add(p2p.peer_ip)).unwrap();
                             };

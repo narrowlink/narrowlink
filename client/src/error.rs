@@ -30,8 +30,10 @@ pub enum ClientError {
     UnableToBind,
     #[error("Unable To Connect")]
     UnableToConnect,
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     #[error("Unable To Create Tun: {0}")]
     UnableToCreateTun(#[from] tun::Error),
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     #[error("Unable To Create Net Stack: {0}")]
     UnableToCreaateNetStack(#[from] netstack_lwip::Error),
     #[error("Network Error: {0}")]
