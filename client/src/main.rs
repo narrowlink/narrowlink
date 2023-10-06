@@ -7,6 +7,7 @@ use std::{
     env,
     io::{self, IsTerminal},
     net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4},
+    process,
     sync::{
         atomic::{AtomicBool, AtomicU8, Ordering},
         Arc,
@@ -81,8 +82,10 @@ pub enum Listener {
 #[tokio::main]
 async fn main() -> Result<(), ClientError> {
     let args = Args::parse(env::args())?;
-    let require_blocking_for_p2p = matches!(args.arg_commands.as_ref(), ArgCommands::Connect(_));
-    let (stdout, _stdout_guard) = if require_blocking_for_p2p {
+    let direct = args.arg_commands.direct();
+    let relay = args.arg_commands.relay();
+    let is_connect = matches!(args.arg_commands.as_ref(), ArgCommands::Connect(_));
+    let (stdout, _stdout_guard) = if is_connect {
         // print all output to stderr when use connect command to avoid conflict with the socket stdout
 
         tracing_appender::non_blocking(io::stderr())
@@ -93,7 +96,7 @@ async fn main() -> Result<(), ClientError> {
 
     let cmd = tracing_subscriber::fmt::layer()
         .with_ansi(
-            if matches!(args.arg_commands.as_ref(), ArgCommands::Connect(_)) {
+            if is_connect {
                 true
             } else {
                 io::stdout().is_terminal()
@@ -194,7 +197,7 @@ async fn main() -> Result<(), ClientError> {
             p2p = tunnel_args.direct;
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             {
-                let tun = TunListener::new().await;
+                let tun = TunListener::new(tunnel_args.local_addr, tunnel_args.remote_addr).await;
                 route_sender = tun.route_sender();
                 socket_listener = Listener::Tun(tun);
             }
@@ -266,6 +269,12 @@ async fn main() -> Result<(), ClientError> {
                 )
                 .await
                 else {
+                    #[cfg(any(target_os = "linux", target_os = "macos"))]
+                    if matches!(args.arg_commands.as_ref(), ArgCommands::Tun(_)) {
+                        if let Listener::Tun(ref tun) = socket_listener {
+                            tun.my_routes(false);
+                        }
+                    }
                     error!("Unable to get list the agents, looks like connection lost");
                     session = None;
                     continue;
@@ -281,7 +290,6 @@ async fn main() -> Result<(), ClientError> {
                 debug!("Agents: {:?}", agents);
                 list_of_agents_refresh_required.store(false, Ordering::Relaxed);
             }
-
             let (mut socket, agent_name, addr, is_tcp) =
                 if let ArgCommands::List(list_args) = arg_commands.as_ref() {
                     trace!("List of agents");
@@ -367,11 +375,9 @@ async fn main() -> Result<(), ClientError> {
                                 let (s, a) = tcp_listen.accept().await?;
                                 (Box::new(s), a, false)
                             }
-                            #[cfg(all(
-                                any(target_os = "linux", target_os = "macos"),
-                                debug_assertions
-                            ))]
+                            #[cfg(any(target_os = "linux", target_os = "macos"))]
                             Listener::Tun(ref mut tun_listen) => {
+                                tun_listen.my_routes(true);
                                 let (s, a) = tun_listen.accept().await?;
                                 match s {
                                     TunStream::Tcp(socket) => (Box::new(socket), a, true),
@@ -405,6 +411,7 @@ async fn main() -> Result<(), ClientError> {
                     //     )
                     // }
                 };
+
             // let agent_name: String = args
             //     .agent_name()
             //     .clone()
@@ -413,20 +420,46 @@ async fn main() -> Result<(), ClientError> {
 
             let session_id = session_id.clone();
             let list_of_agents_refresh_required = list_of_agents_refresh_required.clone();
+            if (direct && !relay) || is_connect {
+                for i in 0..120 {
+                    if p2p_status.load(Ordering::Relaxed) == P2PStatus::Success as u8 {
+                        break;
+                    } else {
+                        if p2p_status.load(Ordering::Relaxed) == P2PStatus::Failed as u8 {
+                            if relay {
+                                warn!("The peer-to-peer channel has failed. Using normal mode");
+                                break;
+                            } else {
+                                error!("Unable to establish a peer-to-peer channel, you can try again with the --relay option");
+                                if matches!(args.arg_commands.as_ref(), ArgCommands::Tun(_)) {
+                                    if let Listener::Tun(ref tun) = socket_listener {
+                                        tun.my_routes(false);
+                                        tokio::time::sleep(Duration::from_secs(1)).await;
+                                    }
+                                }
+                                process::exit(0);
+                            }
+                        }
+                        if i % 4 == 0 {
+                            info!(
+                                "The peer-to-peer channel has not been established yet. Please wait."
+                            );
+                        }
+                        tokio::time::sleep(Duration::from_millis(500)).await;
+                    }
+                }
+            };
+
             let task = tokio::spawn({
                 debug!("Make a data stream to agent: {}", agent_name);
                 let arg_commands = arg_commands.clone();
                 let connections = connections.clone();
-                // dbg!(&addr);
                 async move {
                     let mut connect = match arg_commands.as_ref() {
                         ArgCommands::List(_) => {
                             unreachable!()
                         }
-                        #[cfg(all(
-                            any(target_os = "linux", target_os = "macos"),
-                            debug_assertions
-                        ))]
+                        #[cfg(any(target_os = "linux", target_os = "macos"))]
                         ArgCommands::Tun(_) => generic::Connect {
                             host: addr.ip().to_string(), //addr.ip().to_string()
                             port: addr.port(),
@@ -438,45 +471,17 @@ async fn main() -> Result<(), ClientError> {
                             cryptography: None,
                             sign: None,
                         },
-                        ArgCommands::Connect(connect_args) => {
-                            if connect_args.direct {
-                                for i in 0..120 {
-                                    if p2p_status.load(Ordering::Relaxed)
-                                        == P2PStatus::Success as u8
-                                    {
-                                        break;
-                                    } else {
-                                        if p2p_status.load(Ordering::Relaxed)
-                                            == P2PStatus::Failed as u8
-                                        {
-                                            warn!("The peer-to-peer channel has failed. Using normal mode");
-                                            break;
-                                        }
-                                        if i % 4 == 0 {
-                                            info!(
-                                                "The peer-to-peer channel has not been established yet. Please wait."
-                                            );
-                                        }
-                                        tokio::time::sleep(Duration::from_millis(500)).await;
-                                    }
-                                }
-                                // if p2p_stream.read().await.is_none()
-                                // && !is_p2p_failed.load(Ordering::Relaxed){
-
-                                // }
-                            };
-                            generic::Connect {
-                                host: connect_args.remote_addr.0.clone(),
-                                port: connect_args.remote_addr.1,
-                                protocol: if connect_args.udp {
-                                    generic::Protocol::UDP
-                                } else {
-                                    generic::Protocol::TCP
-                                },
-                                cryptography: None,
-                                sign: None,
-                            }
-                        }
+                        ArgCommands::Connect(connect_args) => generic::Connect {
+                            host: connect_args.remote_addr.0.clone(),
+                            port: connect_args.remote_addr.1,
+                            protocol: if connect_args.udp {
+                                generic::Protocol::UDP
+                            } else {
+                                generic::Protocol::TCP
+                            },
+                            cryptography: None,
+                            sign: None,
+                        },
                         ArgCommands::Forward(forward_args) => generic::Connect {
                             host: forward_args.remote_addr.0.clone(),
                             port: forward_args.remote_addr.1,
@@ -746,6 +751,12 @@ async fn main() -> Result<(), ClientError> {
                 .ok_or(ClientError::InvalidConfig)?
                 .to_string();
             debug!("Connection successful, Session ID: {}", session_id);
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            if let Listener::Tun(ref tun) = socket_listener {
+                if relay {
+                    tun.my_routes(true);
+                }
+            }
             let event: NarrowEvent<ClientEventOutBound, ClientEventInBound> =
                 NarrowEvent::new(event_stream);
             let req = event.get_request();
@@ -775,7 +786,7 @@ async fn main() -> Result<(), ClientError> {
                             let p2p_stream = p2p_stream.clone();
 
                             tokio::spawn(async move {
-                                if require_blocking_for_p2p {
+                                if is_connect && !relay {
                                     info!("Trying to create a peer-to-peer channel, please wait");
                                 } else {
                                     info!("Trying to create a peer-to-peer channel");
@@ -798,7 +809,7 @@ async fn main() -> Result<(), ClientError> {
                                                 "Unable to establish a peer-to-peer channel: {}",
                                                 e
                                             );
-                                            if !require_blocking_for_p2p {
+                                            if relay {
                                                 info!(
                                                     "Your connection continues to use normal mode"
                                                 );

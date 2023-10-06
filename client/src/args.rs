@@ -1,7 +1,12 @@
 use crate::error::ClientError;
 
 use regex::Regex;
-use std::{collections::HashMap, net::SocketAddr, process, sync::Arc};
+use std::{
+    collections::HashMap,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    process,
+    sync::Arc,
+};
 
 static HELP: &str = include_str!("../main.help.arg");
 static LIST_HELP: &str = include_str!("../list.help.arg");
@@ -77,13 +82,13 @@ pub struct ConnectArgs {
 #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
 #[derive(Debug, Clone)]
 pub struct TunArgs {
-    pub gateway: bool,                      //g gateway
-    pub direct: bool,                       //d direct
-    pub relay: bool,                        //r relay
-    pub agent_name: String,                 //i name
-    pub cryptography: Option<String>,       //k key
-    pub local_addr: Option<(String, u16)>,  //l local - Todo: add
-    pub remote_addr: Option<(String, u16)>, //r remote - Todo: add
+    pub gateway: bool,                //g gateway
+    pub direct: bool,                 //d direct
+    pub relay: bool,                  //r relay
+    pub agent_name: String,           //i name
+    pub cryptography: Option<String>, //k key
+    pub local_addr: IpAddr,           //l local
+    pub remote_addr: Option<IpAddr>,  //r remote
 }
 
 #[derive(Debug)]
@@ -153,6 +158,7 @@ impl Args {
         let mut cursor = raw.cursor();
         raw.next(&mut cursor);
         let mut config_path = None;
+        let mut use_default_mode = true;
         let command_arg = loop {
             let Some(arg) = raw.next(&mut cursor) else {
                 print!("{}", HELP);
@@ -247,7 +253,7 @@ impl Args {
                         direct: false,
                         gateway: false,
                         relay: false,
-                        local_addr: None,
+                        local_addr: IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1)),
                         remote_addr: None,
                     };
                     while let Some(arg) = raw.next(&mut cursor) {
@@ -255,12 +261,14 @@ impl Args {
                             match long {
                                 Ok("direct") => {
                                     sub.direct = true;
+                                    use_default_mode = false;
                                 }
                                 Ok("gateway") => {
                                     sub.gateway = true;
                                 }
                                 Ok("relay") => {
                                     sub.relay = true;
+                                    use_default_mode = false;
                                 }
                                 Ok("name") => {
                                     sub.agent_name = value
@@ -276,6 +284,24 @@ impl Args {
                                             .to_str()
                                             .ok_or(ClientError::Encoding)?
                                             .to_string(),
+                                    );
+                                }
+                                Ok("local") => {
+                                    sub.local_addr = value
+                                        .ok_or(ClientError::RequiredValue("local"))?
+                                        .to_str()
+                                        .ok_or(ClientError::Encoding)?
+                                        .parse::<IpAddr>()
+                                        .map_err(|_| ClientError::InvalidAddress)?;
+                                }
+                                Ok("target") => {
+                                    sub.remote_addr = Some(
+                                        value
+                                            .ok_or(ClientError::RequiredValue("target"))?
+                                            .to_str()
+                                            .ok_or(ClientError::Encoding)?
+                                            .parse::<IpAddr>()
+                                            .map_err(|_| ClientError::InvalidAddress)?,
                                     );
                                 }
                                 Ok("help") => {
@@ -306,9 +332,11 @@ impl Args {
                                     }
                                     Ok('d') => {
                                         sub.direct = true;
+                                        use_default_mode = false;
                                     }
                                     Ok('r') => {
                                         sub.relay = true;
+                                        use_default_mode = false;
                                     }
                                     Ok('g') => {
                                         sub.gateway = true;
@@ -334,7 +362,47 @@ impl Args {
                                                 .to_string(),
                                         );
                                     }
+                                    Ok('l') => {
+                                        let next_value = if let Some(v) = shorts.next_value_os() {
+                                            v.to_str()
+                                        } else if let Some(v) = raw.next_os(&mut cursor) {
+                                            v.to_str().and_then(|v| {
+                                                if v.is_empty() || v.find('-') == Some(0) {
+                                                    None
+                                                } else {
+                                                    Some(v)
+                                                }
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        sub.local_addr = next_value
+                                            .ok_or(ClientError::RequiredValue("local"))?
+                                            .parse::<IpAddr>()
+                                            .map_err(|_| ClientError::InvalidAddress)?;
+                                    }
+                                    Ok('t') => {
+                                        let next_value = if let Some(v) = shorts.next_value_os() {
+                                            v.to_str()
+                                        } else if let Some(v) = raw.next_os(&mut cursor) {
+                                            v.to_str().and_then(|v| {
+                                                if v.is_empty() || v.find('-') == Some(0) {
+                                                    None
+                                                } else {
+                                                    Some(v)
+                                                }
+                                            })
+                                        } else {
+                                            None
+                                        };
 
+                                        sub.remote_addr = Some(
+                                            next_value
+                                                .ok_or(ClientError::RequiredValue("remote"))?
+                                                .parse::<IpAddr>()
+                                                .map_err(|_| ClientError::InvalidAddress)?,
+                                        );
+                                    }
                                     Ok('h') => {
                                         print!("{}", TUN_HELP);
                                         process::exit(0x0);
@@ -357,6 +425,10 @@ impl Args {
                             //     false,
                             // )?;
                         }
+                    }
+                    if use_default_mode {
+                        sub.direct = true;
+                        sub.relay = true;
                     }
                     Ok(ArgCommands::Tun(sub))
                     // if sub.remote_addr.0.is_empty() {
@@ -390,9 +462,11 @@ impl Args {
                                 }
                                 Ok("direct") => {
                                     sub.direct = true;
+                                    use_default_mode = false;
                                 }
                                 Ok("relay") => {
                                     sub.relay = true;
+                                    use_default_mode = false;
                                 }
                                 Ok("name") => {
                                     sub.agent_name = value
@@ -452,9 +526,11 @@ impl Args {
                                     }
                                     Ok('d') => {
                                         sub.direct = true;
+                                        use_default_mode = false;
                                     }
                                     Ok('r') => {
                                         sub.relay = true;
+                                        use_default_mode = false;
                                     }
 
                                     Ok('n') => {
@@ -546,6 +622,10 @@ impl Args {
                         // if sub.agent_name.is_empty() {
                         //     sub.agent_name = lookup_one(gateway_address.clone(), token.clone()).await?
                         // }
+                        if use_default_mode {
+                            sub.direct = true;
+                            sub.relay = true;
+                        }
                         Ok(ArgCommands::Forward(sub))
                     }
                 }
@@ -575,9 +655,11 @@ impl Args {
                                 }
                                 Ok("direct") => {
                                     sub.direct = true;
+                                    use_default_mode = false;
                                 }
                                 Ok("relay") => {
                                     sub.relay = true;
+                                    use_default_mode = false;
                                 }
                                 Ok("name") => {
                                     // sub.agent_name = lookup_by_name(
@@ -630,9 +712,11 @@ impl Args {
                                     }
                                     Ok('d') => {
                                         sub.direct = true;
+                                        use_default_mode = false;
                                     }
                                     Ok('r') => {
                                         sub.relay = true;
+                                        use_default_mode = false;
                                     }
                                     Ok('n') => {
                                         sub.agent_name = if let Some(v) = shorts.next_value_os() {
@@ -724,6 +808,10 @@ impl Args {
                         // if sub.agent_name.is_empty() {
                         //     sub.agent_name = lookup_one(gateway_address.clone(), token.clone()).await?
                         // }
+                        if use_default_mode {
+                            sub.direct = true;
+                            sub.relay = true;
+                        }
                         Ok(ArgCommands::Connect(sub))
                     }
                 }
@@ -763,9 +851,11 @@ impl Args {
                                 }
                                 Ok("direct") => {
                                     sub.direct = true;
+                                    use_default_mode = false;
                                 }
                                 Ok("relay") => {
                                     sub.relay = true;
+                                    use_default_mode = false;
                                 }
                                 Ok("key") => {
                                     sub.cryptography = Some(
@@ -787,9 +877,11 @@ impl Args {
                                 match short {
                                     Ok('d') => {
                                         sub.direct = true;
+                                        use_default_mode = false;
                                     }
                                     Ok('r') => {
                                         sub.relay = true;
+                                        use_default_mode = false;
                                     }
                                     Ok('n') => {
                                         sub.agent_name = if let Some(v) = shorts.next_value_os() {
@@ -858,6 +950,10 @@ impl Args {
                         // if sub.agent_name.is_empty() {
                         //     sub.agent_name = lookup_one(gateway_address, token.clone()).await?
                         // }
+                        if use_default_mode {
+                            sub.direct = true;
+                            sub.relay = true;
+                        }
                         Ok(ArgCommands::Proxy(sub))
                     }
                 }
@@ -894,6 +990,26 @@ impl ArgCommands {
     pub fn verbose(&self) -> bool {
         match self {
             ArgCommands::List(args) => args.verbose,
+            _ => false,
+        }
+    }
+    pub fn relay(&self) -> bool {
+        match self {
+            ArgCommands::Forward(args) => args.relay,
+            ArgCommands::Proxy(args) => args.relay,
+            ArgCommands::Connect(args) => args.relay,
+            #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
+            ArgCommands::Tun(args) => args.relay,
+            _ => false,
+        }
+    }
+    pub fn direct(&self) -> bool {
+        match self {
+            ArgCommands::Forward(args) => args.direct,
+            ArgCommands::Proxy(args) => args.direct,
+            ArgCommands::Connect(args) => args.direct,
+            #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
+            ArgCommands::Tun(args) => args.direct,
             _ => false,
         }
     }
