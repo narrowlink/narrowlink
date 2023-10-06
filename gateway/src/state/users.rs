@@ -137,7 +137,7 @@ impl Users {
             for port in pub_info.keys() {
                 self.domains
                     .entry(domain_name.clone())
-                    .or_insert_with(HashMap::new)
+                    .or_default()
                     .insert(*port, user_id);
                 // self.domains.entry(domain_name.to_owned()).
             }

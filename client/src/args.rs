@@ -1,7 +1,12 @@
 use crate::error::ClientError;
 
 use regex::Regex;
-use std::{collections::HashMap, net::SocketAddr, process, sync::Arc};
+use std::{
+    collections::HashMap,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    process,
+    sync::Arc,
+};
 
 static HELP: &str = include_str!("../main.help.arg");
 static LIST_HELP: &str = include_str!("../list.help.arg");
@@ -9,7 +14,7 @@ static FORWARD_HELP: &str = include_str!("../forward.help.arg");
 static PROXY_HELP: &str = include_str!("../proxy.help.arg");
 static CONNECT_HELP: &str = include_str!("../connect.help.arg");
 #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
-static TUNNEL_HELP: &str = include_str!("../tunnel.help.arg");
+static TUN_HELP: &str = include_str!("../tun.help.arg");
 
 pub fn extract_addr(addr: &str, local: bool) -> Result<(String, u16), ClientError> {
     match addr.parse::<SocketAddr>() {
@@ -44,40 +49,46 @@ pub struct ListArgs {
 
 #[derive(Debug, Clone)]
 pub struct ForwardArgs {
-    pub agent_name: String,           //i name
-    pub local_addr: (String, u16),    //l local
-    pub silent: bool,                 //s silent
-    pub cryptography: Option<String>, //k key
+    pub direct: bool,                 //d direct
+    pub relay: bool,                  //r relay
+    pub skip_check: bool,             //s skip_check
     pub udp: bool,                    //u udp
-    pub p2p: bool,                    //p p2p
+    pub agent_name: String,           //i name
+    pub cryptography: Option<String>, //k key
+    pub local_addr: (String, u16),    //l local
     pub remote_addr: (String, u16),   //<Remote>
 }
 
 #[derive(Debug, Clone)]
 pub struct ProxyArgs {
+    pub direct: bool,                 //d direct
+    pub relay: bool,                  //r relay
     pub agent_name: String,           //i name
     pub cryptography: Option<String>, //k key
-    pub p2p: bool,                    //p p2p
     pub local_addr: (String, u16),    //<Local>
 }
 
 #[derive(Debug, Clone)]
 pub struct ConnectArgs {
-    pub agent_name: String,           //i name
-    pub silent: bool,                 //s silent
-    pub cryptography: Option<String>, //k key
+    pub direct: bool,                 //d direct
+    pub relay: bool,                  //r relay
+    pub skip_check: bool,             //s skip_check
     pub udp: bool,                    //u udp
-    pub p2p: bool,                    //p p2p
+    pub agent_name: String,           //i name
+    pub cryptography: Option<String>, //k key
     pub remote_addr: (String, u16),   //<Local>
 }
 
 #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
 #[derive(Debug, Clone)]
-pub struct TunnelArgs {
+pub struct TunArgs {
+    pub gateway: bool,                //g gateway
+    pub direct: bool,                 //d direct
+    pub relay: bool,                  //r relay
     pub agent_name: String,           //i name
     pub cryptography: Option<String>, //k key
-    pub p2p: bool,                    //p p2p
-                                      // pub remote_addr: String,          //<Local>
+    pub local_addr: IpAddr,           //l local
+    pub map_addr: Option<IpAddr>,     //m map
 }
 
 #[derive(Debug)]
@@ -86,7 +97,7 @@ enum SubCommands {
     List,
     Connect,
     #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
-    Tunnel,
+    Tun,
     Proxy,
 }
 
@@ -98,7 +109,7 @@ impl SubCommands {
             ("proxy", 0),
             ("connect", 0),
             #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
-            ("tunnel", 0),
+            ("tun", 0),
         ]);
         for (i, c) in arg.chars().enumerate() {
             for (type_name, type_value) in types.iter_mut() {
@@ -127,7 +138,7 @@ impl SubCommands {
             "connect" => Ok(Self::Connect),
             "proxy" => Ok(Self::Proxy),
             #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
-            "tunnel" => Ok(Self::Tunnel),
+            "tun" => Ok(Self::Tun),
             _ => Err(ClientError::CommandNotFound),
         }
     }
@@ -147,6 +158,7 @@ impl Args {
         let mut cursor = raw.cursor();
         raw.next(&mut cursor);
         let mut config_path = None;
+        let mut use_default_mode = true;
         let command_arg = loop {
             let Some(arg) = raw.next(&mut cursor) else {
                 print!("{}", HELP);
@@ -234,18 +246,29 @@ impl Args {
                     Ok(ArgCommands::List(sub))
                 }
                 #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
-                SubCommands::Tunnel => {
-                    let mut sub = TunnelArgs {
+                SubCommands::Tun => {
+                    let mut sub = TunArgs {
                         agent_name: String::new(),
                         cryptography: None,
-                        p2p: false,
-                        // remote_addr: ("".to_string(), 0),
+                        direct: false,
+                        gateway: false,
+                        relay: false,
+                        local_addr: IpAddr::V4(Ipv4Addr::new(10, 10, 10, 10)),
+                        map_addr: None,
                     };
                     while let Some(arg) = raw.next(&mut cursor) {
                         if let Some((long, value)) = arg.to_long() {
                             match long {
-                                Ok("p2p") => {
-                                    sub.p2p = true;
+                                Ok("direct") => {
+                                    sub.direct = true;
+                                    use_default_mode = false;
+                                }
+                                Ok("gateway") => {
+                                    sub.gateway = true;
+                                }
+                                Ok("relay") => {
+                                    sub.relay = true;
+                                    use_default_mode = false;
                                 }
                                 Ok("name") => {
                                     sub.agent_name = value
@@ -263,8 +286,26 @@ impl Args {
                                             .to_string(),
                                     );
                                 }
+                                Ok("local") => {
+                                    sub.local_addr = value
+                                        .ok_or(ClientError::RequiredValue("local"))?
+                                        .to_str()
+                                        .ok_or(ClientError::Encoding)?
+                                        .parse::<IpAddr>()
+                                        .map_err(|_| ClientError::InvalidAddress)?;
+                                }
+                                Ok("map") => {
+                                    sub.map_addr = Some(
+                                        value
+                                            .ok_or(ClientError::RequiredValue("map"))?
+                                            .to_str()
+                                            .ok_or(ClientError::Encoding)?
+                                            .parse::<IpAddr>()
+                                            .map_err(|_| ClientError::InvalidAddress)?,
+                                    );
+                                }
                                 Ok("help") => {
-                                    print!("{}", TUNNEL_HELP);
+                                    print!("{}", TUN_HELP);
                                     process::exit(0x0);
                                 }
                                 _ => {}
@@ -289,6 +330,17 @@ impl Args {
                                         .ok_or(ClientError::Encoding)?
                                         .to_string();
                                     }
+                                    Ok('d') => {
+                                        sub.direct = true;
+                                        use_default_mode = false;
+                                    }
+                                    Ok('r') => {
+                                        sub.relay = true;
+                                        use_default_mode = false;
+                                    }
+                                    Ok('g') => {
+                                        sub.gateway = true;
+                                    }
                                     Ok('k') => {
                                         let next_value = if let Some(v) = shorts.next_value_os() {
                                             v.to_str()
@@ -310,9 +362,49 @@ impl Args {
                                                 .to_string(),
                                         );
                                     }
+                                    Ok('l') => {
+                                        let next_value = if let Some(v) = shorts.next_value_os() {
+                                            v.to_str()
+                                        } else if let Some(v) = raw.next_os(&mut cursor) {
+                                            v.to_str().and_then(|v| {
+                                                if v.is_empty() || v.find('-') == Some(0) {
+                                                    None
+                                                } else {
+                                                    Some(v)
+                                                }
+                                            })
+                                        } else {
+                                            None
+                                        };
+                                        sub.local_addr = next_value
+                                            .ok_or(ClientError::RequiredValue("local"))?
+                                            .parse::<IpAddr>()
+                                            .map_err(|_| ClientError::InvalidAddress)?;
+                                    }
+                                    Ok('m') => {
+                                        let next_value = if let Some(v) = shorts.next_value_os() {
+                                            v.to_str()
+                                        } else if let Some(v) = raw.next_os(&mut cursor) {
+                                            v.to_str().and_then(|v| {
+                                                if v.is_empty() || v.find('-') == Some(0) {
+                                                    None
+                                                } else {
+                                                    Some(v)
+                                                }
+                                            })
+                                        } else {
+                                            None
+                                        };
 
+                                        sub.map_addr = Some(
+                                            next_value
+                                                .ok_or(ClientError::RequiredValue("map"))?
+                                                .parse::<IpAddr>()
+                                                .map_err(|_| ClientError::InvalidAddress)?,
+                                        );
+                                    }
                                     Ok('h') => {
-                                        print!("{}", TUNNEL_HELP);
+                                        print!("{}", TUN_HELP);
                                         process::exit(0x0);
                                     }
                                     _ => {}
@@ -334,24 +426,29 @@ impl Args {
                             // )?;
                         }
                     }
-                    Ok(ArgCommands::Tunnel(sub))
+                    if use_default_mode {
+                        sub.direct = true;
+                        sub.relay = true;
+                    }
+                    Ok(ArgCommands::Tun(sub))
                     // if sub.remote_addr.0.is_empty() {
                     //     Err(ClientError::RequiredValue("remote"))
                     // } else {
                     //     // if sub.agent_name.is_empty() {
                     //     //     sub.agent_name = lookup_one(gateway_address.clone(), token.clone()).await?
                     //     // }
-                    //     Ok(ArgCommands::Tunnel(sub))
+                    //     Ok(ArgCommands::Tun(sub))
                     // }
                 }
                 SubCommands::Forward => {
                     let mut sub = ForwardArgs {
                         agent_name: String::new(),
                         local_addr: ("127.0.0.1".to_string(), 0),
-                        silent: false,
+                        skip_check: false,
                         cryptography: None,
                         udp: false,
-                        p2p: false,
+                        direct: false,
+                        relay: false,
                         remote_addr: ("".to_string(), 0),
                     };
                     while let Some(arg) = raw.next(&mut cursor) {
@@ -360,11 +457,16 @@ impl Args {
                                 Ok("udp") => {
                                     sub.udp = true;
                                 }
-                                Ok("silent") => {
-                                    sub.silent = true;
+                                Ok("skip-check") => {
+                                    sub.skip_check = true;
                                 }
-                                Ok("p2p") => {
-                                    sub.p2p = true;
+                                Ok("direct") => {
+                                    sub.direct = true;
+                                    use_default_mode = false;
+                                }
+                                Ok("relay") => {
+                                    sub.relay = true;
+                                    use_default_mode = false;
                                 }
                                 Ok("name") => {
                                     sub.agent_name = value
@@ -420,8 +522,17 @@ impl Args {
                                         sub.udp = true;
                                     }
                                     Ok('s') => {
-                                        sub.silent = true;
+                                        sub.skip_check = true;
                                     }
+                                    Ok('d') => {
+                                        sub.direct = true;
+                                        use_default_mode = false;
+                                    }
+                                    Ok('r') => {
+                                        sub.relay = true;
+                                        use_default_mode = false;
+                                    }
+
                                     Ok('n') => {
                                         sub.agent_name = if let Some(v) = shorts.next_value_os() {
                                             v.to_str()
@@ -511,6 +622,10 @@ impl Args {
                         // if sub.agent_name.is_empty() {
                         //     sub.agent_name = lookup_one(gateway_address.clone(), token.clone()).await?
                         // }
+                        if use_default_mode {
+                            sub.direct = true;
+                            sub.relay = true;
+                        }
                         Ok(ArgCommands::Forward(sub))
                     }
                 }
@@ -522,11 +637,12 @@ impl Args {
                     // };
                     let mut sub = ConnectArgs {
                         agent_name: String::new(),
-                        silent: false,
+                        skip_check: false,
                         cryptography: None,
                         udp: false,
-                        p2p: false,
+                        direct: false,
                         remote_addr: ("".to_string(), 0),
+                        relay: false,
                     };
                     while let Some(arg) = raw.next(&mut cursor) {
                         if let Some((long, value)) = arg.to_long() {
@@ -534,11 +650,16 @@ impl Args {
                                 Ok("udp") => {
                                     sub.udp = true;
                                 }
-                                Ok("silent") => {
-                                    sub.silent = true;
+                                Ok("skip-check") => {
+                                    sub.skip_check = true;
                                 }
-                                Ok("p2p") => {
-                                    sub.p2p = true;
+                                Ok("direct") => {
+                                    sub.direct = true;
+                                    use_default_mode = false;
+                                }
+                                Ok("relay") => {
+                                    sub.relay = true;
+                                    use_default_mode = false;
                                 }
                                 Ok("name") => {
                                     // sub.agent_name = lookup_by_name(
@@ -587,7 +708,15 @@ impl Args {
                                         sub.udp = true;
                                     }
                                     Ok('s') => {
-                                        sub.silent = true;
+                                        sub.skip_check = true;
+                                    }
+                                    Ok('d') => {
+                                        sub.direct = true;
+                                        use_default_mode = false;
+                                    }
+                                    Ok('r') => {
+                                        sub.relay = true;
+                                        use_default_mode = false;
                                     }
                                     Ok('n') => {
                                         sub.agent_name = if let Some(v) = shorts.next_value_os() {
@@ -679,6 +808,10 @@ impl Args {
                         // if sub.agent_name.is_empty() {
                         //     sub.agent_name = lookup_one(gateway_address.clone(), token.clone()).await?
                         // }
+                        if use_default_mode {
+                            sub.direct = true;
+                            sub.relay = true;
+                        }
                         Ok(ArgCommands::Connect(sub))
                     }
                 }
@@ -691,7 +824,8 @@ impl Args {
                     let mut sub = ProxyArgs {
                         agent_name: String::new(),
                         cryptography: None,
-                        p2p: false,
+                        relay: false,
+                        direct: false,
                         local_addr: ("".to_string(), 0),
                     };
                     while let Some(arg) = raw.next(&mut cursor) {
@@ -715,8 +849,13 @@ impl Args {
                                     // )
                                     // .await?;
                                 }
-                                Ok("p2p") => {
-                                    sub.p2p = true;
+                                Ok("direct") => {
+                                    sub.direct = true;
+                                    use_default_mode = false;
+                                }
+                                Ok("relay") => {
+                                    sub.relay = true;
+                                    use_default_mode = false;
                                 }
                                 Ok("key") => {
                                     sub.cryptography = Some(
@@ -736,6 +875,14 @@ impl Args {
                         } else if let Some(mut shorts) = arg.to_short() {
                             while let Some(short) = shorts.next_flag() {
                                 match short {
+                                    Ok('d') => {
+                                        sub.direct = true;
+                                        use_default_mode = false;
+                                    }
+                                    Ok('r') => {
+                                        sub.relay = true;
+                                        use_default_mode = false;
+                                    }
                                     Ok('n') => {
                                         sub.agent_name = if let Some(v) = shorts.next_value_os() {
                                             v.to_str()
@@ -803,6 +950,10 @@ impl Args {
                         // if sub.agent_name.is_empty() {
                         //     sub.agent_name = lookup_one(gateway_address, token.clone()).await?
                         // }
+                        if use_default_mode {
+                            sub.direct = true;
+                            sub.relay = true;
+                        }
                         Ok(ArgCommands::Proxy(sub))
                     }
                 }
@@ -821,7 +972,7 @@ pub enum ArgCommands {
     Proxy(ProxyArgs),
     Connect(ConnectArgs),
     #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
-    Tunnel(TunnelArgs),
+    Tun(TunArgs),
 }
 
 impl ArgCommands {
@@ -831,7 +982,7 @@ impl ArgCommands {
             ArgCommands::Proxy(args) => Some(&args.agent_name),
             ArgCommands::Connect(args) => Some(&args.agent_name),
             #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
-            ArgCommands::Tunnel(args) => Some(&args.agent_name),
+            ArgCommands::Tun(args) => Some(&args.agent_name),
             _ => None,
         }
         .cloned()
@@ -842,13 +993,33 @@ impl ArgCommands {
             _ => false,
         }
     }
+    pub fn relay(&self) -> bool {
+        match self {
+            ArgCommands::Forward(args) => args.relay,
+            ArgCommands::Proxy(args) => args.relay,
+            ArgCommands::Connect(args) => args.relay,
+            #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
+            ArgCommands::Tun(args) => args.relay,
+            _ => false,
+        }
+    }
+    pub fn direct(&self) -> bool {
+        match self {
+            ArgCommands::Forward(args) => args.direct,
+            ArgCommands::Proxy(args) => args.direct,
+            ArgCommands::Connect(args) => args.direct,
+            #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
+            ArgCommands::Tun(args) => args.direct,
+            _ => false,
+        }
+    }
     pub fn cryptography(&self) -> Option<String> {
         match self {
             ArgCommands::Forward(args) => args.cryptography.clone(),
             ArgCommands::Proxy(args) => args.cryptography.clone(),
             ArgCommands::Connect(args) => args.cryptography.clone(),
             #[cfg(all(any(target_os = "linux", target_os = "macos"), debug_assertions))]
-            ArgCommands::Tunnel(args) => args.cryptography.clone(),
+            ArgCommands::Tun(args) => args.cryptography.clone(),
             _ => None,
         }
     }

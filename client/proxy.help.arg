@@ -1,17 +1,18 @@
-Create a socks proxy
+Create a SOCKS5 proxy
 
 Usage:
-  narrowlink proxy [OPTIONS]
+  narrowlink proxy [OPTIONS] <local_addr:local_port>
 
 
 Description:
-  Creates a socks5 proxy that forward the network packets to the agent
+  Creates a SOCKS5 proxy that forward the network packets to the agent
 
 Examples:
   narrowlink proxy -n <agent name> <local_addr:local_port>
   narrowlink p -n <agent name> <local_addr:local_port>
 
 Options:
-  -n, --name=       The name of the agent
+  -d, --direct      Direct connection to the remote endpoint (peer-to-peer)
+  -r, --relay       Relay connection to the remote endpoint (peer-to-gateway-to-peer)
+  -n, --name=       The name of the agent (required)
   -k, --key=        The secret key for end-to-end encryption
-      --p2p         Use P2P mode

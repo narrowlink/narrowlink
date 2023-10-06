@@ -140,8 +140,9 @@ async fn start(args: Args) -> Result<(), AgentError> {
             )
             .await
             {
-                Ok((event_stream, local_addr)) => {
+                Ok(event_stream) => {
                     sleep_time = 0;
+                    let local_addr = event_stream.local_addr();
                     let event: NarrowEvent<AgentEventOutBound, AgentEventInBound> =
                         NarrowEvent::new(event_stream);
                     let req = event.get_request();

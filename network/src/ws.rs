@@ -5,7 +5,7 @@ use narrowlink_types::ServiceType;
 use std::{
     collections::HashMap,
     io::{self, Error, ErrorKind},
-    net::SocketAddr,
+    net::{SocketAddr, SocketAddrV4},
     pin::Pin,
     task::{Context, Poll},
 };
@@ -34,6 +34,8 @@ pub struct WsConnection {
     ws_stream: WebSocketStream<Box<dyn AsyncSocket>>,
     remaining_bytes: Option<BytesMut>,
     mode: WsMode,
+    local_addr: SocketAddr,
+    peer_addr: SocketAddr,
 }
 
 impl WsConnection {
@@ -52,13 +54,15 @@ impl WsConnection {
             mode: WsMode::Server(tokio::time::interval(core::time::Duration::from_secs(
                 KEEP_ALIVE_TIME,
             ))),
+            local_addr: SocketAddr::V4(SocketAddrV4::new(std::net::Ipv4Addr::UNSPECIFIED, 0)),
+            peer_addr: SocketAddr::V4(SocketAddrV4::new(std::net::Ipv4Addr::UNSPECIFIED, 0)),
         }
     }
     pub async fn new(
         host: &str,
         headers: HashMap<&'static str, String>,
         service_type: ServiceType,
-    ) -> Result<(Self, SocketAddr), NetworkError> {
+    ) -> Result<Self, NetworkError> {
         let sni = if let Some(sni) = host.split(':').next() {
             sni
         } else {
@@ -73,6 +77,7 @@ impl WsConnection {
         };
         let stream = UnifiedSocket::new(host, transport_type).await?;
         let local_addr = stream.local_addr();
+        let peer_addr = stream.peer_addr();
         let (mut request_sender, connection) = conn::handshake(stream).await?;
         let conn_handler = tokio::spawn(async move {
             if let Err(e) = connection.await {
@@ -125,14 +130,13 @@ impl WsConnection {
             None,
         )
         .await;
-        Ok((
-            Self {
-                ws_stream,
-                remaining_bytes: None,
-                mode: WsMode::Client(response_headers, conn_handler),
-            },
+        Ok(Self {
+            ws_stream,
+            remaining_bytes: None,
+            mode: WsMode::Client(response_headers, conn_handler),
             local_addr,
-        ))
+            peer_addr,
+        })
     }
     pub fn get_header(&self, key: &str) -> Option<&str> {
         if let WsMode::Client(response_headers, _) = &self.mode {
@@ -143,6 +147,12 @@ impl WsConnection {
     }
     pub fn drive_key(key: &[u8]) -> String {
         tungstenite::handshake::derive_accept_key(key)
+    }
+    pub fn local_addr(&self) -> SocketAddr {
+        self.local_addr
+    }
+    pub fn peer_addr(&self) -> SocketAddr {
+        self.peer_addr
     }
 }
 

@@ -1,4 +1,5 @@
 use std::{
+    fmt::Write,
     io::{BufReader, BufWriter},
     time::SystemTime,
 };
@@ -52,10 +53,13 @@ impl CertificateStorage for CertificateFileStorage {
     ) -> Result<(), GatewayError> {
         let base_path = format!("{}/{}", self.path, account);
         fs::create_dir_all(&base_path).await?;
-        let domain_hash = Sha3_256::digest(domain.as_bytes())
-            .iter()
-            .map(|x| format!("{:02x}", x))
-            .collect::<String>();
+        let domain_hash =
+            Sha3_256::digest(domain.as_bytes())
+                .iter()
+                .fold(String::new(), |mut acc, x| {
+                    let _ = write!(acc, "{:02x}", x);
+                    acc
+                });
         if let Some(acme_account_credentials) = acme_account_credentials {
             let acme_account_path = format!("{}/{}.account", base_path, domain_hash);
 
@@ -85,10 +89,13 @@ impl CertificateStorage for CertificateFileStorage {
         account: &str,
         domain: &str,
     ) -> Result<(Certificate, Option<AccountCredentials>), GatewayError> {
-        let domain_hash = Sha3_256::digest(domain.as_bytes())
-            .iter()
-            .map(|x| format!("{:02x}", x))
-            .collect::<String>();
+        let domain_hash =
+            Sha3_256::digest(domain.as_bytes())
+                .iter()
+                .fold(String::new(), |mut acc, x| {
+                    let _ = write!(acc, "{:02x}", x);
+                    acc
+                });
         let base_path = format!("{}/{}", self.path, account);
         let acme_account_path = format!("{}/{}.account", base_path, domain_hash);
         let pem_path = format!("{}/{}.pem", base_path, domain_hash);
@@ -113,20 +120,26 @@ impl CertificateStorage for CertificateFileStorage {
         account: &str,
         domain: &str,
     ) -> Option<AccountCredentials> {
-        let domain_hash = Sha3_256::digest(domain.as_bytes())
-            .iter()
-            .map(|x| format!("{:02x}", x))
-            .collect::<String>();
+        let domain_hash =
+            Sha3_256::digest(domain.as_bytes())
+                .iter()
+                .fold(String::new(), |mut acc, x| {
+                    let _ = write!(acc, "{:02x}", x);
+                    acc
+                });
         let acme_account_path = format!("{}/{}/{}.account", self.path, account, domain_hash);
         std::fs::File::open(acme_account_path)
             .ok()
             .and_then(|f| serde_json::de::from_reader(BufReader::new(f)).ok())
     }
     async fn set_failed(&self, account: &str, domain: &str) -> Result<(), GatewayError> {
-        let domain_hash = Sha3_256::digest(domain.as_bytes())
-            .iter()
-            .map(|x| format!("{:02x}", x))
-            .collect::<String>();
+        let domain_hash =
+            Sha3_256::digest(domain.as_bytes())
+                .iter()
+                .fold(String::new(), |mut acc, x| {
+                    let _ = write!(acc, "{:02x}", x);
+                    acc
+                });
         let base_path = format!("{}/{}", self.path, account);
         fs::create_dir_all(&base_path).await?;
         let failed_path = format!("{}/{}.failed", base_path, domain_hash);
@@ -134,10 +147,13 @@ impl CertificateStorage for CertificateFileStorage {
         Ok(fs::rename(pending_path, failed_path).await.map(|_| ())?)
     }
     async fn is_failed(&self, account: &str, domain: &str) -> bool {
-        let domain_hash = Sha3_256::digest(domain.as_bytes())
-            .iter()
-            .map(|x| format!("{:02x}", x))
-            .collect::<String>();
+        let domain_hash =
+            Sha3_256::digest(domain.as_bytes())
+                .iter()
+                .fold(String::new(), |mut acc, x| {
+                    let _ = write!(acc, "{:02x}", x);
+                    acc
+                });
         let failed_path = format!("{}/{}/{}.failed", self.path, account, domain_hash);
         let ts = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
@@ -150,10 +166,13 @@ impl CertificateStorage for CertificateFileStorage {
             .is_some()
     }
     async fn set_pending(&self, account: &str, domain: &str) -> Result<(), GatewayError> {
-        let domain_hash = Sha3_256::digest(domain.as_bytes())
-            .iter()
-            .map(|x| format!("{:02x}", x))
-            .collect::<String>();
+        let domain_hash =
+            Sha3_256::digest(domain.as_bytes())
+                .iter()
+                .fold(String::new(), |mut acc, x| {
+                    let _ = write!(acc, "{:02x}", x);
+                    acc
+                });
         let base_path = format!("{}/{}", self.path, account);
         let pending_path = format!("{}/{}.pending", base_path, domain_hash);
         let ts = SystemTime::now()
@@ -164,10 +183,13 @@ impl CertificateStorage for CertificateFileStorage {
         Ok(fs::write(pending_path, ts.to_string()).await.map(|_| ())?)
     }
     async fn is_pending(&self, account: &str, domain: &str) -> bool {
-        let domain_hash = Sha3_256::digest(domain.as_bytes())
-            .iter()
-            .map(|x| format!("{:02x}", x))
-            .collect::<String>();
+        let domain_hash =
+            Sha3_256::digest(domain.as_bytes())
+                .iter()
+                .fold(String::new(), |mut acc, x| {
+                    let _ = write!(acc, "{:02x}", x);
+                    acc
+                });
         let pending_path = format!("{}/{}/{}.pending", self.path, account, domain_hash);
         let ts = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
