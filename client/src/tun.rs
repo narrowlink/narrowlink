@@ -29,7 +29,7 @@ pub struct TunListener {
     _task: tokio::task::JoinHandle<Result<(), std::io::Error>>,
     route: Option<TunRoute>,
     local_addr: IpAddr,
-    remote_addr: Option<IpAddr>,
+    map_addr: Option<IpAddr>,
 }
 
 pub enum RouteCommand {
@@ -130,7 +130,7 @@ impl TunRoute {
 }
 
 impl TunListener {
-    pub async fn new(local_addr: IpAddr, remote_addr: Option<IpAddr>) -> Self {
+    pub async fn new(local_addr: IpAddr, map_addr: Option<IpAddr>) -> Self {
         let mut config = tun::Configuration::default();
 
         let ipv4 = match local_addr {
@@ -202,7 +202,7 @@ impl TunListener {
             _task: task,
             route,
             local_addr,
-            remote_addr,
+            map_addr,
         }
     }
     pub async fn accept(&mut self) -> Result<(TunStream, SocketAddr), ClientError> {
@@ -211,7 +211,7 @@ impl TunListener {
                 stream = self.udp.accept() => {
                     let mut addr = stream.get_dst_addr();
                     if addr.ip() == self.local_addr {
-                        if let Some(remote_addr) = self.remote_addr {
+                        if let Some(remote_addr) = self.map_addr {
                             addr = SocketAddr::new(remote_addr, addr.port());
                         }
                     }
@@ -220,7 +220,7 @@ impl TunListener {
                 res = self.tcp.next() => {
                     let (stream, _src_addr, mut dst_adr) = res.unwrap();
                     if dst_adr.ip() == self.local_addr {
-                        if let Some(remote_addr) = self.remote_addr {
+                        if let Some(remote_addr) = self.map_addr {
                             dst_adr = SocketAddr::new(remote_addr, dst_adr.port());
                         }
                     }

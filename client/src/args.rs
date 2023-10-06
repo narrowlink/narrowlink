@@ -88,7 +88,7 @@ pub struct TunArgs {
     pub agent_name: String,           //i name
     pub cryptography: Option<String>, //k key
     pub local_addr: IpAddr,           //l local
-    pub remote_addr: Option<IpAddr>,  //r remote
+    pub map_addr: Option<IpAddr>,     //m map
 }
 
 #[derive(Debug)]
@@ -254,7 +254,7 @@ impl Args {
                         gateway: false,
                         relay: false,
                         local_addr: IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1)),
-                        remote_addr: None,
+                        map_addr: None,
                     };
                     while let Some(arg) = raw.next(&mut cursor) {
                         if let Some((long, value)) = arg.to_long() {
@@ -294,10 +294,10 @@ impl Args {
                                         .parse::<IpAddr>()
                                         .map_err(|_| ClientError::InvalidAddress)?;
                                 }
-                                Ok("target") => {
-                                    sub.remote_addr = Some(
+                                Ok("map") => {
+                                    sub.map_addr = Some(
                                         value
-                                            .ok_or(ClientError::RequiredValue("target"))?
+                                            .ok_or(ClientError::RequiredValue("map"))?
                                             .to_str()
                                             .ok_or(ClientError::Encoding)?
                                             .parse::<IpAddr>()
@@ -381,7 +381,7 @@ impl Args {
                                             .parse::<IpAddr>()
                                             .map_err(|_| ClientError::InvalidAddress)?;
                                     }
-                                    Ok('t') => {
+                                    Ok('m') => {
                                         let next_value = if let Some(v) = shorts.next_value_os() {
                                             v.to_str()
                                         } else if let Some(v) = raw.next_os(&mut cursor) {
@@ -396,9 +396,9 @@ impl Args {
                                             None
                                         };
 
-                                        sub.remote_addr = Some(
+                                        sub.map_addr = Some(
                                             next_value
-                                                .ok_or(ClientError::RequiredValue("remote"))?
+                                                .ok_or(ClientError::RequiredValue("map"))?
                                                 .parse::<IpAddr>()
                                                 .map_err(|_| ClientError::InvalidAddress)?,
                                         );
