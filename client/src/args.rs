@@ -253,7 +253,7 @@ impl Args {
                         direct: false,
                         gateway: false,
                         relay: false,
-                        local_addr: IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1)),
+                        local_addr: IpAddr::V4(Ipv4Addr::new(10, 10, 10, 10)),
                         map_addr: None,
                     };
                     while let Some(arg) = raw.next(&mut cursor) {

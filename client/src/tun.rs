@@ -66,7 +66,7 @@ impl TunRoute {
                     Some(signal) = signals.next() => {
                         if (signal == SIGTERM || signal == SIGINT || signal == SIGQUIT || signal == SIGTSTP || signal == SIGABRT || signal == SIGHUP) && my_routes {
                             for route in &routes {
-                                handle.delete(route).await.unwrap();
+                                let _ = handle.delete(route).await;
                             }
                             handle.add(&default_gw).await.unwrap();
                         }
@@ -85,7 +85,7 @@ impl TunRoute {
                             my_routes = true;
                         }else if !route_action && my_routes{
                             for route in &routes {
-                                handle.delete(route).await.unwrap();
+                                let _ = handle.delete(route).await;
                             }
                             handle.add(&default_gw).await.unwrap();
                             my_routes = false;
@@ -130,7 +130,7 @@ impl TunRoute {
 }
 
 impl TunListener {
-    pub async fn new(local_addr: IpAddr, map_addr: Option<IpAddr>) -> Self {
+    pub async fn new(local_addr: IpAddr, map_addr: Option<IpAddr>) -> Result<Self, ClientError> {
         let mut config = tun::Configuration::default();
 
         let ipv4 = match local_addr {
@@ -145,7 +145,7 @@ impl TunListener {
             // .netmask((255, 255, 255, 255))
             .mtu(MTU as i32)
             .up();
-        let device = tun::create_as_async(&config).unwrap();
+        let device = tun::create_as_async(&config).map_err(ClientError::UnableToCreateTun)?;
         let route = TunRoute::new(ipv4)
             .await
             .map_err(|e| {
@@ -153,7 +153,7 @@ impl TunListener {
                 e
             })
             .ok();
-        let (stack, tcp, udp) = NetStack::new().unwrap();
+        let (stack, tcp, udp) = NetStack::new()?;
         let (udp_writer, mut udp_reader) = mpsc::channel::<Vec<u8>>(10);
         let task = tokio::spawn(async move {
             let (mut stack_sink, mut stack_stream) = stack.split();
@@ -196,14 +196,14 @@ impl TunListener {
             }
         });
 
-        Self {
+        Ok(Self {
             tcp,
             udp: TunUdpListener::new(udp, udp_writer),
             _task: task,
             route,
             local_addr,
             map_addr,
-        }
+        })
     }
     pub async fn accept(&mut self) -> Result<(TunStream, SocketAddr), ClientError> {
         loop {
@@ -217,8 +217,8 @@ impl TunListener {
                     }
                     return Ok((TunStream::Udp(stream), addr));
                 }
-                res = self.tcp.next() => {
-                    let (stream, _src_addr, mut dst_adr) = res.unwrap();
+                Some(res) = self.tcp.next() => {
+                    let (stream, _src_addr, mut dst_adr) = res;
                     if dst_adr.ip() == self.local_addr {
                         if let Some(remote_addr) = self.map_addr {
                             dst_adr = SocketAddr::new(remote_addr, dst_adr.port());

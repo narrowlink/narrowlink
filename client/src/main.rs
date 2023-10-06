@@ -197,7 +197,7 @@ async fn main() -> Result<(), ClientError> {
             p2p = tunnel_args.direct;
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             {
-                let tun = TunListener::new(tunnel_args.local_addr, tunnel_args.map_addr).await;
+                let tun = TunListener::new(tunnel_args.local_addr, tunnel_args.map_addr).await?;
                 route_sender = tun.route_sender();
                 socket_listener = Listener::Tun(tun);
             }
