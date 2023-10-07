@@ -31,6 +31,7 @@ tokio = { version = "1.32.0", features = [
     "io-std",
     "rt-multi-thread",
     "time",
+    "signal",
 ], default-features = false }
 futures-util = { version = "0.3.28", default-features = false }
 futures-sink = { version = "0.3.28", features = [
@@ -69,8 +70,6 @@ narrowlink-network = { version = "0.2.0-git" }
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
 netstack-lwip = { git = "https://github.com/eycorsican/netstack-lwip.git", rev = "ebbd4e8" }
 tun = { version = "0.5", features = ["async"] }
-signal-hook-tokio = { version = "0.3.1", features = ["futures-v0_3"] }
-signal-hook = { version = "0.3.17" }
 net-route = { git = "https://github.com/SajjadPourali/net-route", branch = "patch-1" }
 etherparse = { version = "0.13.0" }
 

@@ -54,17 +54,51 @@ impl TunRoute {
         };
         let (my_routes_sender, mut my_routes_receiver) = mpsc::unbounded_channel::<bool>();
         let (route_tx, mut route_rx) = mpsc::unbounded_channel::<RouteCommand>();
-        use signal_hook::consts::signal::{SIGABRT, SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGTSTP};
-        let mut signals =
-            signal_hook_tokio::Signals::new([SIGTERM, SIGINT, SIGQUIT, SIGTSTP, SIGABRT, SIGHUP])?;
+        let mut signals = Vec::new();
+        #[cfg(not(target_os = "windows"))]
+        for signal_number in [1, 2, 3, 6, 15, 20] {
+            signals.push(Box::pin(async move {
+                if let Ok(mut signal) = tokio::signal::unix::signal(
+                    tokio::signal::unix::SignalKind::from_raw(signal_number),
+                ) {
+                    signal.recv().await
+                } else {
+                    None
+                }
+            }));
+        }
+        #[cfg(target_os = "windows")]
+        {
+            use tokio::signal::windows::signal;
+        }
+
+        let mut signal_stream = futures_util::future::select_all(signals).into_stream();
+        // let signals = signals.shared();
+        // [1, 2, 3, 6, 15, 20].iter().map(|signal_number| {
+        //     tokio::signal::unix::signal(tokio::signal::unix::SignalKind::from_raw(*signal_number))
+        //         .unwrap()
+        //         .recv()
+        // });
+        // for signal in [1, 2, 3, 6, 15, 20]
+        // // SIGHUP, SIGINT, SIGQUIT, SIGABRT, SIGTERM, SIGTSTP
+        // {
+        //     signals.push(
+        //         tokio::signal::unix::signal(tokio::signal::unix::SignalKind::from_raw(signal))
+        //             .unwrap()
+        //             .recv(),
+        //     );
+        // }
+        // use signal_hook::consts::signal::{SIGABRT, SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGTSTP};
+        // let mut signals =
+        //     signal_hook_tokio::Signals::new([SIGTERM, SIGINT, SIGQUIT, SIGTSTP, SIGABRT, SIGHUP])?;
         let task = tokio::spawn(async move {
             let mut init = false;
             let mut my_routes = false;
             let mut routes = Vec::new();
             loop {
                 tokio::select! {
-                    Some(signal) = signals.next() => {
-                        if (signal == SIGTERM || signal == SIGINT || signal == SIGQUIT || signal == SIGTSTP || signal == SIGABRT || signal == SIGHUP) && my_routes {
+                    _ = signal_stream.next() => {
+                        if my_routes {
                             for route in &routes {
                                 let _ = handle.delete(route).await;
                             }
