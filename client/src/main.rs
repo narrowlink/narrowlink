@@ -289,7 +289,8 @@ async fn main() -> Result<(), ClientError> {
                 debug!("Agents: {:?}", agents);
                 list_of_agents_refresh_required.store(false, Ordering::Relaxed);
             }
-            let (mut socket, agent_name, addr, is_tcp) =
+
+            let (mut socket, agent_name, _addr, _is_tcp) =
                 if let ArgCommands::List(list_args) = arg_commands.as_ref() {
                     trace!("List of agents");
                     if agents.is_empty() {
@@ -461,9 +462,9 @@ async fn main() -> Result<(), ClientError> {
                         }
                         #[cfg(any(target_os = "linux", target_os = "macos"))]
                         ArgCommands::Tun(_) => generic::Connect {
-                            host: addr.ip().to_string(), //addr.ip().to_string()
-                            port: addr.port(),
-                            protocol: if is_tcp {
+                            host: _addr.ip().to_string(), //addr.ip().to_string()
+                            port: _addr.port(),
+                            protocol: if _is_tcp {
                                 generic::Protocol::TCP
                             } else {
                                 generic::Protocol::UDP

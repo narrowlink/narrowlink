@@ -1,12 +1,10 @@
 use crate::error::ClientError;
 
 use regex::Regex;
-use std::{
-    collections::HashMap,
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    process,
-    sync::Arc,
-};
+use std::{collections::HashMap, net::SocketAddr, process, sync::Arc};
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+use std::net::{IpAddr, Ipv4Addr};
 
 static HELP: &str = include_str!("../main.help.arg");
 static LIST_HELP: &str = include_str!("../list.help.arg");

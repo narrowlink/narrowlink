@@ -13,6 +13,7 @@ use tokio::{
     sync::mpsc::{self, UnboundedSender},
 };
 use tracing::warn;
+use tun::Device;
 
 use crate::error::ClientError;
 
@@ -55,7 +56,7 @@ impl TunRoute {
         let (my_routes_sender, mut my_routes_receiver) = mpsc::unbounded_channel::<bool>();
         let (route_tx, mut route_rx) = mpsc::unbounded_channel::<RouteCommand>();
         let mut signals = Vec::new();
-        #[cfg(not(target_os = "windows"))]
+
         for signal_number in [1, 2, 3, 6, 15, 20] {
             signals.push(Box::pin(async move {
                 if let Ok(mut signal) = tokio::signal::unix::signal(
@@ -67,30 +68,8 @@ impl TunRoute {
                 }
             }));
         }
-        #[cfg(target_os = "windows")]
-        {
-            use tokio::signal::windows::signal;
-        }
 
         let mut signal_stream = futures_util::future::select_all(signals).into_stream();
-        // let signals = signals.shared();
-        // [1, 2, 3, 6, 15, 20].iter().map(|signal_number| {
-        //     tokio::signal::unix::signal(tokio::signal::unix::SignalKind::from_raw(*signal_number))
-        //         .unwrap()
-        //         .recv()
-        // });
-        // for signal in [1, 2, 3, 6, 15, 20]
-        // // SIGHUP, SIGINT, SIGQUIT, SIGABRT, SIGTERM, SIGTSTP
-        // {
-        //     signals.push(
-        //         tokio::signal::unix::signal(tokio::signal::unix::SignalKind::from_raw(signal))
-        //             .unwrap()
-        //             .recv(),
-        //     );
-        // }
-        // use signal_hook::consts::signal::{SIGABRT, SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGTSTP};
-        // let mut signals =
-        //     signal_hook_tokio::Signals::new([SIGTERM, SIGINT, SIGQUIT, SIGTSTP, SIGABRT, SIGHUP])?;
         let task = tokio::spawn(async move {
             let mut init = false;
             let mut my_routes = false;
@@ -179,7 +158,8 @@ impl TunListener {
             // .netmask((255, 255, 255, 255))
             .mtu(MTU as i32)
             .up();
-        let device = tun::create_as_async(&config).map_err(ClientError::UnableToCreateTun)?;
+        let mut device = tun::create_as_async(&config).map_err(ClientError::UnableToCreateTun)?;
+        device.get_mut().enabled(false).unwrap();
         let route = TunRoute::new(ipv4)
             .await
             .map_err(|e| {
@@ -191,16 +171,16 @@ impl TunListener {
         let (udp_writer, mut udp_reader) = mpsc::channel::<Vec<u8>>(10);
         let task = tokio::spawn(async move {
             let (mut stack_sink, mut stack_stream) = stack.split();
-            let (mut reader, mut writer) = tokio::io::split(device);
+
             let mut buffer = vec![0u8; MTU];
             loop {
                 tokio::select! {
                     res = stack_stream.next() => {
                         match res {
-                            Some(v)=>writer.write_all(&v.map(|mut pkt|{pkt.splice(0..0, vec![0x00, 0x00, 0x00, 0x02]);pkt})?).await?,
+                            Some(v)=>device.write_all(&v.map(|mut pkt|{pkt.splice(0..0, vec![0x00, 0x00, 0x00, 0x02]);pkt})?).await?,
                             None=>{
                                 let _ = stack_sink.close().await;
-                                let _ = writer.shutdown().await;
+                                let _ = device.shutdown().await;
                                 return Ok::<(),std::io::Error>(())
                             }
                         };
@@ -208,20 +188,20 @@ impl TunListener {
                     res = udp_reader.recv() => {
 
                         match res {
-                            Some(mut v)=>writer.write_all({v.splice(0..0, vec![0x00, 0x00, 0x00, 0x02]);&v}).await?,
+                            Some(mut v)=>device.write_all({v.splice(0..0, vec![0x00, 0x00, 0x00, 0x02]);&v}).await?,
                             None=>{
                                 let _ = stack_sink.close().await;
-                                let _ = writer.shutdown().await;
+                                let _ = device.shutdown().await;
                                 return Ok::<(),std::io::Error>(())
                             }
                         };
                     },
-                    res = reader.read(&mut buffer) => {
+                    res = device.read(&mut buffer) => {
                         match res {
                             Ok(len)=>stack_sink.send((buffer[4..len]).to_vec()).await?,
                             Err(e)=>{
                                 let _ = stack_sink.close().await;
-                                let _ = writer.shutdown().await;
+                                let _ = device.shutdown().await;
                                 return Err(e)
                             }
                         };
