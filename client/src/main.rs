@@ -10,14 +10,20 @@ use narrowlink_network::{
     event::{NarrowEvent, NarrowEventRequest},
     ws::WsConnection,
 };
-use narrowlink_types::{client::Peer2PeerInstruction, generic::AgentInfo, ServiceType};
+use narrowlink_types::{
+    client::{Peer2PeerInstruction, Peer2PeerRequest},
+    generic::AgentInfo,
+    ServiceType,
+};
+use rand::Rng;
 use std::{
     collections::HashMap,
     env,
     io::{self, IsTerminal},
     net::{SocketAddr, TcpListener},
+    process,
     sync::Arc,
-    task::{Context, Poll}, process,
+    task::{Context, Poll},
 };
 use tokio::select;
 use tracing::{debug, error, info, span, trace, warn, Level};
@@ -96,7 +102,7 @@ async fn start(mut args: Args) -> Result<(), ClientError> {
     let conf = config::Config::load(args.take_conf_path())?;
     let mut control = ControlFactory::new(conf)?;
     let instruction = Instruction::from(&args.arg_commands);
-    let transport = TransportFactory::new(instruction.transport);
+    // let transport = TransportFactory::new(instruction.transport);
     let mut tunnel = TunnelFactory::new(instruction.tunnel);
 
     loop {
@@ -158,15 +164,15 @@ impl Stream for TunnelFactory {
     }
 }
 
-struct TransportFactory {
-    i: TransportInstruction,
-}
+// struct TransportFactory {
+//     i: TransportInstruction,
+// }
 
-impl TransportFactory {
-    fn new(i: TransportInstruction) -> Self {
-        Self { i }
-    }
-}
+// impl TransportFactory {
+//     fn new(i: TransportInstruction) -> Self {
+//         Self { i }
+//     }
+// }
 
 struct ControlFactory {
     gateway: Arc<String>,
@@ -342,6 +348,18 @@ impl ControlFactory {
                 // req.shutdown().await;
                 // break;
             }
+            ManageInstruction::Peer2Peer(p2p) => {
+                // trace!("Peer2Peer");
+                // let Some(req) = self.control.as_ref().map(|c| c.request.clone()) else {
+                //     println!("Agent not found");
+                //     return;
+                // };
+                // req.request(ClientEventOutBound::Request(
+                //     0,
+                //     ClientEventRequest::Peer2Peer(p2p.clone()),
+                // ))
+                // .await;
+            }
             ManageInstruction::None => (),
         }
     }
@@ -372,20 +390,46 @@ pub enum TunnelInstruction {
 }
 
 pub enum TransportInstruction {
+    Direct,
+    Relay,
+    Mixed,
     None,
 }
 
+impl TransportInstruction {
+    fn determine(direct: bool, relay: bool) -> Self {
+        match (direct, relay) {
+            (false, false) | (true, true) => Self::Mixed,
+            (true, false) => Self::Direct,
+            (false, true) => Self::Relay,
+        }
+    }
+}
+
 pub enum ManageInstruction {
+    Peer2Peer(Peer2PeerRequest),
     AgentList(bool),
     None,
+}
+
+impl ManageInstruction {
+    fn default_p2p(agent_name: String) -> Self {
+        Self::Peer2Peer(Peer2PeerRequest {
+            agent_name,
+            easy_seed_port: rand::thread_rng().gen_range((49152 + 2)..(65535 - 2)),
+            easy_seq: 2,
+            hard_seed_port: rand::thread_rng().gen_range((49152 + 255)..(65535 - 255)),
+            hard_seq: 255,
+        })
+    }
 }
 
 impl From<&ArgCommands> for Instruction {
     fn from(cmd: &ArgCommands) -> Self {
         match cmd {
-            ArgCommands::Forward(_) => Self {
+            ArgCommands::Forward(a) => Self {
                 tunnel: TunnelInstruction::None,
-                transport: TransportInstruction::None,
+                transport: TransportInstruction::determine(a.direct, a.relay),
                 manage: ManageInstruction::None,
             },
             ArgCommands::List(ListArgs { verbose }) => Self {
@@ -393,19 +437,19 @@ impl From<&ArgCommands> for Instruction {
                 transport: TransportInstruction::None,
                 manage: ManageInstruction::AgentList(*verbose),
             },
-            ArgCommands::Proxy(_) => Self {
+            ArgCommands::Proxy(a) => Self {
                 tunnel: TunnelInstruction::None,
-                transport: TransportInstruction::None,
+                transport: TransportInstruction::determine(a.direct, a.relay),
                 manage: ManageInstruction::None,
             },
-            ArgCommands::Connect(_) => Self {
+            ArgCommands::Connect(a) => Self {
                 tunnel: TunnelInstruction::None,
-                transport: TransportInstruction::None,
+                transport: TransportInstruction::determine(a.direct, a.relay),
                 manage: ManageInstruction::None,
             },
-            ArgCommands::Tun(_) => Self {
+            ArgCommands::Tun(a) => Self {
                 tunnel: TunnelInstruction::None,
-                transport: TransportInstruction::None,
+                transport: TransportInstruction::determine(a.direct, a.relay),
                 manage: ManageInstruction::None,
             },
         }

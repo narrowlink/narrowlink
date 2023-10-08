@@ -1,7 +1,7 @@
 use crate::error::ClientError;
 
 use regex::Regex;
-use std::{collections::HashMap, net::SocketAddr, process, sync::Arc};
+use std::{collections::HashMap, net::SocketAddr, process};
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use std::net::{IpAddr, Ipv4Addr};
@@ -49,7 +49,6 @@ pub struct ListArgs {
 pub struct ForwardArgs {
     pub direct: bool,                 //d direct
     pub relay: bool,                  //r relay
-    pub skip_check: bool,             //s skip_check
     pub udp: bool,                    //u udp
     pub agent_name: String,           //i name
     pub cryptography: Option<String>, //k key
@@ -70,7 +69,6 @@ pub struct ProxyArgs {
 pub struct ConnectArgs {
     pub direct: bool,                 //d direct
     pub relay: bool,                  //r relay
-    pub skip_check: bool,             //s skip_check
     pub udp: bool,                    //u udp
     pub agent_name: String,           //i name
     pub cryptography: Option<String>, //k key
@@ -156,7 +154,6 @@ impl Args {
         let mut cursor = raw.cursor();
         raw.next(&mut cursor);
         let mut config_path = None;
-        let mut use_default_mode = true;
         let command_arg = loop {
             let Some(arg) = raw.next(&mut cursor) else {
                 print!("{}", HELP);
@@ -259,14 +256,12 @@ impl Args {
                             match long {
                                 Ok("direct") => {
                                     sub.direct = true;
-                                    use_default_mode = false;
                                 }
                                 Ok("gateway") => {
                                     sub.gateway = true;
                                 }
                                 Ok("relay") => {
                                     sub.relay = true;
-                                    use_default_mode = false;
                                 }
                                 Ok("name") => {
                                     sub.agent_name = value
@@ -330,11 +325,9 @@ impl Args {
                                     }
                                     Ok('d') => {
                                         sub.direct = true;
-                                        use_default_mode = false;
                                     }
                                     Ok('r') => {
                                         sub.relay = true;
-                                        use_default_mode = false;
                                     }
                                     Ok('g') => {
                                         sub.gateway = true;
@@ -424,10 +417,6 @@ impl Args {
                             // )?;
                         }
                     }
-                    if use_default_mode {
-                        sub.direct = true;
-                        sub.relay = true;
-                    }
                     Ok(ArgCommands::Tun(sub))
                     // if sub.remote_addr.0.is_empty() {
                     //     Err(ClientError::RequiredValue("remote"))
@@ -442,7 +431,6 @@ impl Args {
                     let mut sub = ForwardArgs {
                         agent_name: String::new(),
                         local_addr: ("127.0.0.1".to_string(), 0),
-                        skip_check: false,
                         cryptography: None,
                         udp: false,
                         direct: false,
@@ -455,16 +443,11 @@ impl Args {
                                 Ok("udp") => {
                                     sub.udp = true;
                                 }
-                                Ok("skip-check") => {
-                                    sub.skip_check = true;
-                                }
                                 Ok("direct") => {
                                     sub.direct = true;
-                                    use_default_mode = false;
                                 }
                                 Ok("relay") => {
                                     sub.relay = true;
-                                    use_default_mode = false;
                                 }
                                 Ok("name") => {
                                     sub.agent_name = value
@@ -519,16 +502,11 @@ impl Args {
                                     Ok('u') => {
                                         sub.udp = true;
                                     }
-                                    Ok('s') => {
-                                        sub.skip_check = true;
-                                    }
                                     Ok('d') => {
                                         sub.direct = true;
-                                        use_default_mode = false;
                                     }
                                     Ok('r') => {
                                         sub.relay = true;
-                                        use_default_mode = false;
                                     }
 
                                     Ok('n') => {
@@ -620,10 +598,6 @@ impl Args {
                         // if sub.agent_name.is_empty() {
                         //     sub.agent_name = lookup_one(gateway_address.clone(), token.clone()).await?
                         // }
-                        if use_default_mode {
-                            sub.direct = true;
-                            sub.relay = true;
-                        }
                         Ok(ArgCommands::Forward(sub))
                     }
                 }
@@ -635,7 +609,6 @@ impl Args {
                     // };
                     let mut sub = ConnectArgs {
                         agent_name: String::new(),
-                        skip_check: false,
                         cryptography: None,
                         udp: false,
                         direct: false,
@@ -648,16 +621,11 @@ impl Args {
                                 Ok("udp") => {
                                     sub.udp = true;
                                 }
-                                Ok("skip-check") => {
-                                    sub.skip_check = true;
-                                }
                                 Ok("direct") => {
                                     sub.direct = true;
-                                    use_default_mode = false;
                                 }
                                 Ok("relay") => {
                                     sub.relay = true;
-                                    use_default_mode = false;
                                 }
                                 Ok("name") => {
                                     // sub.agent_name = lookup_by_name(
@@ -705,16 +673,11 @@ impl Args {
                                     Ok('u') => {
                                         sub.udp = true;
                                     }
-                                    Ok('s') => {
-                                        sub.skip_check = true;
-                                    }
                                     Ok('d') => {
                                         sub.direct = true;
-                                        use_default_mode = false;
                                     }
                                     Ok('r') => {
                                         sub.relay = true;
-                                        use_default_mode = false;
                                     }
                                     Ok('n') => {
                                         sub.agent_name = if let Some(v) = shorts.next_value_os() {
@@ -806,10 +769,7 @@ impl Args {
                         // if sub.agent_name.is_empty() {
                         //     sub.agent_name = lookup_one(gateway_address.clone(), token.clone()).await?
                         // }
-                        if use_default_mode {
-                            sub.direct = true;
-                            sub.relay = true;
-                        }
+
                         Ok(ArgCommands::Connect(sub))
                     }
                 }
@@ -849,11 +809,9 @@ impl Args {
                                 }
                                 Ok("direct") => {
                                     sub.direct = true;
-                                    use_default_mode = false;
                                 }
                                 Ok("relay") => {
                                     sub.relay = true;
-                                    use_default_mode = false;
                                 }
                                 Ok("key") => {
                                     sub.cryptography = Some(
@@ -875,11 +833,9 @@ impl Args {
                                 match short {
                                     Ok('d') => {
                                         sub.direct = true;
-                                        use_default_mode = false;
                                     }
                                     Ok('r') => {
                                         sub.relay = true;
-                                        use_default_mode = false;
                                     }
                                     Ok('n') => {
                                         sub.agent_name = if let Some(v) = shorts.next_value_os() {
@@ -948,10 +904,7 @@ impl Args {
                         // if sub.agent_name.is_empty() {
                         //     sub.agent_name = lookup_one(gateway_address, token.clone()).await?
                         // }
-                        if use_default_mode {
-                            sub.direct = true;
-                            sub.relay = true;
-                        }
+
                         Ok(ArgCommands::Proxy(sub))
                     }
                 }
