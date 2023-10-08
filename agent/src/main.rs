@@ -608,7 +608,7 @@ async fn data_connect(
     }
     trace!("Connecting to gateway for Data channel: {}", gateway_addr);
     let mut data_stream: Box<dyn AsyncSocket> =
-        Box::new(WsConnectionBinary::new(gateway_addr, headers, service_type).await?);
+        Box::new(WsConnectionBinary::new(gateway_addr, headers, &service_type).await?);
     trace!("Connected to gateway for Data channel");
     if let (Some(k), Some(n)) = (k, n) {
         data_stream = Box::new(AsyncSocketCrypt::new(k, n, data_stream, false).await);

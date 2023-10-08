@@ -7,12 +7,14 @@ use config::Config;
 use error::ClientError;
 use futures_util::{FutureExt, Stream, StreamExt};
 use narrowlink_network::{
+    async_forward,
     event::{NarrowEvent, NarrowEventRequest},
-    ws::WsConnection,
+    ws::{WsConnection, WsConnectionBinary},
+    AsyncSocket,
 };
 use narrowlink_types::{
     client::{Peer2PeerInstruction, Peer2PeerRequest},
-    generic::AgentInfo,
+    generic::{AgentInfo, Connect},
     ServiceType,
 };
 use proxy_stream::ProxyStream;
@@ -26,7 +28,7 @@ use std::{
     sync::Arc,
     task::{Context, Poll},
 };
-use tokio::{net::TcpListener, select};
+use tokio::{net::TcpListener, select, sync::Notify};
 use tracing::{debug, error, info, span, trace, warn, Level};
 use uuid::Uuid;
 
@@ -103,7 +105,7 @@ async fn start(mut args: Args) -> Result<(), ClientError> {
     let conf = config::Config::load(args.take_conf_path())?;
     let mut control = ControlFactory::new(conf)?;
     let instruction = Instruction::from(&args.arg_commands);
-    let transport = TransportFactory::new(instruction.transport);
+    let mut transport = TransportFactory::new(instruction.transport);
     let mut tunnel = TunnelFactory::new(instruction.tunnel);
 
     loop {
@@ -118,18 +120,22 @@ async fn start(mut args: Args) -> Result<(), ClientError> {
                     }
                     None => {
                         tunnel.stop();
-                        control.connect().await?; // todo: reconnect
+                        let relay_info = control.connect().await?; // todo: reconnect
+                        transport.set_relay(relay_info);
                         // if let Some(manage) = manage.take() {
                             control.manage(&instruction.manage);
                         //     break;
                         // }else{
-                        //     tunnel.start();
+                            tunnel.start().await;
                         // }
 
                     }
                 }
             }
-            msg = tunnel.next() => {
+            msg = tunnel.accept() => {
+                let x = msg.unwrap();
+                transport.connect(x.0,x.1).await;
+                // dbg!(msg.unwrap().1);
 
             }
         }
@@ -141,6 +147,7 @@ async fn start(mut args: Args) -> Result<(), ClientError> {
 struct TunnelFactory {
     i: TunnelInstruction,
     listener: Option<TunnelListener>,
+    wait: Option<Arc<Notify>>,
 }
 
 pub enum TunnelListener {
@@ -149,7 +156,11 @@ pub enum TunnelListener {
 
 impl TunnelFactory {
     fn new(i: TunnelInstruction) -> Self {
-        Self { i, listener: None }
+        Self {
+            i,
+            listener: None,
+            wait: Some(Arc::new(Notify::new())),
+        }
     }
     async fn start(&mut self) {
         match &self.i {
@@ -162,41 +173,154 @@ impl TunnelFactory {
             TunnelInstruction::Tun(default_gateway, addr, map) => todo!(),
             TunnelInstruction::None => todo!(),
         };
+        self.wait.take().unwrap().notify_waiters();
     }
-    fn stop(&self) {}
+    fn stop(&mut self) {
+        self.wait = Some(Arc::new(Notify::new()));
+    }
+    async fn socks_accept(
+        listener: &mut TcpListener,
+    ) -> Result<(impl AsyncSocket, generic::Connect), ClientError> {
+        let proxy_stream = ProxyStream::new(proxy_stream::ProxyType::SOCKS5);
+        let (socket, _local_addr) = listener.accept().await?;
+        let interrupted_stream = match proxy_stream.accept(socket).await {
+            Ok(s) => s,
+            Err(_) => todo!(),
+        };
+        let addr: (String, u16) = interrupted_stream.addr().into();
+        let protocol = if interrupted_stream.command() == proxy_stream::Command::UdpAssociate {
+            generic::Protocol::UDP
+        } else {
+            generic::Protocol::TCP
+        };
+        let s = interrupted_stream.connect().await.unwrap();
+        Ok((
+            s,
+            generic::Connect {
+                host: addr.0,
+                port: addr.1,
+                protocol,
+                cryptography: None,
+                sign: None,
+            },
+        ))
+    }
+    async fn accept(&mut self) -> Result<(impl AsyncSocket, generic::Connect), ClientError> {
+        if let Some(wait) = self.wait.as_ref() {
+            wait.notified().await;
+        };
+        match &mut self.listener {
+            Some(TunnelListener::Proxy(l)) => {
+                let (socket, _local_addr) = l.accept().await.unwrap();
+                let interrupted_stream = match ProxyStream::new(proxy_stream::ProxyType::SOCKS5)
+                    .accept(socket)
+                    .await
+                {
+                    Ok(s) => s,
+                    Err(_) => todo!(),
+                };
+                let addr: (String, u16) = interrupted_stream.addr().into();
+                let protocol =
+                    if interrupted_stream.command() == proxy_stream::Command::UdpAssociate {
+                        generic::Protocol::UDP
+                    } else {
+                        generic::Protocol::TCP
+                    };
+                let s = interrupted_stream.connect().await.unwrap();
+                Ok((
+                    s,
+                    generic::Connect {
+                        host: addr.0,
+                        port: addr.1,
+                        protocol,
+                        cryptography: None,
+                        sign: None,
+                    },
+                ))
+            }
+            None => Err(ClientError::UnableToConnect),
+        }
+    }
 }
 
-impl Stream for TunnelFactory {
-    type Item = Result<(), ClientError>;
-    fn poll_next(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Option<Self::Item>> {
-        let Some(listener) = self.listener.as_mut() else {
-            return Poll::Pending;
-        };
-        match listener {
-            TunnelListener::Proxy(l) => match Box::pin(l.accept()).poll_unpin(cx) {
-                Poll::Ready(Ok(s)) => {
-                    let proxy_stream = ProxyStream::new(proxy_stream::ProxyType::SOCKS5);
-
-                    todo!()
-                }
-                Poll::Ready(Err(e)) => todo!(),
-                Poll::Pending => todo!(),
-            },
-        }
-        Poll::Pending
-    }
+struct RelayInfo {
+    protocol: ServiceType,
+    gateway: String,
+    token: String,
+    session_id: String,
 }
 
 struct TransportFactory {
     i: TransportInstruction,
+    direct: Option<()>,
+    relay: Option<RelayInfo>,
 }
 
 impl TransportFactory {
     fn new(i: TransportInstruction) -> Self {
-        Self { i }
+        Self {
+            i,
+            direct: None,
+            relay: None,
+        }
+    }
+    fn set_relay(&mut self, relays: RelayInfo) {
+        self.relay = Some(relays);
+    }
+    fn unset_relay(&mut self) {
+        self.relay = None;
+    }
+    async fn connect(
+        &mut self,
+        socket: impl AsyncSocket,
+        connect: Connect,
+    ) -> Result<(), ClientError> {
+        let (connection, connection_id, e2ee) = match &self.i {
+            TransportInstruction::Direct(e2ee, agent_name) => {
+                todo!()
+            }
+            TransportInstruction::Mixed(e2ee, agent_name)
+            | TransportInstruction::Relay(e2ee, agent_name) => {
+                let Some(relay) = self.relay.as_ref() else {
+                    todo!();
+                    return Err(ClientError::UnableToConnect); // todo: change
+                };
+                let Ok(cmd) = serde_json::to_string(&ClientDataOutBound::Connect(
+                    agent_name.clone(),
+                    connect.clone(),
+                )) else {
+                    error!("Unable to serialize connect command"); // unreachable
+                    return Err(ClientError::UnableToConnect); // todo: change
+                };
+                let connection = match WsConnectionBinary::new(
+                    &relay.gateway,
+                    HashMap::from([
+                        ("NL-TOKEN", relay.token.to_owned()),
+                        ("NL-SESSION", relay.session_id.to_owned()),
+                        ("NL-COMMAND", cmd),
+                    ]),
+                    &relay.protocol,
+                )
+                .await
+                {
+                    Ok(c) => c,
+                    Err(e) => {
+                        dbg!(e.to_string());
+                        todo!()
+                    }
+                };
+                let connection_id = connection
+                    .get_header("NL-CONNECTION")
+                    .map(|c| c.to_string());
+                (connection, connection_id, e2ee)
+            }
+            TransportInstruction::Mixed(e2ee, agent_name) => {
+                todo!()
+            }
+            TransportInstruction::None => todo!(),
+        };
+        async_forward(socket, connection).await.unwrap();
+        Ok(())
     }
 }
 
@@ -227,7 +351,12 @@ impl ControlFactory {
             control: None,
         })
     }
-    async fn connect(&mut self) -> Result<(), ClientError> {
+    // fn get_relay_info(&self) -> RelayInfo {
+    //     RelayInfo {
+    //         protocol: self.protocol.clone(),
+    //     }
+    // }
+    async fn connect(&mut self) -> Result<RelayInfo, ClientError> {
         let headers = if let Some(acl) = self.acl.as_ref() {
             HashMap::from([
                 ("NL-ACL", acl.to_string()),
@@ -302,14 +431,19 @@ impl ControlFactory {
         self.control = Some(ControlInfo {
             local_addr,
             address,
-            session_id,
+            session_id: session_id.clone(),
             request,
             agents,
             msg_receiver,
             task,
         });
 
-        Ok(())
+        Ok(RelayInfo {
+            protocol: self.protocol.clone(),
+            gateway: self.gateway.to_string(),
+            token: self.token.to_string(),
+            session_id,
+        })
     }
     pub async fn accept_msg(&mut self) -> Option<ControlMsg> {
         if let Some(control) = self.control.as_mut() {
@@ -429,18 +563,18 @@ impl TunnelInstruction {
     }
 }
 pub enum TransportInstruction {
-    Direct(Option<String>),
-    Relay(Option<String>),
-    Mixed(Option<String>),
+    Direct(Option<String>, String),
+    Relay(Option<String>, String),
+    Mixed(Option<String>, String),
     None,
 }
 
 impl TransportInstruction {
-    fn determine(direct: bool, relay: bool, e2ee: Option<String>) -> Self {
+    fn determine(direct: bool, relay: bool, e2ee: Option<String>, agent_name: String) -> Self {
         match (direct, relay) {
-            (false, false) | (true, true) => Self::Mixed(e2ee),
-            (true, false) => Self::Direct(e2ee),
-            (false, true) => Self::Relay(e2ee),
+            (false, false) | (true, true) => Self::Mixed(e2ee, agent_name),
+            (true, false) => Self::Direct(e2ee, agent_name),
+            (false, true) => Self::Relay(e2ee, agent_name),
         }
     }
 }
@@ -476,6 +610,7 @@ impl From<&ArgCommands> for Instruction {
                     a.direct,
                     a.relay,
                     a.cryptography.clone(),
+                    a.agent_name.clone(),
                 ),
                 manage: if a.direct {
                     ManageInstruction::default_p2p(a.agent_name.clone())
@@ -494,6 +629,7 @@ impl From<&ArgCommands> for Instruction {
                     a.direct,
                     a.relay,
                     a.cryptography.clone(),
+                    a.agent_name.clone(),
                 ),
                 manage: if a.direct {
                     ManageInstruction::default_p2p(a.agent_name.clone())
@@ -507,6 +643,7 @@ impl From<&ArgCommands> for Instruction {
                     a.direct,
                     a.relay,
                     a.cryptography.clone(),
+                    a.agent_name.clone(),
                 ),
                 manage: if a.direct {
                     ManageInstruction::default_p2p(a.agent_name.clone())
@@ -521,6 +658,7 @@ impl From<&ArgCommands> for Instruction {
                     a.direct,
                     a.relay,
                     a.cryptography.clone(),
+                    a.agent_name.clone(),
                 ),
                 manage: if a.direct {
                     ManageInstruction::default_p2p(a.agent_name.clone())
