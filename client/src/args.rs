@@ -145,7 +145,7 @@ impl SubCommands {
 #[derive(Debug)]
 pub struct Args {
     pub config_path: Option<String>,
-    pub arg_commands: Arc<ArgCommands>,
+    pub arg_commands: ArgCommands,
 }
 
 impl Args {
@@ -241,7 +241,7 @@ impl Args {
                             }
                         }
                     }
-                    Ok(ArgCommands::List(sub))
+                    Ok(ArgCommands::MC(ManageCommands::List(sub)))
                 }
                 #[cfg(any(target_os = "linux", target_os = "macos"))]
                 SubCommands::Tun => {
@@ -428,7 +428,7 @@ impl Args {
                         sub.direct = true;
                         sub.relay = true;
                     }
-                    Ok(ArgCommands::Tun(sub))
+                    Ok(ArgCommands::TC(TunnelCommands::Tun(sub)))
                     // if sub.remote_addr.0.is_empty() {
                     //     Err(ClientError::RequiredValue("remote"))
                     // } else {
@@ -624,7 +624,7 @@ impl Args {
                             sub.direct = true;
                             sub.relay = true;
                         }
-                        Ok(ArgCommands::Forward(sub))
+                        Ok(ArgCommands::TC(TunnelCommands::Forward(sub)))
                     }
                 }
                 SubCommands::Connect => {
@@ -810,7 +810,7 @@ impl Args {
                             sub.direct = true;
                             sub.relay = true;
                         }
-                        Ok(ArgCommands::Connect(sub))
+                        Ok(ArgCommands::TC(TunnelCommands::Connect(sub)))
                     }
                 }
                 SubCommands::Proxy => {
@@ -952,72 +952,78 @@ impl Args {
                             sub.direct = true;
                             sub.relay = true;
                         }
-                        Ok(ArgCommands::Proxy(sub))
+                        Ok(ArgCommands::TC(TunnelCommands::Proxy(sub)))
                     }
                 }
             };
         Ok(Self {
             config_path,
-            arg_commands: Arc::new(arg_command?),
+            arg_commands: arg_command?,
         })
+    }
+    pub fn take_conf_path(&mut self) -> Option<String> {
+        self.config_path.take()
     }
 }
 
 #[derive(Debug)]
 pub enum ArgCommands {
-    Forward(ForwardArgs),
+    TC(TunnelCommands),
+    MC(ManageCommands),
+}
+#[derive(Debug)]
+pub enum ManageCommands {
     List(ListArgs),
+}
+
+#[derive(Debug)]
+pub enum TunnelCommands {
+    Forward(ForwardArgs),
     Proxy(ProxyArgs),
     Connect(ConnectArgs),
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     Tun(TunArgs),
 }
 
-impl ArgCommands {
+impl TunnelCommands {
     pub fn agent_name(&self) -> Option<String> {
         match self {
-            ArgCommands::Forward(args) => Some(&args.agent_name),
-            ArgCommands::Proxy(args) => Some(&args.agent_name),
-            ArgCommands::Connect(args) => Some(&args.agent_name),
+            TunnelCommands::Forward(args) => Some(&args.agent_name),
+            TunnelCommands::Proxy(args) => Some(&args.agent_name),
+            TunnelCommands::Connect(args) => Some(&args.agent_name),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
-            ArgCommands::Tun(args) => Some(&args.agent_name),
+            TunnelCommands::Tun(args) => Some(&args.agent_name),
             _ => None,
         }
         .cloned()
     }
-    pub fn verbose(&self) -> bool {
-        match self {
-            ArgCommands::List(args) => args.verbose,
-            _ => false,
-        }
-    }
     pub fn relay(&self) -> bool {
         match self {
-            ArgCommands::Forward(args) => args.relay,
-            ArgCommands::Proxy(args) => args.relay,
-            ArgCommands::Connect(args) => args.relay,
+            TunnelCommands::Forward(args) => args.relay,
+            TunnelCommands::Proxy(args) => args.relay,
+            TunnelCommands::Connect(args) => args.relay,
             #[cfg(any(target_os = "linux", target_os = "macos"))]
-            ArgCommands::Tun(args) => args.relay,
+            TunnelCommands::Tun(args) => args.relay,
             _ => false,
         }
     }
     pub fn direct(&self) -> bool {
         match self {
-            ArgCommands::Forward(args) => args.direct,
-            ArgCommands::Proxy(args) => args.direct,
-            ArgCommands::Connect(args) => args.direct,
+            TunnelCommands::Forward(args) => args.direct,
+            TunnelCommands::Proxy(args) => args.direct,
+            TunnelCommands::Connect(args) => args.direct,
             #[cfg(any(target_os = "linux", target_os = "macos"))]
-            ArgCommands::Tun(args) => args.direct,
+            TunnelCommands::Tun(args) => args.direct,
             _ => false,
         }
     }
     pub fn cryptography(&self) -> Option<String> {
         match self {
-            ArgCommands::Forward(args) => args.cryptography.clone(),
-            ArgCommands::Proxy(args) => args.cryptography.clone(),
-            ArgCommands::Connect(args) => args.cryptography.clone(),
+            TunnelCommands::Forward(args) => args.cryptography.clone(),
+            TunnelCommands::Proxy(args) => args.cryptography.clone(),
+            TunnelCommands::Connect(args) => args.cryptography.clone(),
             #[cfg(any(target_os = "linux", target_os = "macos"))]
-            ArgCommands::Tun(args) => args.cryptography.clone(),
+            TunnelCommands::Tun(args) => args.cryptography.clone(),
             _ => None,
         }
     }

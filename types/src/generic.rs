@@ -140,7 +140,7 @@ impl std::fmt::Debug for AgentInfo {
         if let Some(forward_addr) = &self.forward_addr {
             debug.field("forward_addr", forward_addr);
         }
-        if let Some(system_info) = &self.system_info {
+        if let Some(system_info) = &self.system_info.as_ref() {
             debug.field("system_info", system_info);
         }
         if let Some(since) = &chrono::NaiveDateTime::from_timestamp_opt(self.since as i64, 0) {
