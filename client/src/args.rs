@@ -52,7 +52,7 @@ pub struct ForwardArgs {
     pub udp: bool,                    //u udp
     pub agent_name: String,           //i name
     pub cryptography: Option<String>, //k key
-    pub local_addr: (String, u16),    //l local
+    pub local_addr: SocketAddr,       //l local
     pub remote_addr: (String, u16),   //<Remote>
 }
 
@@ -62,7 +62,7 @@ pub struct ProxyArgs {
     pub relay: bool,                  //r relay
     pub agent_name: String,           //i name
     pub cryptography: Option<String>, //k key
-    pub local_addr: (String, u16),    //<Local>
+    pub local_addr: SocketAddr,       //<Local>
 }
 
 #[derive(Debug, Clone)]
@@ -430,7 +430,7 @@ impl Args {
                 SubCommands::Forward => {
                     let mut sub = ForwardArgs {
                         agent_name: String::new(),
-                        local_addr: ("127.0.0.1".to_string(), 0),
+                        local_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 0),
                         cryptography: None,
                         udp: false,
                         direct: false,
@@ -473,13 +473,11 @@ impl Args {
                                     // );
                                 }
                                 Ok("local") => {
-                                    sub.local_addr = extract_addr(
-                                        value
-                                            .ok_or(ClientError::RequiredValue("local"))?
-                                            .to_str()
-                                            .ok_or(ClientError::Encoding)?,
-                                        true,
-                                    )?;
+                                    sub.local_addr = value
+                                        .and_then(|v| v.to_str())
+                                        .ok_or(ClientError::RequiredValue("local"))?
+                                        .parse::<SocketAddr>()
+                                        .map_err(|_| ClientError::Encoding)?;
                                 }
                                 Ok("key") => {
                                     sub.cryptography = Some(
@@ -540,12 +538,10 @@ impl Args {
                                         } else {
                                             None
                                         };
-
-                                        sub.local_addr = extract_addr(
-                                            next_value
-                                                .ok_or(ClientError::RequiredValue("local"))?,
-                                            true,
-                                        )?;
+                                        sub.local_addr = next_value
+                                            .ok_or(ClientError::RequiredValue("local"))?
+                                            .parse::<SocketAddr>()
+                                            .map_err(|_| ClientError::Encoding)?;
                                     }
                                     Ok('k') => {
                                         let next_value = if let Some(v) = shorts.next_value_os() {
@@ -784,7 +780,7 @@ impl Args {
                         cryptography: None,
                         relay: false,
                         direct: false,
-                        local_addr: ("".to_string(), 0),
+                        local_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 0),
                     };
                     while let Some(arg) = raw.next(&mut cursor) {
                         if let Some((long, value)) = arg.to_long() {
@@ -883,30 +879,43 @@ impl Args {
                                 }
                             }
                         } else {
-                            sub.local_addr = extract_addr(
-                                arg.to_value_os()
-                                    .to_str()
-                                    .and_then(|v| {
-                                        if v.is_empty() || v.find('-') == Some(0) {
-                                            None
-                                        } else {
-                                            Some(v)
-                                        }
-                                    })
-                                    .ok_or(ClientError::Encoding)?,
-                                false,
-                            )?;
+                            // sub.local_addr = next_value
+                            //                 .ok_or(ClientError::RequiredValue("local"))?
+                            //                 .parse::<SocketAddr>()
+                            //                 .map_err(|_| ClientError::Encoding)?;
+
+                            // sub.local_addr = extract_addr(
+                            //     arg.to_value_os()
+                            //         .to_str()
+                            //         .and_then(|v| {
+                            //             if v.is_empty() || v.find('-') == Some(0) {
+                            //                 None
+                            //             } else {
+                            //                 Some(v)
+                            //             }
+                            //         })
+                            //         .ok_or(ClientError::Encoding)?,
+                            //     false,
+                            // )?;
+                            sub.local_addr = arg
+                                .to_value_os()
+                                .to_str()
+                                .and_then(|v| {
+                                    if v.is_empty() || v.find('-') == Some(0) {
+                                        None
+                                    } else {
+                                        Some(v)
+                                    }
+                                })
+                                .ok_or(ClientError::RequiredValue("local"))?
+                                .parse::<SocketAddr>()
+                                .map_err(|_| ClientError::Encoding)?;
                         }
                     }
-                    if sub.local_addr.0.is_empty() {
-                        Err(ClientError::RequiredValue("local"))
-                    } else {
-                        // if sub.agent_name.is_empty() {
-                        //     sub.agent_name = lookup_one(gateway_address, token.clone()).await?
-                        // }
+                   
 
                         Ok(ArgCommands::Proxy(sub))
-                    }
+                    
                 }
             };
         Ok(Self {

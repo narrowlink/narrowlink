@@ -15,17 +15,18 @@ use narrowlink_types::{
     generic::AgentInfo,
     ServiceType,
 };
+use proxy_stream::ProxyStream;
 use rand::Rng;
 use std::{
     collections::HashMap,
     env,
     io::{self, IsTerminal},
-    net::{SocketAddr, TcpListener},
+    net::{IpAddr, SocketAddr},
     process,
     sync::Arc,
     task::{Context, Poll},
 };
-use tokio::select;
+use tokio::{net::TcpListener, select};
 use tracing::{debug, error, info, span, trace, warn, Level};
 use uuid::Uuid;
 
@@ -102,7 +103,7 @@ async fn start(mut args: Args) -> Result<(), ClientError> {
     let conf = config::Config::load(args.take_conf_path())?;
     let mut control = ControlFactory::new(conf)?;
     let instruction = Instruction::from(&args.arg_commands);
-    // let transport = TransportFactory::new(instruction.transport);
+    let transport = TransportFactory::new(instruction.transport);
     let mut tunnel = TunnelFactory::new(instruction.tunnel);
 
     loop {
@@ -150,7 +151,18 @@ impl TunnelFactory {
     fn new(i: TunnelInstruction) -> Self {
         Self { i, listener: None }
     }
-    fn start(&self) {}
+    async fn start(&mut self) {
+        match &self.i {
+            TunnelInstruction::Connect(udp, (dst_addr, dst_port)) => todo!(),
+            TunnelInstruction::Forward(udp, local, endpoint) => todo!(),
+            TunnelInstruction::Proxy(endpoint) => {
+                let listener = TcpListener::bind(endpoint).await.unwrap();
+                self.listener = Some(TunnelListener::Proxy(listener));
+            }
+            TunnelInstruction::Tun(default_gateway, addr, map) => todo!(),
+            TunnelInstruction::None => todo!(),
+        };
+    }
     fn stop(&self) {}
 }
 
@@ -160,19 +172,33 @@ impl Stream for TunnelFactory {
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Self::Item>> {
+        let Some(listener) = self.listener.as_mut() else {
+            return Poll::Pending;
+        };
+        match listener {
+            TunnelListener::Proxy(l) => match Box::pin(l.accept()).poll_unpin(cx) {
+                Poll::Ready(Ok(s)) => {
+                    let proxy_stream = ProxyStream::new(proxy_stream::ProxyType::SOCKS5);
+
+                    todo!()
+                }
+                Poll::Ready(Err(e)) => todo!(),
+                Poll::Pending => todo!(),
+            },
+        }
         Poll::Pending
     }
 }
 
-// struct TransportFactory {
-//     i: TransportInstruction,
-// }
+struct TransportFactory {
+    i: TransportInstruction,
+}
 
-// impl TransportFactory {
-//     fn new(i: TransportInstruction) -> Self {
-//         Self { i }
-//     }
-// }
+impl TransportFactory {
+    fn new(i: TransportInstruction) -> Self {
+        Self { i }
+    }
+}
 
 struct ControlFactory {
     gateway: Arc<String>,
@@ -386,22 +412,35 @@ pub struct Instruction {
     manage: ManageInstruction,
 }
 pub enum TunnelInstruction {
+    Connect(bool, (String, u16)),             // udp, endpoint
+    Forward(bool, SocketAddr, (String, u16)), // udp, local, endpoint
+    Proxy(SocketAddr),                        // endpoint
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    Tun(bool, IpAddr, Option<IpAddr>), // default_gateway, addr, map
     None,
 }
 
+impl TunnelInstruction {
+    fn is_proxy(&self) -> bool {
+        match self {
+            TunnelInstruction::Proxy(_) => true,
+            _ => false,
+        }
+    }
+}
 pub enum TransportInstruction {
-    Direct,
-    Relay,
-    Mixed,
+    Direct(Option<String>),
+    Relay(Option<String>),
+    Mixed(Option<String>),
     None,
 }
 
 impl TransportInstruction {
-    fn determine(direct: bool, relay: bool) -> Self {
+    fn determine(direct: bool, relay: bool, e2ee: Option<String>) -> Self {
         match (direct, relay) {
-            (false, false) | (true, true) => Self::Mixed,
-            (true, false) => Self::Direct,
-            (false, true) => Self::Relay,
+            (false, false) | (true, true) => Self::Mixed(e2ee),
+            (true, false) => Self::Direct(e2ee),
+            (false, true) => Self::Relay(e2ee),
         }
     }
 }
@@ -428,9 +467,21 @@ impl From<&ArgCommands> for Instruction {
     fn from(cmd: &ArgCommands) -> Self {
         match cmd {
             ArgCommands::Forward(a) => Self {
-                tunnel: TunnelInstruction::None,
-                transport: TransportInstruction::determine(a.direct, a.relay),
-                manage: ManageInstruction::None,
+                tunnel: TunnelInstruction::Forward(
+                    a.udp,
+                    a.local_addr.clone(),
+                    a.remote_addr.clone(),
+                ),
+                transport: TransportInstruction::determine(
+                    a.direct,
+                    a.relay,
+                    a.cryptography.clone(),
+                ),
+                manage: if a.direct {
+                    ManageInstruction::default_p2p(a.agent_name.clone())
+                } else {
+                    ManageInstruction::None
+                },
             },
             ArgCommands::List(ListArgs { verbose }) => Self {
                 tunnel: TunnelInstruction::None,
@@ -438,19 +489,44 @@ impl From<&ArgCommands> for Instruction {
                 manage: ManageInstruction::AgentList(*verbose),
             },
             ArgCommands::Proxy(a) => Self {
-                tunnel: TunnelInstruction::None,
-                transport: TransportInstruction::determine(a.direct, a.relay),
-                manage: ManageInstruction::None,
+                tunnel: TunnelInstruction::Proxy(a.local_addr.clone()),
+                transport: TransportInstruction::determine(
+                    a.direct,
+                    a.relay,
+                    a.cryptography.clone(),
+                ),
+                manage: if a.direct {
+                    ManageInstruction::default_p2p(a.agent_name.clone())
+                } else {
+                    ManageInstruction::None
+                },
             },
             ArgCommands::Connect(a) => Self {
-                tunnel: TunnelInstruction::None,
-                transport: TransportInstruction::determine(a.direct, a.relay),
-                manage: ManageInstruction::None,
+                tunnel: TunnelInstruction::Connect(a.udp, a.remote_addr.clone()),
+                transport: TransportInstruction::determine(
+                    a.direct,
+                    a.relay,
+                    a.cryptography.clone(),
+                ),
+                manage: if a.direct {
+                    ManageInstruction::default_p2p(a.agent_name.clone())
+                } else {
+                    ManageInstruction::None
+                },
             },
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
             ArgCommands::Tun(a) => Self {
-                tunnel: TunnelInstruction::None,
-                transport: TransportInstruction::determine(a.direct, a.relay),
-                manage: ManageInstruction::None,
+                tunnel: TunnelInstruction::Tun(a.gateway, a.local_addr, a.map_addr),
+                transport: TransportInstruction::determine(
+                    a.direct,
+                    a.relay,
+                    a.cryptography.clone(),
+                ),
+                manage: if a.direct {
+                    ManageInstruction::default_p2p(a.agent_name.clone())
+                } else {
+                    ManageInstruction::None
+                },
             },
         }
     }

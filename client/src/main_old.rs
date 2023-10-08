@@ -237,7 +237,7 @@ async fn main() -> Result<(), ClientError> {
     let connections = Arc::new(Mutex::new(HashMap::new()));
     let p2p_stream = Arc::new(RwLock::new(None::<QuicStream>));
     let p2p_status = Arc::new(AtomicU8::new(P2PStatus::Uninitialized as u8));
-    
+
     let acl = if conf.acl.is_empty() {
         None
     } else {
