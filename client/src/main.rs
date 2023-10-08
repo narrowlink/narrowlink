@@ -2,7 +2,7 @@ mod args;
 mod config;
 mod error;
 mod input_stream;
-use args::{ArgCommands, Args, TunnelCommands};
+use args::{ArgCommands, Args};
 use config::Config;
 use error::ClientError;
 use futures_util::{FutureExt, Stream, StreamExt};
@@ -15,9 +15,9 @@ use std::{
     collections::HashMap,
     env,
     io::{self, IsTerminal},
-    net::SocketAddr,
+    net::{SocketAddr, TcpListener},
     sync::Arc,
-    task::{Context, Poll},
+    task::{Context, Poll}, process,
 };
 use tokio::select;
 use tracing::{debug, error, info, span, trace, warn, Level};
@@ -36,7 +36,8 @@ use tracing_subscriber::{
     Layer,
 };
 
-use crate::args::{ListArgs, ManageCommands};
+use crate::args::ListArgs;
+
 pub fn main() -> Result<(), ClientError> {
     let args = Args::parse(env::args())?;
 
@@ -94,11 +95,9 @@ pub fn main() -> Result<(), ClientError> {
 async fn start(mut args: Args) -> Result<(), ClientError> {
     let conf = config::Config::load(args.take_conf_path())?;
     let mut control = ControlFactory::new(conf)?;
-    let data = DataFactory::new();
-    let (mut tunnel, mut manage) = match args.arg_commands {
-        ArgCommands::TC(tc) => (TunnelFactory::new(tc), None),
-        ArgCommands::MC(mc) => (TunnelFactory::empty(), Some(mc)),
-    };
+    let instruction = Instruction::from(&args.arg_commands);
+    let transport = TransportFactory::new(instruction.transport);
+    let mut tunnel = TunnelFactory::new(instruction.tunnel);
 
     loop {
         tokio::select! {
@@ -113,12 +112,12 @@ async fn start(mut args: Args) -> Result<(), ClientError> {
                     None => {
                         tunnel.stop();
                         control.connect().await?; // todo: reconnect
-                        if let Some(manage) = manage.take() {
-                            control.manage(manage);
-                            break;
-                        }else{
-                            tunnel.start();
-                        }
+                        // if let Some(manage) = manage.take() {
+                            control.manage(&instruction.manage);
+                        //     break;
+                        // }else{
+                        //     tunnel.start();
+                        // }
 
                     }
                 }
@@ -133,25 +132,19 @@ async fn start(mut args: Args) -> Result<(), ClientError> {
 }
 
 struct TunnelFactory {
-    tc: Option<TunnelCommands>,
+    i: TunnelInstruction,
+    listener: Option<TunnelListener>,
+}
+
+pub enum TunnelListener {
+    Proxy(TcpListener),
 }
 
 impl TunnelFactory {
-    fn new(tc: TunnelCommands) -> Self {
-        Self { tc: Some(tc) }
+    fn new(i: TunnelInstruction) -> Self {
+        Self { i, listener: None }
     }
-    fn empty() -> Self {
-        // futures_util::stream::pending
-        Self { tc: None }
-    }
-    fn start(&self) {
-        match self.tc.as_ref().unwrap() {
-            TunnelCommands::Forward(f) => todo!(),
-            TunnelCommands::Proxy(p) => todo!(),
-            TunnelCommands::Connect(c) => todo!(),
-            TunnelCommands::Tun(t) => todo!(),
-        }
-    }
+    fn start(&self) {}
     fn stop(&self) {}
 }
 
@@ -165,11 +158,13 @@ impl Stream for TunnelFactory {
     }
 }
 
-struct DataFactory {}
+struct TransportFactory {
+    i: TransportInstruction,
+}
 
-impl DataFactory {
-    fn new() -> Self {
-        Self {}
+impl TransportFactory {
+    fn new(i: TransportInstruction) -> Self {
+        Self { i }
     }
 }
 
@@ -298,9 +293,9 @@ impl ControlFactory {
         None
     }
 
-    fn manage(&self, manage: ManageCommands) {
+    fn manage(&self, manage: &ManageInstruction) {
         match manage {
-            ManageCommands::List(ListArgs { verbose }) => {
+            ManageInstruction::AgentList(verbose) => {
                 trace!("List of agents");
                 let Some(agents) = self.control.as_ref().map(|c| c.agents.clone()) else {
                     println!("Agent not found");
@@ -322,7 +317,7 @@ impl ControlFactory {
                         println!("\t\tLoad Avarage: {}", system_info.dynamic.loadavg);
                         println!("\t\tCPU Cores: {}", system_info.constant.cpus);
                     }
-                    if verbose {
+                    if *verbose {
                         if !agent.publish_info.is_empty() {
                             println!("\tPublish Info:");
                             for agent_publish_info in &agent.publish_info {
@@ -343,9 +338,11 @@ impl ControlFactory {
 
                     println!("\tConnection Ping: {}ms\r\n", agent.ping);
                 }
+                process::exit(0);
                 // req.shutdown().await;
                 // break;
             }
+            ManageInstruction::None => (),
         }
     }
 }
@@ -363,4 +360,54 @@ pub struct ControlInfo {
     agents: Vec<AgentInfo>,
     msg_receiver: tokio::sync::mpsc::UnboundedReceiver<ControlMsg>,
     task: tokio::task::JoinHandle<()>,
+}
+
+pub struct Instruction {
+    tunnel: TunnelInstruction,
+    transport: TransportInstruction,
+    manage: ManageInstruction,
+}
+pub enum TunnelInstruction {
+    None,
+}
+
+pub enum TransportInstruction {
+    None,
+}
+
+pub enum ManageInstruction {
+    AgentList(bool),
+    None,
+}
+
+impl From<&ArgCommands> for Instruction {
+    fn from(cmd: &ArgCommands) -> Self {
+        match cmd {
+            ArgCommands::Forward(_) => Self {
+                tunnel: TunnelInstruction::None,
+                transport: TransportInstruction::None,
+                manage: ManageInstruction::None,
+            },
+            ArgCommands::List(ListArgs { verbose }) => Self {
+                tunnel: TunnelInstruction::None,
+                transport: TransportInstruction::None,
+                manage: ManageInstruction::AgentList(*verbose),
+            },
+            ArgCommands::Proxy(_) => Self {
+                tunnel: TunnelInstruction::None,
+                transport: TransportInstruction::None,
+                manage: ManageInstruction::None,
+            },
+            ArgCommands::Connect(_) => Self {
+                tunnel: TunnelInstruction::None,
+                transport: TransportInstruction::None,
+                manage: ManageInstruction::None,
+            },
+            ArgCommands::Tun(_) => Self {
+                tunnel: TunnelInstruction::None,
+                transport: TransportInstruction::None,
+                manage: ManageInstruction::None,
+            },
+        }
+    }
 }
