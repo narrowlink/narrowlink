@@ -1,3 +1,6 @@
+mod input_stream;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+mod tun;
 use either::Either;
 use futures_util::{
     future::{pending, Ready},
@@ -17,8 +20,9 @@ use std::{
 };
 use tokio::{net::TcpListener, sync::Notify};
 
-use crate::{
-    error::ClientError,
+use crate::error::ClientError;
+
+use self::{
     input_stream::InputStream,
     tun::{RouteCommand, TunListener, TunStream},
 };
@@ -52,7 +56,7 @@ pub enum TunnelListener {
     Forward(Either<TcpListener, UdpListener>, (String, u16)),
     Proxy(TcpListener),
     #[cfg(any(target_os = "linux", target_os = "macos"))]
-    Tun(crate::tun::TunListener),
+    Tun(TunListener),
 }
 
 impl TunnelFactory {

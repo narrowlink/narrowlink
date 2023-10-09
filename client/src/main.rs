@@ -2,12 +2,9 @@ mod args;
 mod config;
 mod control;
 mod error;
-mod input_stream;
 mod manage;
 mod transport;
-mod tun;
 mod tunnel;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
 use args::Args;
 use error::ClientError;
 use manage::{ControlFactory, ControlMsg, Instruction};
@@ -125,14 +122,12 @@ async fn start(mut args: Args) -> Result<(), ClientError> {
             msg = tunnel.accept() => {
                 let t = transport.clone();
                 tokio::spawn(async move{
-                    let x = msg.unwrap();
-                    t.connect(x.0,x.1).await;
+                    let (socket,connect) = msg.unwrap();
+                    t.connect(socket,connect).await;
                 });
                 // dbg!(msg.unwrap().1);
 
             }
         }
     }
-
-    Ok(())
 }
