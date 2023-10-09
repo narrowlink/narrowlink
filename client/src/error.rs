@@ -35,11 +35,23 @@ pub enum ClientError {
     UnableToCreateTun(#[from] tun::Error),
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     #[error("Unable To Create Net Stack: {0}")]
-    UnableToCreaateNetStack(#[from] netstack_lwip::Error),
+    UnableToCreateNetStack(#[from] netstack_lwip::Error),
     #[error("Network Error: {0}")]
     NetworkError(#[from] NetworkError),
     #[error("STOP: #{0:#10x}")]
-    InternalError(u32),
+    Unexpected(u32),
     #[error("IO Error: {0}")]
     IoError(#[from] std::io::Error),
+    #[error("Direct Channel Not Ready")]
+    DirectChannelNotAvailable,
+    #[error("Relay Channel Not Ready")]
+    RelayChannelNotAvailable,
+    #[error("Unable To Open Quic Bi Stream")]
+    UnableToOpenQuicBiStream,
+    #[error("Unable To Communicate With Quic Bi Stream")]
+    UnableToCommunicateWithQuicBiStream,
+    #[error("Invalid Direct Request")]
+    InvalidDirectRequest,
+    #[error("Invalid Direct Response")]
+    InvalidDirectResponse,
 }

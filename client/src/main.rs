@@ -1,14 +1,24 @@
 mod args;
 mod config;
+mod control;
 mod error;
 mod input_stream;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+mod tun;
 use args::{ArgCommands, Args};
 use config::Config;
+use either::Either;
 use error::ClientError;
-use futures_util::{FutureExt, Stream, StreamExt};
+use futures_util::{
+    future::{pending, Ready},
+    stream::{self, Once},
+    StreamExt,
+};
+use input_stream::InputStream;
 use narrowlink_network::{
     async_forward,
     event::{NarrowEvent, NarrowEventRequest},
+    p2p::QuicStream,
     ws::{WsConnection, WsConnectionBinary},
     AsyncSocket,
 };
@@ -19,16 +29,25 @@ use narrowlink_types::{
 };
 use proxy_stream::ProxyStream;
 use rand::Rng;
+use sha3::{Digest, Sha3_256};
+use udp_stream::UdpListener;
+
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     env,
     io::{self, IsTerminal},
     net::{IpAddr, SocketAddr},
     process,
-    sync::Arc,
-    task::{Context, Poll},
+    sync::{
+        atomic::{AtomicU8, Ordering},
+        Arc,
+    },
 };
-use tokio::{net::TcpListener, select, sync::Notify};
+use tokio::{
+    net::TcpListener,
+    select,
+    sync::{Notify, RwLock},
+};
 use tracing::{debug, error, info, span, trace, warn, Level};
 use uuid::Uuid;
 
@@ -46,6 +65,9 @@ use tracing_subscriber::{
 };
 
 use crate::args::ListArgs;
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+use tun::{RouteCommand, TunListener, TunStream};
 
 pub fn main() -> Result<(), ClientError> {
     let args = Args::parse(env::args())?;
@@ -117,13 +139,23 @@ async fn start(mut args: Args) -> Result<(), ClientError> {
                     }
                     Some(ControlMsg::Peer2Peer(p2p)) => {
                         debug!("Peer2Peer: {:?}", p2p);
+                        let t = transport.clone();
+                        let direct_tunnel_status = control.direct_tunnel_status.clone();
+                        tunnel.add_host(p2p.peer_ip); // todo del_host
+                        tokio::spawn(async move{
+                            t.create_direct(p2p,direct_tunnel_status).await.unwrap();
+                        });
+
                     }
                     None => {
                         tunnel.stop();
                         let relay_info = control.connect().await?; // todo: reconnect
+                        if let Some(addr) = control.control.as_ref().map(|c| c.address.ip()) {
+                            tunnel.add_host(addr);
+                        }
                         transport.set_relay(relay_info);
                         // if let Some(manage) = manage.take() {
-                            control.manage(&instruction.manage);
+                            control.manage(&instruction.manage).await;
                         //     break;
                         // }else{
                             tunnel.start().await;
@@ -133,8 +165,11 @@ async fn start(mut args: Args) -> Result<(), ClientError> {
                 }
             }
             msg = tunnel.accept() => {
-                let x = msg.unwrap();
-                transport.connect(x.0,x.1).await;
+                let t = transport.clone();
+                tokio::spawn(async move{
+                    let x = msg.unwrap();
+                    t.connect(x.0,x.1).await;
+                });
                 // dbg!(msg.unwrap().1);
 
             }
@@ -144,14 +179,27 @@ async fn start(mut args: Args) -> Result<(), ClientError> {
     Ok(())
 }
 
+pub enum DirectTunnelStatus {
+    Uninitialized = 0x0,
+    Success = 0x1,
+    Pending = 0x2,
+    Closed = 0x3,
+    Failed = 0xff,
+}
+
 struct TunnelFactory {
     i: TunnelInstruction,
     listener: Option<TunnelListener>,
     wait: Option<Arc<Notify>>,
+    hosts: HashSet<IpAddr>,
 }
 
 pub enum TunnelListener {
+    Connect(Once<Ready<InputStream>>, bool, (String, u16)),
+    Forward(Either<TcpListener, UdpListener>, (String, u16)),
     Proxy(TcpListener),
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    Tun(TunListener),
 }
 
 impl TunnelFactory {
@@ -160,56 +208,77 @@ impl TunnelFactory {
             i,
             listener: None,
             wait: Some(Arc::new(Notify::new())),
+            hosts: HashSet::new(),
         }
     }
-    async fn start(&mut self) {
+    async fn start(&mut self) -> Result<(), ClientError> {
         match &self.i {
-            TunnelInstruction::Connect(udp, (dst_addr, dst_port)) => todo!(),
-            TunnelInstruction::Forward(udp, local, endpoint) => todo!(),
+            TunnelInstruction::Connect(udp, (dst_addr, dst_port)) => {
+                self.listener = Some(TunnelListener::Connect(
+                    stream::once(futures_util::future::ready(InputStream::default())),
+                    *udp,
+                    (dst_addr.clone(), dst_port.clone()),
+                ));
+            }
+            TunnelInstruction::Forward(udp, local, endpoint) => {
+                let listener = if *udp {
+                    either::Right(UdpListener::bind(local.clone()).await?)
+                } else {
+                    either::Left(TcpListener::bind(local).await?)
+                };
+                self.listener = Some(TunnelListener::Forward(listener, endpoint.clone()));
+            }
             TunnelInstruction::Proxy(endpoint) => {
-                let listener = TcpListener::bind(endpoint).await.unwrap();
+                let listener = TcpListener::bind(endpoint).await?;
                 self.listener = Some(TunnelListener::Proxy(listener));
             }
-            TunnelInstruction::Tun(default_gateway, addr, map) => todo!(),
-            TunnelInstruction::None => todo!(),
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            TunnelInstruction::Tun(default_gateway, addr, map) => {
+                let tun = TunListener::new(*addr, *map).await?;
+                if let Some(s) = tun.route_sender() {
+                    for ip in self.hosts.iter() {
+                        s.send(RouteCommand::Add(*ip)).unwrap();
+                    }
+                }
+                tun.my_routes(*default_gateway);
+                self.listener = Some(TunnelListener::Tun(tun));
+            }
+            TunnelInstruction::None => Err(ClientError::Unexpected(0))?,
         };
-        self.wait.take().unwrap().notify_waiters();
+        if let Some(wait) = self.wait.take() {
+            wait.notify_waiters();
+        }
+        Ok(())
     }
     fn stop(&mut self) {
         self.wait = Some(Arc::new(Notify::new()));
+        self.listener.take();
     }
-    async fn socks_accept(
-        listener: &mut TcpListener,
-    ) -> Result<(impl AsyncSocket, generic::Connect), ClientError> {
-        let proxy_stream = ProxyStream::new(proxy_stream::ProxyType::SOCKS5);
-        let (socket, _local_addr) = listener.accept().await?;
-        let interrupted_stream = match proxy_stream.accept(socket).await {
-            Ok(s) => s,
-            Err(_) => todo!(),
-        };
-        let addr: (String, u16) = interrupted_stream.addr().into();
-        let protocol = if interrupted_stream.command() == proxy_stream::Command::UdpAssociate {
-            generic::Protocol::UDP
-        } else {
-            generic::Protocol::TCP
-        };
-        let s = interrupted_stream.connect().await.unwrap();
-        Ok((
-            s,
-            generic::Connect {
-                host: addr.0,
-                port: addr.1,
-                protocol,
-                cryptography: None,
-                sign: None,
-            },
-        ))
-    }
-    async fn accept(&mut self) -> Result<(impl AsyncSocket, generic::Connect), ClientError> {
+    async fn accept(&mut self) -> Result<(Box<dyn AsyncSocket>, generic::Connect), ClientError> {
         if let Some(wait) = self.wait.as_ref() {
             wait.notified().await;
         };
         match &mut self.listener {
+            Some(TunnelListener::Connect(stream, udp, (dst_addr, dst_port))) => {
+                let s = match stream.next().await {
+                    Some(s) => s,
+                    None => pending().await,
+                };
+                Ok((
+                    Box::new(s),
+                    generic::Connect {
+                        host: dst_addr.clone(),
+                        port: dst_port.clone(),
+                        protocol: if *udp {
+                            generic::Protocol::UDP
+                        } else {
+                            generic::Protocol::TCP
+                        },
+                        cryptography: None,
+                        sign: None,
+                    },
+                ))
+            }
             Some(TunnelListener::Proxy(l)) => {
                 let (socket, _local_addr) = l.accept().await.unwrap();
                 let interrupted_stream = match ProxyStream::new(proxy_stream::ProxyType::SOCKS5)
@@ -228,7 +297,7 @@ impl TunnelFactory {
                     };
                 let s = interrupted_stream.connect().await.unwrap();
                 Ok((
-                    s,
+                    Box::new(s),
                     generic::Connect {
                         host: addr.0,
                         port: addr.1,
@@ -238,11 +307,73 @@ impl TunnelFactory {
                     },
                 ))
             }
+            Some(TunnelListener::Forward(listener, end_point)) => {
+                let (socket, protocol): (Box<dyn AsyncSocket>, generic::Protocol) = match listener {
+                    either::Left(tcp_listener) => {
+                        let (socket, _local_addr) = tcp_listener.accept().await?;
+                        (Box::new(socket), generic::Protocol::UDP)
+                    }
+                    either::Right(udp_listener) => {
+                        let (socket, _local_addr) = udp_listener.accept().await?;
+                        (Box::new(socket), generic::Protocol::TCP)
+                    }
+                };
+                let addr: (String, u16) = end_point.clone();
+                Ok((
+                    Box::new(socket),
+                    generic::Connect {
+                        host: addr.0,
+                        port: addr.1,
+                        protocol,
+                        cryptography: None,
+                        sign: None,
+                    },
+                ))
+            }
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            Some(TunnelListener::Tun(tun_listener)) => {
+                let (stream, addr) = tun_listener.accept().await.unwrap();
+                let (stream, udp): (Box<dyn AsyncSocket>, bool) = match stream {
+                    TunStream::Tcp(tcp) => (Box::new(tcp), false),
+                    TunStream::Udp(udp) => (Box::new(udp), true),
+                };
+                Ok((
+                    stream,
+                    generic::Connect {
+                        host: addr.ip().to_string(),
+                        port: addr.port(),
+                        protocol: if udp {
+                            generic::Protocol::UDP
+                        } else {
+                            generic::Protocol::TCP
+                        },
+                        cryptography: None,
+                        sign: None,
+                    },
+                ))
+            }
             None => Err(ClientError::UnableToConnect),
+        }
+    }
+    fn add_host(&mut self, ip: IpAddr) {
+        self.hosts.insert(ip);
+        if let Some(TunnelListener::Tun(tun)) = self.listener.as_ref() {
+            if let Some(s) = tun.route_sender() {
+                let _ = s.send(RouteCommand::Add(ip));
+            };
+        }
+    }
+    fn del_host(&mut self, ip: IpAddr) {
+        self.hosts.remove(&ip);
+        if let Some(TunnelListener::Tun(tun)) = self.listener.as_ref() {
+            if let Some(s) = tun.route_sender() {
+                let _ = s.send(RouteCommand::Del(ip));
+            };
         }
     }
 }
 
+#[derive(Clone)]
 struct RelayInfo {
     protocol: ServiceType,
     gateway: String,
@@ -250,17 +381,23 @@ struct RelayInfo {
     session_id: String,
 }
 
+#[derive(Clone)]
 struct TransportFactory {
     i: TransportInstruction,
-    direct: Option<()>,
+    direct: Arc<RwLock<Option<QuicStream>>>,
+    notify_direct: Arc<RwLock<Option<Arc<Notify>>>>,
     relay: Option<RelayInfo>,
 }
 
+// impl From<&ArgCommands> for Instruction {
+
+// }
 impl TransportFactory {
     fn new(i: TransportInstruction) -> Self {
         Self {
             i,
-            direct: None,
+            direct: Arc::new(RwLock::new(None)),
+            notify_direct: Arc::new(RwLock::new(Some(Arc::new(Notify::new())))),
             relay: None,
         }
     }
@@ -270,57 +407,166 @@ impl TransportFactory {
     fn unset_relay(&mut self) {
         self.relay = None;
     }
-    async fn connect(
-        &mut self,
-        socket: impl AsyncSocket,
-        connect: Connect,
+    async fn create_direct(
+        &self,
+        direct_instruction: Peer2PeerInstruction,
+        direct_tunnel_status: Arc<AtomicU8>,
     ) -> Result<(), ClientError> {
-        let (connection, connection_id, e2ee) = match &self.i {
-            TransportInstruction::Direct(e2ee, agent_name) => {
-                todo!()
-            }
-            TransportInstruction::Mixed(e2ee, agent_name)
-            | TransportInstruction::Relay(e2ee, agent_name) => {
-                let Some(relay) = self.relay.as_ref() else {
-                    todo!();
-                    return Err(ClientError::UnableToConnect); // todo: change
-                };
-                let Ok(cmd) = serde_json::to_string(&ClientDataOutBound::Connect(
-                    agent_name.clone(),
-                    connect.clone(),
-                )) else {
-                    error!("Unable to serialize connect command"); // unreachable
-                    return Err(ClientError::UnableToConnect); // todo: change
-                };
-                let connection = match WsConnectionBinary::new(
-                    &relay.gateway,
-                    HashMap::from([
-                        ("NL-TOKEN", relay.token.to_owned()),
-                        ("NL-SESSION", relay.session_id.to_owned()),
-                        ("NL-COMMAND", cmd),
-                    ]),
-                    &relay.protocol,
-                )
-                .await
-                {
-                    Ok(c) => c,
+        direct_tunnel_status.store(DirectTunnelStatus::Pending as u8, Ordering::Relaxed);
+        info!("Trying to create a direct (peer-to-peer) channel");
+        let res = 'res: {
+            let (socket, peer) = match narrowlink_network::p2p::udp_punched_socket(
+                (&direct_instruction).into(),
+                &Sha3_256::digest(&direct_instruction.cert)[0..6],
+                true,
+                false,
+            )
+            .await
+            {
+                Ok((socket, peer)) => (socket, peer),
+                Err(e) => {
+                    break 'res (Err(e), DirectTunnelStatus::Failed);
+                }
+            };
+            let quic_stream =
+                match QuicStream::new_client(peer, socket, direct_instruction.cert).await {
+                    Ok(qs) => qs,
                     Err(e) => {
-                        dbg!(e.to_string());
-                        todo!()
+                        break 'res (Err(e), DirectTunnelStatus::Closed);
                     }
                 };
-                let connection_id = connection
-                    .get_header("NL-CONNECTION")
-                    .map(|c| c.to_string());
-                (connection, connection_id, e2ee)
-            }
-            TransportInstruction::Mixed(e2ee, agent_name) => {
+            info!("The direct channel has just been established");
+            self.direct.write().await.replace(quic_stream);
+            (Ok(()), DirectTunnelStatus::Success)
+        };
+
+        if let Some(notify) = self.notify_direct.write().await.take() {
+            notify.notify_waiters();
+        }
+        direct_tunnel_status.store(res.1 as u8, Ordering::Relaxed);
+        Ok(res.0?)
+    }
+    async fn connect_direct(
+        &self,
+        _agent_name: &str,
+        connect: &Connect,
+        wait_for_tunnel: bool,
+    ) -> Result<(impl AsyncSocket, Option<String>), ClientError> {
+        let notify = self.notify_direct.read().await.clone();
+        if let Some(notify) = notify.filter(|_| wait_for_tunnel) {
+            info!("Waiting to create a direct (peer-to-peer) channel");
+            notify.notified().await;
+        }
+        let qs = self.direct.read().await;
+        let Some(direct) = qs.as_ref() else {
+            return Err(ClientError::DirectChannelNotAvailable);
+        };
+
+        let Ok(mut quic_socket) = direct.open_bi().await else {
+            self.direct.write().await.take();
+            self.notify_direct
+                .write()
+                .await
+                .replace(Arc::new(Notify::new()));
+            return Err(ClientError::UnableToOpenQuicBiStream);
+        };
+
+        narrowlink_network::p2p::Request::from(connect)
+            .write(&mut quic_socket)
+            .await
+            .map_err(|_| ClientError::UnableToCommunicateWithQuicBiStream)?;
+        match narrowlink_network::p2p::Response::read(&mut quic_socket)
+            .await
+            .map_err(|e| {
+                if matches!(
+                    e,
+                    narrowlink_network::error::NetworkError::P2PInvalidCommand
+                ) {
+                    ClientError::InvalidDirectResponse
+                } else {
+                    ClientError::UnableToCommunicateWithQuicBiStream
+                }
+            })? {
+            narrowlink_network::p2p::Response::Success => {}
+            narrowlink_network::p2p::Response::InvalidRequest => todo!(),
+            narrowlink_network::p2p::Response::AccessDenied => todo!(),
+            narrowlink_network::p2p::Response::UnableToResolve => todo!(),
+            narrowlink_network::p2p::Response::Failed => todo!(),
+        }
+
+        Ok((quic_socket, None))
+    }
+    async fn connect_relay(
+        &self,
+        agent_name: &str,
+        connect: &Connect,
+    ) -> Result<(impl AsyncSocket, Option<String>), ClientError> {
+        let Some(relay) = self.relay.as_ref() else {
+            return Err(ClientError::RelayChannelNotAvailable);
+        };
+        let cmd = serde_json::to_string(&ClientDataOutBound::Connect(
+            agent_name.to_owned(),
+            connect.clone(),
+        ))
+        .map_err(|_| ClientError::Unexpected(0))?;
+        let connection = match WsConnectionBinary::new(
+            &relay.gateway,
+            HashMap::from([
+                ("NL-TOKEN", relay.token.to_owned()),
+                ("NL-SESSION", relay.session_id.to_owned()),
+                ("NL-COMMAND", cmd),
+            ]),
+            &relay.protocol,
+        )
+        .await
+        {
+            Ok(c) => c,
+            Err(e) => {
+                dbg!(e.to_string());
                 todo!()
             }
-            TransportInstruction::None => todo!(),
         };
-        async_forward(socket, connection).await.unwrap();
-        Ok(())
+        let connection_id = connection
+            .get_header("NL-CONNECTION")
+            .map(|c| c.to_string());
+        Ok((connection, connection_id))
+    }
+
+    async fn connect(
+        &self,
+        socket: impl AsyncSocket,
+        connect: Connect,
+    ) -> Result<Option<String>, ClientError> {
+        let (connection, connection_id, e2ee): (
+            Box<dyn AsyncSocket>,
+            Option<String>,
+            &Option<String>,
+        ) = match &self.i {
+            TransportInstruction::Direct(e2ee, agent_name) => {
+                let (connection, connection_id) =
+                    self.connect_direct(agent_name, &connect, true).await?;
+                (Box::new(connection), connection_id, e2ee)
+            }
+            TransportInstruction::Relay(e2ee, agent_name) => {
+                let (connection, connection_id) = self.connect_relay(agent_name, &connect).await?;
+                (Box::new(connection), connection_id, e2ee)
+            }
+            TransportInstruction::Mixed(e2ee, agent_name, wait) => {
+                match self.connect_direct(agent_name, &connect, *wait).await {
+                    Ok((connection, connection_id)) => (Box::new(connection), connection_id, e2ee),
+                    Err(_) => {
+                        let (connection, connection_id) =
+                            self.connect_relay(agent_name, &connect).await?;
+                        (Box::new(connection), connection_id, e2ee)
+                    }
+                }
+            }
+            TransportInstruction::None => return Err(ClientError::Unexpected(0)),
+        };
+
+        Ok(async_forward(socket, connection)
+            .await
+            .map(|_| connection_id)?)
     }
 }
 
@@ -331,6 +577,7 @@ struct ControlFactory {
     protocol: ServiceType,
     agents: Vec<u8>,
     control: Option<ControlInfo>,
+    pub direct_tunnel_status: Arc<AtomicU8>,
 }
 
 impl ControlFactory {
@@ -349,6 +596,7 @@ impl ControlFactory {
             protocol: conf.protocol.clone(),
             agents: Vec::new(),
             control: None,
+            direct_tunnel_status: Arc::new(AtomicU8::new(DirectTunnelStatus::Uninitialized as u8)),
         })
     }
     // fn get_relay_info(&self) -> RelayInfo {
@@ -459,7 +707,7 @@ impl ControlFactory {
         None
     }
 
-    fn manage(&self, manage: &ManageInstruction) {
+    async fn manage(&self, manage: &ManageInstruction) {
         match manage {
             ManageInstruction::AgentList(verbose) => {
                 trace!("List of agents");
@@ -509,16 +757,23 @@ impl ControlFactory {
                 // break;
             }
             ManageInstruction::Peer2Peer(p2p) => {
-                // trace!("Peer2Peer");
-                // let Some(req) = self.control.as_ref().map(|c| c.request.clone()) else {
-                //     println!("Agent not found");
-                //     return;
-                // };
-                // req.request(ClientEventOutBound::Request(
-                //     0,
-                //     ClientEventRequest::Peer2Peer(p2p.clone()),
-                // ))
-                // .await;
+                if !self.direct_tunnel_status.load(Ordering::Relaxed)
+                    == (DirectTunnelStatus::Uninitialized as u8)
+                {
+                    // debug!("Direct tunnel already initialized");
+                    return;
+                };
+                let Some(control) = self.control.as_ref() else {
+                    todo!()
+                };
+                control
+                    .request
+                    .request(ClientEventOutBound::Request(
+                        0,
+                        ClientEventRequest::Peer2Peer(p2p.clone()),
+                    ))
+                    .await
+                    .unwrap();
             }
             ManageInstruction::None => (),
         }
@@ -554,25 +809,24 @@ pub enum TunnelInstruction {
     None,
 }
 
-impl TunnelInstruction {
-    fn is_proxy(&self) -> bool {
-        match self {
-            TunnelInstruction::Proxy(_) => true,
-            _ => false,
-        }
-    }
-}
+#[derive(Clone)]
 pub enum TransportInstruction {
     Direct(Option<String>, String),
     Relay(Option<String>, String),
-    Mixed(Option<String>, String),
+    Mixed(Option<String>, String, bool),
     None,
 }
 
 impl TransportInstruction {
-    fn determine(direct: bool, relay: bool, e2ee: Option<String>, agent_name: String) -> Self {
+    fn determine(
+        direct: bool,
+        relay: bool,
+        e2ee: Option<String>,
+        agent_name: String,
+        wait_for_direct_tunnel: bool,
+    ) -> Self {
         match (direct, relay) {
-            (false, false) | (true, true) => Self::Mixed(e2ee, agent_name),
+            (false, false) | (true, true) => Self::Mixed(e2ee, agent_name, wait_for_direct_tunnel),
             (true, false) => Self::Direct(e2ee, agent_name),
             (false, true) => Self::Relay(e2ee, agent_name),
         }
@@ -611,6 +865,7 @@ impl From<&ArgCommands> for Instruction {
                     a.relay,
                     a.cryptography.clone(),
                     a.agent_name.clone(),
+                    false,
                 ),
                 manage: if a.direct {
                     ManageInstruction::default_p2p(a.agent_name.clone())
@@ -630,6 +885,7 @@ impl From<&ArgCommands> for Instruction {
                     a.relay,
                     a.cryptography.clone(),
                     a.agent_name.clone(),
+                    false,
                 ),
                 manage: if a.direct {
                     ManageInstruction::default_p2p(a.agent_name.clone())
@@ -644,6 +900,7 @@ impl From<&ArgCommands> for Instruction {
                     a.relay,
                     a.cryptography.clone(),
                     a.agent_name.clone(),
+                    true,
                 ),
                 manage: if a.direct {
                     ManageInstruction::default_p2p(a.agent_name.clone())
@@ -659,6 +916,7 @@ impl From<&ArgCommands> for Instruction {
                     a.relay,
                     a.cryptography.clone(),
                     a.agent_name.clone(),
+                    false,
                 ),
                 manage: if a.direct {
                     ManageInstruction::default_p2p(a.agent_name.clone())

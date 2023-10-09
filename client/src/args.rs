@@ -912,10 +912,8 @@ impl Args {
                                 .map_err(|_| ClientError::Encoding)?;
                         }
                     }
-                   
 
-                        Ok(ArgCommands::Proxy(sub))
-                    
+                    Ok(ArgCommands::Proxy(sub))
                 }
             };
         Ok(Self {

@@ -13,7 +13,6 @@ use tokio::{
     sync::mpsc::{self, UnboundedSender},
 };
 use tracing::warn;
-use tun::Device;
 
 use crate::error::ClientError;
 
@@ -159,7 +158,6 @@ impl TunListener {
             .mtu(MTU as i32)
             .up();
         let mut device = tun::create_as_async(&config).map_err(ClientError::UnableToCreateTun)?;
-        device.get_mut().enabled(false).unwrap();
         let route = TunRoute::new(ipv4)
             .await
             .map_err(|e| {
