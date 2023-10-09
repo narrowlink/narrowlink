@@ -14,6 +14,7 @@ use futures_util::{
     stream::{self, Once},
     StreamExt,
 };
+use hmac::Mac;
 use input_stream::InputStream;
 use narrowlink_network::{
     async_forward,
@@ -21,7 +22,7 @@ use narrowlink_network::{
     event::{NarrowEvent, NarrowEventRequest},
     p2p::QuicStream,
     ws::{WsConnection, WsConnectionBinary},
-    AsyncSocket,
+    AsyncSocket, AsyncSocketCrypt,
 };
 use narrowlink_types::{
     client::{Peer2PeerInstruction, Peer2PeerRequest},
@@ -289,7 +290,7 @@ impl TunnelFactory {
                     .await
                 {
                     Ok(s) => s,
-                    Err(_) => todo!(),
+                    Err(e) => todo!("{}", e),
                 };
                 let addr: (String, u16) = interrupted_stream.addr().into();
                 let protocol =
@@ -452,9 +453,10 @@ impl TransportFactory {
     async fn connect_direct(
         &self,
         _agent_name: &str,
-        connect: &Connect,
+        mut connect: Connect,
         wait_for_tunnel: bool,
-    ) -> Result<(impl AsyncSocket, Option<String>), ClientError> {
+        e2ee: &Option<String>,
+    ) -> Result<(Box<dyn AsyncSocket>, Option<String>), ClientError> {
         let notify = self.notify_direct.read().await.clone();
         if let Some(notify) = notify.filter(|_| wait_for_tunnel) {
             info!("Waiting to create a direct (peer-to-peer) channel");
@@ -473,8 +475,42 @@ impl TransportFactory {
                 .replace(Arc::new(Notify::new()));
             return Err(ClientError::UnableToOpenQuicBiStream);
         };
+        let e2ee_params: Option<([u8; 32], [u8; 24])> = match e2ee {
+            Some(ck) => {
+                trace!("Cryptography required");
+                let n = rand::random::<[u8; 24]>();
+                connect.set_cryptography_nonce(n);
+                let k = Sha3_256::digest(
+                    ck.as_bytes()
+                        .iter()
+                        .zip(n.iter().cycle())
+                        .map(|(n, s)| n ^ s)
+                        .collect::<Vec<u8>>(),
+                );
+                let Ok(mut mac) = generic::HmacSha256::new_from_slice(&k) else {
+                    error!("Unable to create hmac"); // unreachable
+                    return Err(ClientError::Unexpected(0));
+                };
+                mac.update(
+                    &[
+                        format!(
+                            "{}:{}:{}",
+                            &connect.host,
+                            &connect.port,
+                            connect.protocol.clone() as u32
+                        )
+                        .as_bytes(),
+                        &n,
+                    ]
+                    .concat(),
+                );
+                connect.set_sign(mac.finalize().into_bytes().into());
+                Some((k.into(), n))
+            }
+            None => None,
+        };
 
-        narrowlink_network::p2p::Request::from(connect)
+        narrowlink_network::p2p::Request::from(&connect)
             .write(&mut quic_socket)
             .await
             .map_err(|_| ClientError::UnableToCommunicateWithQuicBiStream)?;
@@ -497,16 +533,60 @@ impl TransportFactory {
             narrowlink_network::p2p::Response::Failed => todo!(),
         }
 
-        Ok((quic_socket, None))
+        if let Some((key, nonce)) = e2ee_params {
+            Ok((
+                Box::new(AsyncSocketCrypt::new(key, nonce, Box::new(quic_socket), true).await),
+                None,
+            ))
+        } else {
+            Ok((Box::new(quic_socket), None))
+        }
     }
     async fn connect_relay(
         &self,
         agent_name: &str,
-        connect: &Connect,
-    ) -> Result<(impl AsyncSocket, Option<String>), ClientError> {
+        mut connect: Connect,
+        e2ee: &Option<String>,
+    ) -> Result<(Box<dyn AsyncSocket>, Option<String>), ClientError> {
         let Some(relay) = self.relay.as_ref() else {
             return Err(ClientError::RelayChannelNotAvailable);
         };
+
+        let e2ee_params: Option<([u8; 32], [u8; 24])> = match e2ee {
+            Some(ck) => {
+                trace!("Cryptography required");
+                let n = rand::random::<[u8; 24]>();
+                connect.set_cryptography_nonce(n);
+                let k = Sha3_256::digest(
+                    ck.as_bytes()
+                        .iter()
+                        .zip(n.iter().cycle())
+                        .map(|(n, s)| n ^ s)
+                        .collect::<Vec<u8>>(),
+                );
+                let Ok(mut mac) = generic::HmacSha256::new_from_slice(&k) else {
+                    error!("Unable to create hmac"); // unreachable
+                    return Err(ClientError::Unexpected(0));
+                };
+                mac.update(
+                    &[
+                        format!(
+                            "{}:{}:{}",
+                            &connect.host,
+                            &connect.port,
+                            connect.protocol.clone() as u32
+                        )
+                        .as_bytes(),
+                        &n,
+                    ]
+                    .concat(),
+                );
+                connect.set_sign(mac.finalize().into_bytes().into());
+                Some((k.into(), n))
+            }
+            None => None,
+        };
+
         let cmd = serde_json::to_string(&ClientDataOutBound::Connect(
             agent_name.to_owned(),
             connect.clone(),
@@ -532,7 +612,15 @@ impl TransportFactory {
         let connection_id = connection
             .get_header("NL-CONNECTION")
             .map(|c| c.to_string());
-        Ok((connection, connection_id))
+
+        if let Some((key, nonce)) = e2ee_params {
+            Ok((
+                Box::new(AsyncSocketCrypt::new(key, nonce, Box::new(connection), true).await),
+                connection_id,
+            ))
+        } else {
+            Ok((Box::new(connection), connection_id))
+        }
     }
 
     async fn connect(
@@ -540,28 +628,20 @@ impl TransportFactory {
         socket: impl AsyncSocket,
         connect: Connect,
     ) -> Result<Option<String>, ClientError> {
-        let (connection, connection_id, e2ee): (
-            Box<dyn AsyncSocket>,
-            Option<String>,
-            &Option<String>,
-        ) = match &self.i {
+        let (connection, connection_id): (Box<dyn AsyncSocket>, Option<String>) = match &self.i {
             TransportInstruction::Direct(e2ee, agent_name) => {
-                let (connection, connection_id) =
-                    self.connect_direct(agent_name, &connect, true).await?;
-                (Box::new(connection), connection_id, e2ee)
+                self.connect_direct(agent_name, connect, true, e2ee).await?
             }
             TransportInstruction::Relay(e2ee, agent_name) => {
-                let (connection, connection_id) = self.connect_relay(agent_name, &connect).await?;
-                (Box::new(connection), connection_id, e2ee)
+                self.connect_relay(agent_name, connect, e2ee).await?
             }
             TransportInstruction::Mixed(e2ee, agent_name, wait) => {
-                match self.connect_direct(agent_name, &connect, *wait).await {
-                    Ok((connection, connection_id)) => (Box::new(connection), connection_id, e2ee),
-                    Err(_) => {
-                        let (connection, connection_id) =
-                            self.connect_relay(agent_name, &connect).await?;
-                        (Box::new(connection), connection_id, e2ee)
-                    }
+                match self
+                    .connect_direct(agent_name, connect.clone(), *wait, e2ee)
+                    .await
+                {
+                    Ok((connection, connection_id)) => (connection, connection_id),
+                    Err(_) => self.connect_relay(agent_name, connect, e2ee).await?,
                 }
             }
             TransportInstruction::None => return Err(ClientError::Unexpected(0)),
@@ -602,11 +682,7 @@ impl ControlFactory {
             direct_tunnel_status: Arc::new(AtomicU8::new(DirectTunnelStatus::Uninitialized as u8)),
         })
     }
-    // fn get_relay_info(&self) -> RelayInfo {
-    //     RelayInfo {
-    //         protocol: self.protocol.clone(),
-    //     }
-    // }
+
     async fn connect(&mut self) -> Result<RelayInfo, ClientError> {
         let headers = if let Some(acl) = self.acl.as_ref() {
             HashMap::from([
