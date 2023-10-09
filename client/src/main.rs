@@ -17,6 +17,7 @@ use futures_util::{
 use input_stream::InputStream;
 use narrowlink_network::{
     async_forward,
+    error::NetworkError,
     event::{NarrowEvent, NarrowEventRequest},
     p2p::QuicStream,
     ws::{WsConnection, WsConnectionBinary},
@@ -42,11 +43,13 @@ use std::{
         atomic::{AtomicU8, Ordering},
         Arc,
     },
+    time::Duration,
 };
 use tokio::{
     net::TcpListener,
     select,
     sync::{Notify, RwLock},
+    time,
 };
 use tracing::{debug, error, info, span, trace, warn, Level};
 use uuid::Uuid;
@@ -616,7 +619,40 @@ impl ControlFactory {
         if let Some(c) = self.control.take() {
             c.task.abort();
         }
-        let connection = WsConnection::new(&self.gateway, headers, &self.protocol).await?;
+        let mut sleep_time = 0;
+        let connection = loop {
+            match WsConnection::new(&self.gateway, &headers, &self.protocol).await {
+                Ok(con) => break con,
+                Err(e) => {
+                    if let NetworkError::UnableToUpgrade(status) = e {
+                        match status {
+                            401 => {
+                                error!("Authentication failed");
+                                return Err(e)?;
+                            }
+                            403 => {
+                                error!("Access denied");
+                                return Err(e)?;
+                            }
+                            _ => {}
+                        }
+                    };
+                    error!("Unable to connect to the gateway: {}", e.to_string());
+                    if sleep_time == 0 {
+                        info!("Try again");
+                    } else if sleep_time >= 35 {
+                        error!("Unable to connect");
+                        info!("Exit");
+                        return Err(e)?;
+                    } else {
+                        info!("Try again in {} secs", sleep_time);
+                    }
+                    time::sleep(Duration::from_secs(sleep_time)).await;
+                    sleep_time += 5;
+                    continue;
+                }
+            }
+        };
 
         let session_id = connection
             .get_header("NL-SESSION")

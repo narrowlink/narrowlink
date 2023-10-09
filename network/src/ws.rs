@@ -60,7 +60,7 @@ impl WsConnection {
     }
     pub async fn new(
         host: &str,
-        headers: HashMap<&'static str, String>,
+        headers: &HashMap<&'static str, String>,
         service_type: &ServiceType,
     ) -> Result<Self, NetworkError> {
         let sni = if let Some(sni) = host.split(':').next() {

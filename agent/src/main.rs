@@ -135,7 +135,7 @@ async fn start(args: Args) -> Result<(), AgentError> {
             info!("Connecting to gateway: {}", self_hosted_config.gateway);
             match WsConnection::new(
                 &self_hosted_config.gateway,
-                event_headers.clone(),
+                &event_headers,
                 &service_type,
             )
             .await
