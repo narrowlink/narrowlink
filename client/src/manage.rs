@@ -185,7 +185,7 @@ impl ControlFactory {
         let Some(narrowlink_types::client::EventResponse::ActiveAgents(agents)) = request
             .request(ClientEventOutBound::Request(
                 0,
-                ClientEventRequest::ListOfAgents(true), // todo: remove verbose
+                ClientEventRequest::ListOfAgents,
             ))
             .await?
             .response()

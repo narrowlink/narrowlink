@@ -21,7 +21,7 @@ pub enum InBound {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Request {
-    ListOfAgents(bool), // verbose
+    ListOfAgents,
     UpdateConstantSysInfo(ConstSystemInfo),
     Peer2Peer(Peer2PeerRequest), // agent_name
 }

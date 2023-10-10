@@ -266,7 +266,7 @@ impl Users {
     // pub fn len(&self) -> usize {
     //     self.users.len()
     // }
-    pub fn get_agents_info(&self, user_id: Uuid, verbose: bool) -> Vec<AgentInfo> {
+    pub fn get_agents_info(&self, user_id: Uuid) -> Vec<AgentInfo> {
         let mut ret = Vec::new();
         if let Some(user) = self.users.get(&user_id) {
             let agents = user.agents.values();
@@ -286,7 +286,7 @@ impl Users {
                     name: agent.name.clone(),
                     socket_addr: agent.socket_addr.to_string(),
                     forward_addr: agent.forward_addr.clone(),
-                    system_info: agent.system_info.as_ref().filter(|_| verbose).cloned(),
+                    system_info: agent.system_info.as_ref().cloned(),
                     publish_info,
                     since: agent.since,
                     ping: agent.ping,
