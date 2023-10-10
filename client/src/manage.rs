@@ -32,8 +32,8 @@ use crate::{
     args::{ArgCommands, ListArgs},
     config::{self, Config},
     error::ClientError,
-    transport::TransportInstruction,
-    tunnel::{DirectTunnelStatus, TunnelInstruction},
+    transport::{DirectTunnelStatus, TransportInstruction},
+    tunnel::TunnelInstruction,
 };
 
 pub enum ControlMsg {
@@ -208,7 +208,7 @@ impl ControlFactory {
             msg_receiver,
             task,
         });
-        info!("Connection successful");
+        info!("Connection to gateway successful");
         Ok(RelayInfo {
             protocol: self.protocol.clone(),
             gateway: self.gateway.to_string(),
@@ -408,7 +408,7 @@ impl From<&ArgCommands> for Instruction {
                     a.agent_name.clone(),
                     false,
                 ),
-                manage: if a.direct {
+                manage: if a.direct || a.relay == a.direct {
                     ManageInstruction::default_p2p(a.agent_name.clone())
                 } else {
                     ManageInstruction::AgentCheck(a.agent_name.clone())
@@ -423,7 +423,7 @@ impl From<&ArgCommands> for Instruction {
                     a.agent_name.clone(),
                     true,
                 ),
-                manage: if a.direct {
+                manage: if a.direct || a.relay == a.direct {
                     ManageInstruction::default_p2p(a.agent_name.clone())
                 } else {
                     ManageInstruction::AgentCheck(a.agent_name.clone())
@@ -439,7 +439,7 @@ impl From<&ArgCommands> for Instruction {
                     a.agent_name.clone(),
                     false,
                 ),
-                manage: if a.direct {
+                manage: if a.direct || a.relay == a.direct {
                     ManageInstruction::default_p2p(a.agent_name.clone())
                 } else {
                     ManageInstruction::AgentCheck(a.agent_name.clone())

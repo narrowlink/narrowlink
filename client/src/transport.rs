@@ -20,7 +20,15 @@ use tracing::{error, info, trace};
 
 use sha3::{Digest, Sha3_256};
 
-use crate::{error::ClientError, manage::RelayInfo, tunnel::DirectTunnelStatus};
+use crate::{error::ClientError, manage::RelayInfo};
+
+pub enum DirectTunnelStatus {
+    Uninitialized = 0x0,
+    Success = 0x1,
+    Pending = 0x2,
+    Closed = 0x3,
+    Failed = 0xff,
+}
 
 #[derive(Clone)]
 pub enum TransportInstruction {

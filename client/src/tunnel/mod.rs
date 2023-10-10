@@ -36,13 +36,6 @@ pub enum TunnelInstruction {
     None,
 }
 
-pub enum DirectTunnelStatus {
-    Uninitialized = 0x0,
-    Success = 0x1,
-    Pending = 0x2,
-    Closed = 0x3,
-    Failed = 0xff,
-}
 
 pub struct TunnelFactory {
     instruction: TunnelInstruction,
