@@ -376,11 +376,7 @@ impl From<&ArgCommands> for Instruction {
     fn from(cmd: &ArgCommands) -> Self {
         match cmd {
             ArgCommands::Forward(a) => Self {
-                tunnel: TunnelInstruction::Forward(
-                    a.udp,
-                    a.local_addr.clone(),
-                    a.remote_addr.clone(),
-                ),
+                tunnel: TunnelInstruction::Forward(a.udp, a.local_addr, a.remote_addr.clone()),
                 transport: TransportInstruction::determine(
                     a.direct,
                     a.relay,
@@ -400,7 +396,7 @@ impl From<&ArgCommands> for Instruction {
                 manage: ManageInstruction::AgentList(*verbose),
             },
             ArgCommands::Proxy(a) => Self {
-                tunnel: TunnelInstruction::Proxy(a.local_addr.clone()),
+                tunnel: TunnelInstruction::Proxy(a.local_addr),
                 transport: TransportInstruction::determine(
                     a.direct,
                     a.relay,

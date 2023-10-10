@@ -1,7 +1,9 @@
 use std::{
     collections::{hash_map::Entry, HashMap},
+    io,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     pin::Pin,
+    task::{self, Poll},
     time::SystemTime,
 };
 
@@ -26,7 +28,7 @@ pub enum TunStream {
 pub struct TunListener {
     tcp: netstack_lwip::TcpListener,
     udp: TunUdpListener,
-    _task: tokio::task::JoinHandle<Result<(), std::io::Error>>,
+    _task: tokio::task::JoinHandle<Result<(), io::Error>>,
     route: Option<TunRoute>,
     local_addr: IpAddr,
     map_addr: Option<IpAddr>,
@@ -38,17 +40,17 @@ pub enum RouteCommand {
 }
 
 pub struct TunRoute {
-    _task: tokio::task::JoinHandle<Result<(), std::io::Error>>,
+    _task: tokio::task::JoinHandle<Result<(), io::Error>>,
     route_sender: UnboundedSender<RouteCommand>,
     my_routes_sender: UnboundedSender<bool>,
 }
 
 impl TunRoute {
-    pub async fn new(local_addr: Ipv4Addr) -> Result<Self, std::io::Error> {
+    pub async fn new(local_addr: Ipv4Addr) -> Result<Self, io::Error> {
         let handle: Handle = Handle::new()?;
         let Some(default_gw) = handle.default_route().await? else {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
                 "No default gateway found",
             ));
         };
@@ -179,7 +181,7 @@ impl TunListener {
                             None=>{
                                 let _ = stack_sink.close().await;
                                 let _ = device.shutdown().await;
-                                return Ok::<(),std::io::Error>(())
+                                return Ok::<(),io::Error>(())
                             }
                         };
                     },
@@ -190,7 +192,7 @@ impl TunListener {
                             None=>{
                                 let _ = stack_sink.close().await;
                                 let _ = device.shutdown().await;
-                                return Ok::<(),std::io::Error>(())
+                                return Ok::<(),io::Error>(())
                             }
                         };
                     },
@@ -258,9 +260,9 @@ pub struct TunTcpStream {
 impl AsyncRead for TunTcpStream {
     fn poll_read(
         mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
+        cx: &mut task::Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
-    ) -> std::task::Poll<std::io::Result<()>> {
+    ) -> task::Poll<io::Result<()>> {
         Pin::new(&mut self.inner).poll_read(cx, buf)
     }
 }
@@ -268,23 +270,23 @@ impl AsyncRead for TunTcpStream {
 impl AsyncWrite for TunTcpStream {
     fn poll_write(
         mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
+        cx: &mut task::Context<'_>,
         buf: &[u8],
-    ) -> std::task::Poll<std::io::Result<usize>> {
+    ) -> task::Poll<io::Result<usize>> {
         Pin::new(&mut self.inner).poll_write(cx, buf)
     }
 
     fn poll_flush(
         mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<std::io::Result<()>> {
+        cx: &mut task::Context<'_>,
+    ) -> task::Poll<io::Result<()>> {
         Pin::new(&mut self.inner).poll_flush(cx)
     }
 
     fn poll_shutdown(
         mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<std::io::Result<()>> {
+        cx: &mut task::Context<'_>,
+    ) -> task::Poll<io::Result<()>> {
         Pin::new(&mut self.inner).poll_shutdown(cx)
     }
 }
@@ -380,35 +382,34 @@ impl TunUdpStream {
 impl AsyncRead for TunUdpStream {
     fn poll_read(
         mut self: Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
+        cx: &mut task::Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
-    ) -> std::task::Poll<std::io::Result<()>> {
+    ) -> task::Poll<io::Result<()>> {
         loop {
             if self.timeout {
                 return match Box::pin(self.timout_tx.send((self.src_addr, self.dst_addr)))
                     .poll_unpin(cx)
                 {
-                    std::task::Poll::Ready(_) => std::task::Poll::Ready(Err(std::io::Error::new(
-                        std::io::ErrorKind::TimedOut,
-                        "Timed out",
-                    ))),
-                    std::task::Poll::Pending => std::task::Poll::Pending,
+                    Poll::Ready(_) => {
+                        Poll::Ready(Err(io::Error::new(io::ErrorKind::TimedOut, "Timed out")))
+                    }
+                    Poll::Pending => Poll::Pending,
                 };
             };
             match self.rx.poll_recv(cx) {
-                std::task::Poll::Ready(Some(v)) => {
+                Poll::Ready(Some(v)) => {
                     buf.put_slice(&v);
                     self.last_seen = SystemTime::now();
-                    return std::task::Poll::Ready(Ok(()));
+                    return Poll::Ready(Ok(()));
                 }
-                std::task::Poll::Ready(None) => {
-                    return std::task::Poll::Ready(Err(std::io::Error::new(
-                        std::io::ErrorKind::BrokenPipe,
+                Poll::Ready(None) => {
+                    return Poll::Ready(Err(io::Error::new(
+                        io::ErrorKind::BrokenPipe,
                         "Broken Pipe",
                     )))
                 }
-                std::task::Poll::Pending => match self.timout_checker.poll_tick(cx) {
-                    std::task::Poll::Ready(_) => {
+                Poll::Pending => match self.timout_checker.poll_tick(cx) {
+                    Poll::Ready(_) => {
                         if SystemTime::now()
                             .duration_since(self.last_seen)
                             .ok()
@@ -419,7 +420,7 @@ impl AsyncRead for TunUdpStream {
                         }
                         continue;
                     }
-                    _ => return std::task::Poll::Pending,
+                    _ => return Poll::Pending,
                 },
             }
         }
@@ -429,11 +430,11 @@ impl AsyncRead for TunUdpStream {
 impl AsyncWrite for TunUdpStream {
     fn poll_write(
         mut self: Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
+        cx: &mut task::Context<'_>,
         buf: &[u8],
-    ) -> std::task::Poll<Result<usize, std::io::Error>> {
+    ) -> task::Poll<Result<usize, io::Error>> {
         let mut buffer = vec![0u8; MTU];
-        let mut cursor = std::io::Cursor::new(&mut buffer);
+        let mut cursor = io::Cursor::new(&mut buffer);
         let addr = match self.dst_addr {
             SocketAddr::V4(v4) => v4.ip().octets(),
             SocketAddr::V6(_v6) => {
@@ -461,22 +462,22 @@ impl AsyncWrite for TunUdpStream {
         packet.write(&mut cursor, payload).unwrap();
         // buffer.splice(0..0, vec![0x00, 0x00, 0x00, 0x01]);
         match Box::pin(self.packet_sender.send(buffer[..len].to_vec())).poll_unpin(cx) {
-            std::task::Poll::Ready(_) => std::task::Poll::Ready(Ok(payload.len())),
-            std::task::Poll::Pending => std::task::Poll::Pending,
+            Poll::Ready(_) => Poll::Ready(Ok(payload.len())),
+            Poll::Pending => Poll::Pending,
         }
     }
 
     fn poll_flush(
         self: Pin<&mut Self>,
-        _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), std::io::Error>> {
-        std::task::Poll::Ready(Ok(()))
+        _cx: &mut task::Context<'_>,
+    ) -> task::Poll<Result<(), io::Error>> {
+        Poll::Ready(Ok(()))
     }
 
     fn poll_shutdown(
         self: Pin<&mut Self>,
-        _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), std::io::Error>> {
-        std::task::Poll::Ready(Ok(()))
+        _cx: &mut task::Context<'_>,
+    ) -> task::Poll<Result<(), io::Error>> {
+        Poll::Ready(Ok(()))
     }
 }

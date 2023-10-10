@@ -26,7 +26,7 @@ use tracing_subscriber::{
 pub fn main() -> Result<(), ClientError> {
     let args = Args::parse(env::args())?;
 
-    let (stdout, _stdout_guard) = if 1 == 1 {
+    let (stdout, _stdout_guard) = if matches!(args.arg_commands, args::ArgCommands::Connect(_)) {
         tracing_appender::non_blocking(io::stderr())
     } else {
         tracing_appender::non_blocking(io::stdout())
@@ -35,7 +35,7 @@ pub fn main() -> Result<(), ClientError> {
 
     let cmd = tracing_subscriber::fmt::layer()
         .with_ansi(
-            if 1 == 1 {
+            if matches!(args.arg_commands, args::ArgCommands::Connect(_)) {
                 true
             } else {
                 io::stdout().is_terminal()

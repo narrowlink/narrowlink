@@ -133,8 +133,7 @@ async fn start(args: Args) -> Result<(), AgentError> {
     loop {
         let Some(event) = event_connection.as_mut() else {
             info!("Connecting to gateway: {}", self_hosted_config.gateway);
-            match WsConnection::new(&self_hosted_config.gateway, &event_headers, &service_type)
-                .await
+            match WsConnection::new(&self_hosted_config.gateway, &event_headers, service_type).await
             {
                 Ok(event_stream) => {
                     sleep_time = 0;

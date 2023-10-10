@@ -36,7 +36,6 @@ pub enum TunnelInstruction {
     None,
 }
 
-
 pub struct TunnelFactory {
     instruction: TunnelInstruction,
     listener: Option<TunnelListener>,
@@ -70,12 +69,12 @@ impl TunnelFactory {
                 self.listener = Some(TunnelListener::Connect(
                     stream::once(futures_util::future::ready(InputStream::default())),
                     *udp,
-                    (dst_addr.clone(), dst_port.clone()),
+                    (dst_addr.clone(), *dst_port),
                 ));
             }
             TunnelInstruction::Forward(udp, local, endpoint) => {
                 let listener = if *udp {
-                    either::Right(UdpListener::bind(local.clone()).await?)
+                    either::Right(UdpListener::bind(*local).await?)
                 } else {
                     either::Left(TcpListener::bind(local).await?)
                 };
@@ -123,7 +122,7 @@ impl TunnelFactory {
                     Box::new(s),
                     generic::Connect {
                         host: dst_addr.clone(),
-                        port: dst_port.clone(),
+                        port: *dst_port,
                         protocol: if *udp {
                             generic::Protocol::UDP
                         } else {
