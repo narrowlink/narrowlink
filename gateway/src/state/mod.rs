@@ -111,8 +111,8 @@ impl State {
                         Ok(ClientEventOutBound::Request(request_id,req))=>{
                             debug!("Client Message {}: {:?}", request_id, req);
                             match req {
-                                ClientEventRequest::ListOfAgents(verbose)=>{
-                                    let agents = users.get_agents_info(uid,verbose);
+                                ClientEventRequest::ListOfAgents=>{
+                                    let agents = users.get_agents_info(uid);
                                     if let Some(client) = users.get_mut_client(uid,session){
                                         let _ = client.send(ClientEventInBound::Response(request_id,ClientEventResponse::ActiveAgents(agents))).await;
                                     }

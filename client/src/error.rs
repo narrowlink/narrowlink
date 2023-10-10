@@ -30,16 +30,44 @@ pub enum ClientError {
     UnableToBind,
     #[error("Unable To Connect")]
     UnableToConnect,
+    #[error("Connection Closed")]
+    ConnectionClosed,
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     #[error("Unable To Create Tun: {0}")]
     UnableToCreateTun(#[from] tun::Error),
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     #[error("Unable To Create Net Stack: {0}")]
-    UnableToCreaateNetStack(#[from] netstack_lwip::Error),
+    UnableToCreateNetStack(#[from] netstack_lwip::Error),
     #[error("Network Error: {0}")]
     NetworkError(#[from] NetworkError),
     #[error("STOP: #{0:#10x}")]
-    InternalError(u32),
+    Unexpected(u32),
     #[error("IO Error: {0}")]
     IoError(#[from] std::io::Error),
+    #[error("Direct Channel Not Ready")]
+    DirectChannelNotAvailable,
+    #[error("Relay Channel Not Ready")]
+    RelayChannelNotAvailable,
+    #[error("Unable To Open Quic Bi Stream")]
+    UnableToOpenQuicBiStream,
+    #[error("Unable To Communicate With Quic Bi Stream")]
+    UnableToCommunicateWithQuicBiStream,
+    #[error("Invalid Direct Request")]
+    InvalidDirectRequest,
+    #[error("Invalid Direct Response")]
+    InvalidDirectResponse,
+    #[error("Access Control Denied: {0}:{1}")]
+    ACLDenied(String, u16),
+    #[error("Unable To Resolve: {0}")]
+    UnableToResolve(String),
+    #[error("Connection to {0}:{1} Failed")]
+    DirectConnectionFailed(String, u16),
+    #[error("Unable To Connect To Relay")]
+    UnableToConnectToRelay,
+    #[error("Invalid Socks Request")]
+    InvalidSocksRequest,
+    #[error("Access Denied")]
+    AccessDenied,
+    #[error("Control Channel Not Connected")]
+    ControlChannelNotConnected,
 }

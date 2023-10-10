@@ -21,7 +21,7 @@ pub enum InBound {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Request {
-    ListOfAgents(bool), // verbose
+    ListOfAgents,
     UpdateConstantSysInfo(ConstSystemInfo),
     Peer2Peer(Peer2PeerRequest), // agent_name
 }
@@ -59,7 +59,7 @@ impl GetResponse for InBound {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Peer2PeerRequest {
     pub agent_name: String,
     pub easy_seed_port: u16,

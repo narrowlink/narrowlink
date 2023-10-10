@@ -8,12 +8,11 @@ Description:
 
 Examples:
   narrowlink forward -n <agent name> <remote_addr:remote_port>
-  narrowlink f -usn <agent name> <remote_addr:remote_port>
+  narrowlink f -un <agent name> <remote_addr:remote_port>
 
 Options:
   -d, --direct      Direct connection to the remote endpoint (peer-to-peer)
   -r, --relay       Relay connection to the remote endpoint (peer-to-gateway-to-peer)
-  -s, --skip-check  Skip reachability check
   -u, --udp         Use UDP instead of TCP
   -n, --name=       The name of the agent (required)
   -k, --key=        The secret key for end-to-end encryption

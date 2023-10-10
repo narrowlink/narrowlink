@@ -133,12 +133,7 @@ async fn start(args: Args) -> Result<(), AgentError> {
     loop {
         let Some(event) = event_connection.as_mut() else {
             info!("Connecting to gateway: {}", self_hosted_config.gateway);
-            match WsConnection::new(
-                &self_hosted_config.gateway,
-                event_headers.clone(),
-                service_type.clone(),
-            )
-            .await
+            match WsConnection::new(&self_hosted_config.gateway, &event_headers, service_type).await
             {
                 Ok(event_stream) => {
                     sleep_time = 0;
@@ -608,7 +603,7 @@ async fn data_connect(
     }
     trace!("Connecting to gateway for Data channel: {}", gateway_addr);
     let mut data_stream: Box<dyn AsyncSocket> =
-        Box::new(WsConnectionBinary::new(gateway_addr, headers, service_type).await?);
+        Box::new(WsConnectionBinary::new(gateway_addr, headers, &service_type).await?);
     trace!("Connected to gateway for Data channel");
     if let (Some(k), Some(n)) = (k, n) {
         data_stream = Box::new(AsyncSocketCrypt::new(k, n, data_stream, false).await);
