@@ -12,7 +12,7 @@ use std::{
     env,
     io::{self, IsTerminal},
 };
-use tracing::{debug, error, Level};
+use tracing::{debug, error, warn, Level};
 use transport::TransportFactory;
 use tunnel::TunnelFactory;
 
@@ -98,23 +98,27 @@ async fn start(mut args: Args) -> Result<(), ClientError> {
                         let direct_tunnel_status = control.direct_tunnel_status.clone();
                         tunnel.add_host(p2p.peer_ip); // todo del_host
                         tokio::spawn(async move{
-                            t.create_direct(p2p,direct_tunnel_status).await.unwrap();
+                                if let Err(e) = t.create_direct(p2p,direct_tunnel_status).await {
+                                    error!("create direct tunnel error: {}",e);
+                                }
                         });
 
                     }
                     None => {
-                        tunnel.stop();
-                        let relay_info = control.connect().await?; // todo: reconnect
+                        if !transport.is_direct_available().await {
+                            tunnel.stop();
+                        }
+
+                        let relay_info = control.connect().await?;
                         if let Some(addr) = control.control.as_ref().map(|c| c.address.ip()) {
                             tunnel.add_host(addr);
                         }
                         transport.set_relay(relay_info);
                         // if let Some(manage) = manage.take() {
-                            control.manage(&instruction.manage).await;
-                        //     break;
-                        // }else{
-                            tunnel.start().await;
-                        // }
+                        if let Err(e) = control.manage(&instruction.manage).await{
+                            warn!("{}",e);
+                        }
+                        tunnel.start().await?;
 
                     }
                 }
@@ -122,11 +126,17 @@ async fn start(mut args: Args) -> Result<(), ClientError> {
             msg = tunnel.accept() => {
                 let t = transport.clone();
                 tokio::spawn(async move{
-                    let (socket,connect) = msg.unwrap();
-                    t.connect(socket,connect).await;
+                    let (socket,connect) = match msg {
+                        Ok(s) => s,
+                        Err(e) => {
+                            warn!("tunnel accept error: {}",e);
+                            return;
+                        }
+                    };
+                    if let Err(e) = t.connect(socket,connect).await{
+                        warn!("connect error: {}",e);
+                    }
                 });
-                // dbg!(msg.unwrap().1);
-
             }
         }
     }

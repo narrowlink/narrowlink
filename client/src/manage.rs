@@ -11,7 +11,7 @@ use std::{
     time::Duration,
 };
 use tokio::{select, time};
-use tracing::{debug, error, info, trace};
+use tracing::{debug, error, info, trace, warn};
 use uuid::Uuid;
 
 use narrowlink_network::{
@@ -36,6 +36,20 @@ use crate::{
     tunnel::{DirectTunnelStatus, TunnelInstruction},
 };
 
+pub enum ControlMsg {
+    ConnectionError(Uuid, String),
+    Peer2Peer(Peer2PeerInstruction),
+}
+
+pub struct ControlFactory {
+    gateway: Arc<String>,
+    token: Arc<String>,
+    acl: Option<String>,
+    protocol: ServiceType,
+    pub control: Option<ControlInfo>,
+    pub direct_tunnel_status: Arc<AtomicU8>,
+}
+
 #[derive(Clone)]
 pub struct RelayInfo {
     pub protocol: ServiceType,
@@ -44,25 +58,10 @@ pub struct RelayInfo {
     pub session_id: String,
 }
 
-pub struct ControlFactory {
-    gateway: Arc<String>,
-    token: Arc<String>,
-    acl: Option<Arc<String>>,
-    protocol: ServiceType,
-    agents: Vec<u8>,
-    pub control: Option<ControlInfo>,
-    pub direct_tunnel_status: Arc<AtomicU8>,
-}
-
-pub enum ControlMsg {
-    ConnectionError(Uuid, String),
-    Peer2Peer(Peer2PeerInstruction),
-}
-
 pub struct ControlInfo {
-    local_addr: SocketAddr,
+    // local_addr: SocketAddr,
     pub address: SocketAddr,
-    session_id: String,
+    // session_id: String,
     request: NarrowEventRequest<ClientEventOutBound, ClientEventInBound>,
     agents: Vec<AgentInfo>,
     msg_receiver: tokio::sync::mpsc::UnboundedReceiver<ControlMsg>,
@@ -80,10 +79,9 @@ impl ControlFactory {
             acl: if conf.acl.is_empty() {
                 None
             } else {
-                serde_json::to_string(&conf.acl).ok().map(Arc::new)
+                serde_json::to_string(&conf.acl).ok()
             },
             protocol: conf.protocol.clone(),
-            agents: Vec::new(),
             control: None,
             direct_tunnel_status: Arc::new(AtomicU8::new(DirectTunnelStatus::Uninitialized as u8)),
         })
@@ -140,8 +138,10 @@ impl ControlFactory {
             .get_header("NL-SESSION")
             .ok_or(ClientError::UnableToConnect)?
             .to_string();
+
         let local_addr = connection.local_addr();
         let address = connection.peer_addr();
+
         let mut stream: NarrowEvent<ClientEventOutBound, ClientEventInBound> =
             NarrowEvent::new(connection);
         let request = stream.get_request();
@@ -149,7 +149,7 @@ impl ControlFactory {
         let task = tokio::spawn(async move {
             loop {
                 let Some(msg) = stream.next().await else {
-                    continue;
+                    break;
                 };
                 match msg {
                     Ok(narrowlink_types::client::EventInBound::ConnectionError(
@@ -195,9 +195,9 @@ impl ControlFactory {
             .await?;
 
         self.control = Some(ControlInfo {
-            local_addr,
+            // local_addr,
             address,
-            session_id: session_id.clone(),
+            // session_id: session_id.clone(),
             request,
             agents,
             msg_receiver,
@@ -211,6 +211,7 @@ impl ControlFactory {
             session_id,
         })
     }
+
     pub async fn accept_msg(&mut self) -> Option<ControlMsg> {
         if let Some(control) = self.control.as_mut() {
             select! {
@@ -218,6 +219,7 @@ impl ControlFactory {
                     return msg;
                 }
                 _ = &mut control.task => {
+                    warn!("Control connection closed");
                     return None;
                 }
             }
@@ -225,13 +227,13 @@ impl ControlFactory {
         None
     }
 
-    pub async fn manage(&self, manage: &ManageInstruction) {
+    pub async fn manage(&self, manage: &ManageInstruction) -> Result<(), ClientError> {
         match manage {
             ManageInstruction::AgentList(verbose) => {
                 trace!("List of agents");
                 let Some(agents) = self.control.as_ref().map(|c| c.agents.clone()) else {
                     println!("Agent not found");
-                    return;
+                    return Ok(());
                 };
                 if agents.is_empty() {
                     println!("Agent not found");
@@ -271,29 +273,32 @@ impl ControlFactory {
                     println!("\tConnection Ping: {}ms\r\n", agent.ping);
                 }
                 process::exit(0);
-                // req.shutdown().await;
-                // break;
             }
             ManageInstruction::Peer2Peer(p2p) => {
                 if !self.direct_tunnel_status.load(Ordering::Relaxed)
                     == (DirectTunnelStatus::Uninitialized as u8)
                 {
                     // debug!("Direct tunnel already initialized");
-                    return;
+                    return Ok(());
                 };
                 let Some(control) = self.control.as_ref() else {
-                    todo!()
+                    return Err(ClientError::ConnectionClosed);
                 };
-                control
+                if control
                     .request
                     .request(ClientEventOutBound::Request(
                         0,
                         ClientEventRequest::Peer2Peer(p2p.clone()),
                     ))
                     .await
-                    .unwrap();
+                    .is_err()
+                {
+                    warn!("Unable to send Peer2Peer request");
+                    return Err(ClientError::ConnectionClosed);
+                }
+                Ok(())
             }
-            ManageInstruction::None => (),
+            ManageInstruction::None => return Err(ClientError::Unexpected(0)),
         }
     }
 }

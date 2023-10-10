@@ -45,7 +45,7 @@ pub enum DirectTunnelStatus {
 }
 
 pub struct TunnelFactory {
-    i: TunnelInstruction,
+    instruction: TunnelInstruction,
     listener: Option<TunnelListener>,
     wait: Option<Arc<Notify>>,
     hosts: HashSet<IpAddr>,
@@ -60,16 +60,19 @@ pub enum TunnelListener {
 }
 
 impl TunnelFactory {
-    pub fn new(i: TunnelInstruction) -> Self {
+    pub fn new(instruction: TunnelInstruction) -> Self {
         Self {
-            i,
+            instruction,
             listener: None,
             wait: Some(Arc::new(Notify::new())),
             hosts: HashSet::new(),
         }
     }
     pub async fn start(&mut self) -> Result<(), ClientError> {
-        match &self.i {
+        if self.listener.is_some() {
+            return Ok(());
+        }
+        match &self.instruction {
             TunnelInstruction::Connect(udp, (dst_addr, dst_port)) => {
                 self.listener = Some(TunnelListener::Connect(
                     stream::once(futures_util::future::ready(InputStream::default())),
@@ -139,13 +142,12 @@ impl TunnelFactory {
                 ))
             }
             Some(TunnelListener::Proxy(l)) => {
-                let (socket, _local_addr) = l.accept().await.unwrap();
                 let interrupted_stream = match ProxyStream::new(proxy_stream::ProxyType::SOCKS5)
-                    .accept(socket)
+                    .accept(l.accept().await?.0)
                     .await
                 {
                     Ok(s) => s,
-                    Err(e) => todo!("{}", e),
+                    Err(_e) => return Err(ClientError::InvalidSocksRequest),
                 };
                 let addr: (String, u16) = interrupted_stream.addr().into();
                 let protocol =
@@ -154,9 +156,13 @@ impl TunnelFactory {
                     } else {
                         generic::Protocol::TCP
                     };
-                let s = interrupted_stream.connect().await.unwrap();
                 Ok((
-                    Box::new(s),
+                    Box::new(
+                        interrupted_stream
+                            .connect()
+                            .await
+                            .map_err(|_| ClientError::InvalidSocksRequest)?,
+                    ),
                     generic::Connect {
                         host: addr.0,
                         port: addr.1,
@@ -222,6 +228,7 @@ impl TunnelFactory {
             };
         }
     }
+    #[allow(dead_code)]
     pub fn del_host(&mut self, ip: IpAddr) {
         self.hosts.remove(&ip);
         if let Some(TunnelListener::Tun(tun)) = self.listener.as_ref() {

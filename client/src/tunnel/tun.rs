@@ -368,6 +368,7 @@ impl TunUdpStream {
     pub fn sender(&self) -> mpsc::Sender<Vec<u8>> {
         self.tx.clone()
     }
+    #[allow(dead_code)]
     pub fn get_src_addr(&self) -> SocketAddr {
         self.src_addr
     }

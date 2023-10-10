@@ -30,6 +30,8 @@ pub enum ClientError {
     UnableToBind,
     #[error("Unable To Connect")]
     UnableToConnect,
+    #[error("Connection Closed")]
+    ConnectionClosed,
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     #[error("Unable To Create Tun: {0}")]
     UnableToCreateTun(#[from] tun::Error),
@@ -54,4 +56,14 @@ pub enum ClientError {
     InvalidDirectRequest,
     #[error("Invalid Direct Response")]
     InvalidDirectResponse,
+    #[error("Access Control Denied: {0}:{1}")]
+    ACLDenied(String, u16),
+    #[error("Unable To Resolve: {0}")]
+    UnableToResolve(String),
+    #[error("Connection to {0}:{1} Failed")]
+    DirectConnectionFailed(String, u16),
+    #[error("Unable To Connect To Relay")]
+    UnableToConnectToRelay,
+    #[error("Invalid Socks Request")]
+    InvalidSocksRequest,
 }

@@ -7,10 +7,6 @@ use narrowlink_types::{
     client::Peer2PeerInstruction,
     generic::{self, Connect},
 };
-use tokio::sync::{Notify, RwLock};
-use tracing::{error, info, trace};
-
-use sha3::{Digest, Sha3_256};
 use std::{
     collections::HashMap,
     sync::{
@@ -18,6 +14,10 @@ use std::{
         Arc,
     },
 };
+use tokio::sync::{Notify, RwLock};
+use tracing::{error, info, trace};
+
+use sha3::{Digest, Sha3_256};
 
 use crate::{error::ClientError, manage::RelayInfo, tunnel::DirectTunnelStatus};
 
@@ -53,9 +53,6 @@ pub struct TransportFactory {
     relay: Option<RelayInfo>,
 }
 
-// impl From<&ArgCommands> for Instruction {
-
-// }
 impl TransportFactory {
     pub fn new(i: TransportInstruction) -> Self {
         Self {
@@ -68,6 +65,7 @@ impl TransportFactory {
     pub fn set_relay(&mut self, relays: RelayInfo) {
         self.relay = Some(relays);
     }
+    #[allow(dead_code)]
     pub fn unset_relay(&mut self) {
         self.relay = None;
     }
@@ -186,11 +184,28 @@ impl TransportFactory {
                     ClientError::UnableToCommunicateWithQuicBiStream
                 }
             })? {
-            narrowlink_network::p2p::Response::Success => {}
-            narrowlink_network::p2p::Response::InvalidRequest => todo!(),
-            narrowlink_network::p2p::Response::AccessDenied => todo!(),
-            narrowlink_network::p2p::Response::UnableToResolve => todo!(),
-            narrowlink_network::p2p::Response::Failed => todo!(),
+            narrowlink_network::p2p::Response::Success => {
+                trace!(
+                    "Direct connection established to {}:{}",
+                    connect.host,
+                    connect.port
+                );
+            }
+            narrowlink_network::p2p::Response::InvalidRequest => {
+                return Err(ClientError::InvalidDirectRequest)
+            }
+            narrowlink_network::p2p::Response::AccessDenied => {
+                return Err(ClientError::ACLDenied(connect.host, connect.port))
+            }
+            narrowlink_network::p2p::Response::UnableToResolve => {
+                return Err(ClientError::UnableToResolve(connect.host))
+            }
+            narrowlink_network::p2p::Response::Failed => {
+                return Err(ClientError::DirectConnectionFailed(
+                    connect.host,
+                    connect.port,
+                ))
+            }
         }
 
         if let Some((key, nonce)) = e2ee_params {
@@ -201,6 +216,9 @@ impl TransportFactory {
         } else {
             Ok((Box::new(quic_socket), None))
         }
+    }
+    pub async fn is_direct_available(&self) -> bool {
+        self.direct.read().await.is_some()
     }
     async fn connect_relay(
         &self,
@@ -265,8 +283,8 @@ impl TransportFactory {
         {
             Ok(c) => c,
             Err(e) => {
-                dbg!(e.to_string());
-                todo!()
+                error!("{}", e.to_string());
+                return Err(ClientError::UnableToConnectToRelay);
             }
         };
         let connection_id = connection
@@ -282,7 +300,6 @@ impl TransportFactory {
             Ok((Box::new(connection), connection_id))
         }
     }
-
     pub async fn connect(
         &self,
         socket: impl AsyncSocket,
