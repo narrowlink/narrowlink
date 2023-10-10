@@ -158,10 +158,6 @@ impl TunListener {
             .destination(ipv4)
             // .netmask((255, 255, 255, 255))
             .mtu(MTU as i32)
-            .platform(|_c| {
-                #[cfg(target_os = "linux")]
-                _c.packet_information(true);
-            })
             .up();
         let mut device = tun::create_as_async(&config).map_err(ClientError::UnableToCreateTun)?;
         let route = TunRoute::new(ipv4)
@@ -182,7 +178,14 @@ impl TunListener {
                 tokio::select! {
                     res = stack_stream.next() => {
                         match res {
-                            Some(v)=>device.write_all(&v.map(|mut pkt|{pkt.splice(0..0, vec![0x00, 0x00, 0x00, 0x02]);pkt})?).await?,
+                            Some(v)=>{
+                                if cfg!(target_os = "linux") {
+                                    device.write_all(&v?).await?
+                                } else {
+                                    device.write_all(&v.map(|mut pkt|{pkt.splice(0..0, vec![0x00, 0x00, 0x00, 0x02]);pkt})?).await?
+                                }
+                            },
+
                             None=>{
                                 let _ = stack_sink.close().await;
                                 let _ = device.shutdown().await;
@@ -191,19 +194,35 @@ impl TunListener {
                         };
                     },
                     res = udp_reader.recv() => {
-
-                        match res {
-                            Some(mut v)=>device.write_all({v.splice(0..0, vec![0x00, 0x00, 0x00, 0x02]);&v}).await?,
-                            None=>{
-                                let _ = stack_sink.close().await;
-                                let _ = device.shutdown().await;
-                                return Ok::<(),io::Error>(())
-                            }
-                        };
+                        if cfg!(target_os = "linux") {
+                            match res {
+                                Some(v)=>device.write_all(&v).await?,
+                                None=>{
+                                    let _ = stack_sink.close().await;
+                                    let _ = device.shutdown().await;
+                                    return Ok::<(),io::Error>(())
+                                }
+                            };
+                        } else {
+                            match res {
+                                Some(mut v)=>device.write_all({v.splice(0..0, vec![0x00, 0x00, 0x00, 0x02]);&v}).await?,
+                                None=>{
+                                    let _ = stack_sink.close().await;
+                                    let _ = device.shutdown().await;
+                                    return Ok::<(),io::Error>(())
+                                }
+                            };
+                        }
                     },
                     res = device.read(&mut buffer) => {
                         match res {
-                            Ok(len)=>stack_sink.send((buffer[4..len]).to_vec()).await?,
+                            Ok(len)=>{
+                                if cfg!(target_os = "linux") {
+                                    stack_sink.send((buffer[..len]).to_vec()).await?
+                                } else {
+                                    stack_sink.send((buffer[4..len]).to_vec()).await?
+                                }
+                            },
                             Err(e)=>{
                                 let _ = stack_sink.close().await;
                                 let _ = device.shutdown().await;
