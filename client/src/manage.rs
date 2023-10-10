@@ -91,8 +91,11 @@ impl ControlFactory {
         })
     }
 
-    pub async fn connect(&mut self) -> Result<RelayInfo, ClientError> {
-        info!("Connecting to gateway: {}", self.gateway);
+    pub async fn connect(&mut self, quiet: bool) -> Result<RelayInfo, ClientError> {
+        if !quiet {
+            info!("Connecting to gateway: {}", self.gateway);
+        }
+
         let headers = if let Some(acl) = self.acl.as_ref() {
             HashMap::from([
                 ("NL-ACL", acl.to_string()),
@@ -208,7 +211,9 @@ impl ControlFactory {
             msg_receiver,
             task,
         });
-        info!("Connection to gateway successful");
+        if !quiet {
+            info!("Connection to gateway successful");
+        }
         Ok(RelayInfo {
             protocol: self.protocol.clone(),
             gateway: self.gateway.to_string(),
@@ -280,7 +285,7 @@ impl ControlFactory {
                     if let Some(forward_addr) = &agent.forward_addr {
                         println!("\tForward Address: {}", forward_addr);
                     }
-                    if let Some(system_info) = &agent.system_info {
+                    if let Some(system_info) = &agent.system_info.as_ref().filter(|_| *verbose) {
                         println!("\tSystem Info:");
                         println!("\t\tLocal Address: {}", system_info.constant.local_addr);
                         println!("\t\tLoad Avarage: {}", system_info.dynamic.loadavg);

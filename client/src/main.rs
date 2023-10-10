@@ -110,7 +110,7 @@ async fn start(mut args: Args) -> Result<(), ClientError> {
                             tunnel.stop();
                         }
 
-                        let relay_info = control.connect().await?;
+                        let relay_info = control.connect(matches!(args.arg_commands, args::ArgCommands::List(_))).await?;
                         if let Some(addr) = control.control.as_ref().map(|c| c.address.ip()) {
                             tunnel.add_host(addr);
                         }
