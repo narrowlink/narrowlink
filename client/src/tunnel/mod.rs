@@ -11,6 +11,7 @@ use narrowlink_network::AsyncSocket;
 use narrowlink_types::generic::{self};
 use proxy_stream::ProxyStream;
 
+use tracing::info;
 use udp_stream::UdpListener;
 
 use std::{
@@ -74,14 +75,26 @@ impl TunnelFactory {
             }
             TunnelInstruction::Forward(udp, local, endpoint) => {
                 let listener = if *udp {
-                    either::Right(UdpListener::bind(*local).await?)
+                    let listener = UdpListener::bind(*local).await?;
+                    if let Ok(addr) = listener.local_addr() {
+                        info!("Listen on: udp://{}:{}", addr.ip(), addr.port());
+                    }
+
+                    either::Right(listener)
                 } else {
-                    either::Left(TcpListener::bind(local).await?)
+                    let listener = TcpListener::bind(*local).await?;
+                    if let Ok(addr) = listener.local_addr() {
+                        info!("Listen on: tcp://{}:{}", addr.ip(), addr.port());
+                    }
+                    either::Left(listener)
                 };
                 self.listener = Some(TunnelListener::Forward(listener, endpoint.clone()));
             }
             TunnelInstruction::Proxy(endpoint) => {
                 let listener = TcpListener::bind(endpoint).await?;
+                if let Ok(addr) = listener.local_addr() {
+                    info!("Listen on: socks5://{}:{}", addr.ip(), addr.port());
+                }
                 self.listener = Some(TunnelListener::Proxy(listener));
             }
             #[cfg(any(target_os = "linux", target_os = "macos"))]

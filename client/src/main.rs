@@ -22,7 +22,7 @@ use tracing_subscriber::{
     util::SubscriberInitExt,
     Layer,
 };
-
+// todo: Fix exit if p2p connection not available
 pub fn main() -> Result<(), ClientError> {
     let args = Args::parse(env::args())?;
 
@@ -118,6 +118,9 @@ async fn start(mut args: Args) -> Result<(), ClientError> {
                         transport.set_relay(relay_info);
                         // if let Some(manage) = manage.take() {
                         if let Err(e) = control.manage(&instruction.manage).await{
+                            if !matches!(e, ClientError::ConnectionClosed) {
+                                return Err(e);
+                            }
                             warn!("{}",e);
                         }
                         tunnel.start().await?;

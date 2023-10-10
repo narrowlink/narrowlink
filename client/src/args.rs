@@ -416,7 +416,11 @@ impl Args {
                             // )?;
                         }
                     }
-                    Ok(ArgCommands::Tun(sub))
+                    if sub.agent_name.is_empty() {
+                        Err(ClientError::RequiredValue("name"))
+                    } else {
+                        Ok(ArgCommands::Tun(sub))
+                    }
                 }
                 SubCommands::Forward => {
                     let mut sub = ForwardArgs {
@@ -563,7 +567,9 @@ impl Args {
                             )?;
                         }
                     }
-                    if sub.remote_addr.0.is_empty() {
+                    if sub.agent_name.is_empty() {
+                        Err(ClientError::RequiredValue("name"))
+                    } else if sub.remote_addr.0.is_empty() {
                         Err(ClientError::RequiredValue("remote"))
                     } else {
                         Ok(ArgCommands::Forward(sub))
@@ -688,7 +694,9 @@ impl Args {
                             )?;
                         }
                     }
-                    if sub.remote_addr.0.is_empty() {
+                    if sub.agent_name.is_empty() {
+                        Err(ClientError::RequiredValue("name"))
+                    } else if sub.remote_addr.0.is_empty() {
                         Err(ClientError::RequiredValue("remote"))
                     } else {
                         Ok(ArgCommands::Connect(sub))
@@ -700,7 +708,7 @@ impl Args {
                         cryptography: None,
                         relay: false,
                         direct: false,
-                        local_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 0),
+                        local_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 1080),
                     };
                     while let Some(arg) = raw.next(&mut cursor) {
                         if let Some((long, value)) = arg.to_long() {
@@ -800,13 +808,16 @@ impl Args {
                                         Some(v)
                                     }
                                 })
-                                .ok_or(ClientError::RequiredValue("local"))?
-                                .parse::<SocketAddr>()
-                                .map_err(|_| ClientError::Encoding)?;
+                                .and_then(|v| v.parse::<SocketAddr>().ok())
+                                .ok_or(ClientError::Encoding)?;
                         }
                     }
 
-                    Ok(ArgCommands::Proxy(sub))
+                    if sub.agent_name.is_empty() {
+                        Err(ClientError::RequiredValue("name"))
+                    } else {
+                        Ok(ArgCommands::Proxy(sub))
+                    }
                 }
             };
         Ok(Self {

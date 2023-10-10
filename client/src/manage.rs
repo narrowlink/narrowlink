@@ -315,6 +315,14 @@ impl ControlFactory {
                 process::exit(0);
             }
             ManageInstruction::Peer2Peer(p2p) => {
+                if self
+                    .control
+                    .as_ref()
+                    .and_then(|c| c.agents.iter().find(|a| a.name == p2p.agent_name))
+                    .is_none()
+                {
+                    return Err(ClientError::AgentNotFound);
+                }
                 if !self.direct_tunnel_status.load(Ordering::Relaxed)
                     == (DirectTunnelStatus::Uninitialized as u8)
                 {
@@ -345,8 +353,7 @@ impl ControlFactory {
                     .and_then(|c| c.agents.iter().find(|a| &a.name == agent_name))
                     .is_none()
                 {
-                    error!("Agent not found");
-                    process::exit(0);
+                    return Err(ClientError::AgentNotFound);
                 }
                 Ok(())
             }
