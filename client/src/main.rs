@@ -1,6 +1,5 @@
 mod args;
 mod config;
-mod control;
 mod error;
 mod manage;
 mod transport;
@@ -89,22 +88,24 @@ async fn start(mut args: Args) -> Result<(), ClientError> {
         tokio::select! {
             msg = control.accept_msg() => {
                 match msg {
-                    Some(ControlMsg::ConnectionError(connection_id, msg)) => {
+                    Ok(ControlMsg::ConnectionError(connection_id, msg)) => {
                         debug!("Connection error: {}:{}", connection_id, msg);
                     }
-                    Some(ControlMsg::Peer2Peer(p2p)) => {
+                    Ok(ControlMsg::Peer2Peer(p2p)) => {
                         debug!("Peer2Peer: {:?}", p2p);
                         let t = transport.clone();
                         let direct_tunnel_status = control.direct_tunnel_status.clone();
                         tunnel.add_host(p2p.peer_ip); // todo del_host
                         tokio::spawn(async move{
-                                if let Err(e) = t.create_direct(p2p,direct_tunnel_status).await {
-                                    error!("create direct tunnel error: {}",e);
-                                }
+                            if let Err(e) = t.create_direct(p2p,direct_tunnel_status).await {
+                                error!("create direct tunnel error: {}",e);
+                            }
                         });
-
                     }
-                    None => {
+                    Err(e) => {
+                        if !(matches!(e, ClientError::ControlChannelNotConnected) || matches!(e, ClientError::ConnectionClosed)) {
+                            return Err(e);
+                        }
                         if !transport.is_direct_available().await {
                             tunnel.stop();
                         }
@@ -113,6 +114,7 @@ async fn start(mut args: Args) -> Result<(), ClientError> {
                         if let Some(addr) = control.control.as_ref().map(|c| c.address.ip()) {
                             tunnel.add_host(addr);
                         }
+                        // relay_info.
                         transport.set_relay(relay_info);
                         // if let Some(manage) = manage.take() {
                         if let Err(e) = control.manage(&instruction.manage).await{
@@ -125,18 +127,11 @@ async fn start(mut args: Args) -> Result<(), ClientError> {
             }
             msg = tunnel.accept() => {
                 let t = transport.clone();
-                tokio::spawn(async move{
-                    let (socket,connect) = match msg {
-                        Ok(s) => s,
-                        Err(e) => {
-                            warn!("tunnel accept error: {}",e);
-                            return;
-                        }
-                    };
-                    if let Err(e) = t.connect(socket,connect).await{
-                        warn!("connect error: {}",e);
-                    }
-                });
+                control.add_connection(tokio::spawn(async move{
+                    let (socket,connect) = msg?;
+                    t.connect(socket,connect).await
+                }));
+
             }
         }
     }

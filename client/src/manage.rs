@@ -47,6 +47,9 @@ pub struct ControlFactory {
     acl: Option<String>,
     protocol: ServiceType,
     pub control: Option<ControlInfo>,
+    pub active_connections: futures_util::stream::FuturesOrdered<
+        tokio::task::JoinHandle<Result<std::option::Option<std::string::String>, ClientError>>,
+    >,
     pub direct_tunnel_status: Arc<AtomicU8>,
 }
 
@@ -83,11 +86,13 @@ impl ControlFactory {
             },
             protocol: conf.protocol.clone(),
             control: None,
+            active_connections: futures_util::stream::FuturesOrdered::new(),
             direct_tunnel_status: Arc::new(AtomicU8::new(DirectTunnelStatus::Uninitialized as u8)),
         })
     }
 
     pub async fn connect(&mut self) -> Result<RelayInfo, ClientError> {
+        info!("Connecting to gateway: {}", self.gateway);
         let headers = if let Some(acl) = self.acl.as_ref() {
             HashMap::from([
                 ("NL-ACL", acl.to_string()),
@@ -203,7 +208,7 @@ impl ControlFactory {
             msg_receiver,
             task,
         });
-
+        info!("Connection successful");
         Ok(RelayInfo {
             protocol: self.protocol.clone(),
             gateway: self.gateway.to_string(),
@@ -211,20 +216,50 @@ impl ControlFactory {
             session_id,
         })
     }
-
-    pub async fn accept_msg(&mut self) -> Option<ControlMsg> {
+    pub fn add_connection(
+        &mut self,
+        task: tokio::task::JoinHandle<
+            Result<std::option::Option<std::string::String>, ClientError>,
+        >,
+    ) {
+        self.active_connections.push_back(task);
+    }
+    pub async fn accept_msg(&mut self) -> Result<ControlMsg, ClientError> {
         if let Some(control) = self.control.as_mut() {
-            select! {
-                msg = control.msg_receiver.recv() => {
-                    return msg;
-                }
-                _ = &mut control.task => {
-                    warn!("Control connection closed");
-                    return None;
+            loop {
+                select! {
+                    msg = control.msg_receiver.recv() => {
+                        match msg{
+                            Some(msg) => {
+                                return Ok(msg);
+                            }
+                            None => {
+                                return Err(ClientError::Unexpected(0));
+                            }
+                        }
+                    }
+                    Some(connection_result) = self.active_connections.next() => {
+                        match connection_result {
+                            Ok(Err(e)) => {
+                                if matches!(e, ClientError::UnableToConnectToRelay) {
+                                    return Err(ClientError::ConnectionClosed);
+                                }else if matches!(e, ClientError::AgentNotFound) || matches!(e, ClientError::AuthRequired) {
+                                    return Err(e);
+                                }
+                            }
+                            _ => {
+                                continue;
+                            }
+                        }
+                    }
+                    _ = &mut control.task => {
+                        warn!("Control connection closed");
+                        return Err(ClientError::ConnectionClosed);
+                    }
                 }
             }
         }
-        None
+        Err(ClientError::ControlChannelNotConnected)
     }
 
     pub async fn manage(&self, manage: &ManageInstruction) -> Result<(), ClientError> {
@@ -298,7 +333,18 @@ impl ControlFactory {
                 }
                 Ok(())
             }
-            ManageInstruction::None => return Err(ClientError::Unexpected(0)),
+            ManageInstruction::AgentCheck(agent_name) => {
+                if self
+                    .control
+                    .as_ref()
+                    .and_then(|c| c.agents.iter().find(|a| &a.name == agent_name))
+                    .is_none()
+                {
+                    error!("Agent not found");
+                    process::exit(0);
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -311,7 +357,7 @@ pub struct Instruction {
 pub enum ManageInstruction {
     Peer2Peer(Peer2PeerRequest),
     AgentList(bool),
-    None,
+    AgentCheck(String),
 }
 
 impl ManageInstruction {
@@ -345,7 +391,7 @@ impl From<&ArgCommands> for Instruction {
                 manage: if a.direct {
                     ManageInstruction::default_p2p(a.agent_name.clone())
                 } else {
-                    ManageInstruction::None
+                    ManageInstruction::AgentCheck(a.agent_name.clone())
                 },
             },
             ArgCommands::List(ListArgs { verbose }) => Self {
@@ -365,7 +411,7 @@ impl From<&ArgCommands> for Instruction {
                 manage: if a.direct {
                     ManageInstruction::default_p2p(a.agent_name.clone())
                 } else {
-                    ManageInstruction::None
+                    ManageInstruction::AgentCheck(a.agent_name.clone())
                 },
             },
             ArgCommands::Connect(a) => Self {
@@ -380,7 +426,7 @@ impl From<&ArgCommands> for Instruction {
                 manage: if a.direct {
                     ManageInstruction::default_p2p(a.agent_name.clone())
                 } else {
-                    ManageInstruction::None
+                    ManageInstruction::AgentCheck(a.agent_name.clone())
                 },
             },
             #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -396,7 +442,7 @@ impl From<&ArgCommands> for Instruction {
                 manage: if a.direct {
                     ManageInstruction::default_p2p(a.agent_name.clone())
                 } else {
-                    ManageInstruction::None
+                    ManageInstruction::AgentCheck(a.agent_name.clone())
                 },
             },
         }

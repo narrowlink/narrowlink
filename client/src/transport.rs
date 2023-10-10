@@ -1,6 +1,7 @@
 use hmac::Mac;
 use narrowlink_network::{
-    async_forward, p2p::QuicStream, ws::WsConnectionBinary, AsyncSocket, AsyncSocketCrypt,
+    async_forward, error::NetworkError, p2p::QuicStream, ws::WsConnectionBinary, AsyncSocket,
+    AsyncSocketCrypt,
 };
 use narrowlink_types::{
     client::DataOutBound as ClientDataOutBound,
@@ -283,8 +284,15 @@ impl TransportFactory {
         {
             Ok(c) => c,
             Err(e) => {
-                error!("{}", e.to_string());
-                return Err(ClientError::UnableToConnectToRelay);
+                if matches!(e, NetworkError::UnableToUpgrade(401)) {
+                    return Err(ClientError::AuthRequired);
+                } else if matches!(e, NetworkError::UnableToUpgrade(403)) {
+                    return Err(ClientError::AccessDenied);
+                } else if matches!(e, NetworkError::UnableToUpgrade(404)) {
+                    return Err(ClientError::AgentNotFound);
+                } else {
+                    return Err(ClientError::UnableToConnectToRelay);
+                }
             }
         };
         let connection_id = connection

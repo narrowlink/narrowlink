@@ -66,4 +66,8 @@ pub enum ClientError {
     UnableToConnectToRelay,
     #[error("Invalid Socks Request")]
     InvalidSocksRequest,
+    #[error("Access Denied")]
+    AccessDenied,
+    #[error("Control Channel Not Connected")]
+    ControlChannelNotConnected,
 }
