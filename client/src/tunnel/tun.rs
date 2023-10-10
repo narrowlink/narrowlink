@@ -158,6 +158,10 @@ impl TunListener {
             .destination(ipv4)
             // .netmask((255, 255, 255, 255))
             .mtu(MTU as i32)
+            .platform(|_c| {
+                #[cfg(target_os = "linux")]
+                _c.packet_information(true);
+            })
             .up();
         let mut device = tun::create_as_async(&config).map_err(ClientError::UnableToCreateTun)?;
         let route = TunRoute::new(ipv4)
@@ -174,6 +178,7 @@ impl TunListener {
 
             let mut buffer = vec![0u8; MTU];
             loop {
+                //todo: recover
                 tokio::select! {
                     res = stack_stream.next() => {
                         match res {
