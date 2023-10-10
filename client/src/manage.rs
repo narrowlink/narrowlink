@@ -39,8 +39,12 @@ use crate::{
 pub enum ControlMsg {
     ConnectionError(Uuid, String),
     Peer2Peer(Peer2PeerInstruction),
+    Shutdown(ClientError),
 }
 
+pub enum ControlStatus {
+    P2PRequest(Result<(), ClientError>),
+}
 pub struct ControlFactory {
     gateway: Arc<String>,
     token: Arc<String>,
@@ -51,6 +55,9 @@ pub struct ControlFactory {
         tokio::task::JoinHandle<Result<std::option::Option<std::string::String>, ClientError>>,
     >,
     pub direct_tunnel_status: Arc<AtomicU8>,
+    system_status_receiver: tokio::sync::mpsc::UnboundedReceiver<ControlStatus>,
+    system_status_sender: tokio::sync::mpsc::UnboundedSender<ControlStatus>,
+    is_direct_only: bool,
 }
 
 #[derive(Clone)]
@@ -68,14 +75,16 @@ pub struct ControlInfo {
     request: NarrowEventRequest<ClientEventOutBound, ClientEventInBound>,
     agents: Vec<AgentInfo>,
     msg_receiver: tokio::sync::mpsc::UnboundedReceiver<ControlMsg>,
+    msg_sender: tokio::sync::mpsc::UnboundedSender<ControlMsg>,
     task: tokio::task::JoinHandle<()>,
 }
 
 impl ControlFactory {
-    pub fn new(conf: Config) -> Result<Self, ClientError> {
+    pub fn new(conf: Config, is_direct_only: bool) -> Result<Self, ClientError> {
         let Some(config::Endpoint::SelfHosted(conf)) = conf.endpoints.first() else {
             return Err(ClientError::InvalidConfig);
         };
+        let (system_status_sender, system_status_receiver) = tokio::sync::mpsc::unbounded_channel();
         Ok(Self {
             gateway: Arc::new(conf.gateway.clone()),
             token: Arc::new(conf.token.clone()),
@@ -88,7 +97,13 @@ impl ControlFactory {
             control: None,
             active_connections: futures_util::stream::FuturesOrdered::new(),
             direct_tunnel_status: Arc::new(AtomicU8::new(DirectTunnelStatus::Uninitialized as u8)),
+            system_status_receiver,
+            system_status_sender,
+            is_direct_only,
         })
+    }
+    pub fn get_status_sender(&self) -> tokio::sync::mpsc::UnboundedSender<ControlStatus> {
+        self.system_status_sender.clone()
     }
 
     pub async fn connect(&mut self, quiet: bool) -> Result<RelayInfo, ClientError> {
@@ -154,29 +169,33 @@ impl ControlFactory {
             NarrowEvent::new(connection);
         let request = stream.get_request();
         let (msg_sender, msg_receiver) = tokio::sync::mpsc::unbounded_channel();
-        let task = tokio::spawn(async move {
-            loop {
-                let Some(msg) = stream.next().await else {
-                    break;
-                };
-                match msg {
-                    Ok(narrowlink_types::client::EventInBound::ConnectionError(
-                        connection_id,
-                        msg,
-                    )) => {
-                        debug!("Connection error: {}:{}", connection_id, msg);
-                        let _ = msg_sender.send(ControlMsg::ConnectionError(connection_id, msg));
-                    }
-                    Ok(narrowlink_types::client::EventInBound::Peer2Peer(p2p)) => {
-                        debug!("Peer2Peer: {:?}", p2p);
-                        let _ = msg_sender.send(ControlMsg::Peer2Peer(p2p));
-                    }
-                    Ok(_) => {
-                        debug!("Unhandled message: {:?}", msg);
-                    }
-                    Err(e) => {
-                        debug!("Error: {:?}", e);
+        let task = tokio::spawn({
+            let msg_sender = msg_sender.clone();
+            async move {
+                loop {
+                    let Some(msg) = stream.next().await else {
                         break;
+                    };
+                    match msg {
+                        Ok(narrowlink_types::client::EventInBound::ConnectionError(
+                            connection_id,
+                            msg,
+                        )) => {
+                            debug!("Connection error: {}:{}", connection_id, msg);
+                            let _ =
+                                msg_sender.send(ControlMsg::ConnectionError(connection_id, msg));
+                        }
+                        Ok(narrowlink_types::client::EventInBound::Peer2Peer(p2p)) => {
+                            debug!("Peer2Peer: {:?}", p2p);
+                            let _ = msg_sender.send(ControlMsg::Peer2Peer(p2p));
+                        }
+                        Ok(_) => {
+                            debug!("Unhandled message: {:?}", msg);
+                        }
+                        Err(e) => {
+                            debug!("Error: {:?}", e);
+                            break;
+                        }
                     }
                 }
             }
@@ -201,7 +220,6 @@ impl ControlFactory {
                 ),
             ))
             .await?;
-
         self.control = Some(ControlInfo {
             // local_addr,
             address,
@@ -209,6 +227,7 @@ impl ControlFactory {
             request,
             agents,
             msg_receiver,
+            msg_sender,
             task,
         });
         if !quiet {
@@ -229,6 +248,9 @@ impl ControlFactory {
     ) {
         self.active_connections.push_back(task);
     }
+    // pub fn get_status_sender(&self) -> tokio::sync::mpsc::UnboundedSender<u8> {
+    //     // self.control.as_ref().map(|c| c.system_status_sender.clone())
+    // }
     pub async fn accept_msg(&mut self) -> Result<ControlMsg, ClientError> {
         if let Some(control) = self.control.as_mut() {
             loop {
@@ -254,6 +276,20 @@ impl ControlFactory {
                             }
                             _ => {
                                 continue;
+                            }
+                        }
+                    }
+                    Some(system_status) = self.system_status_receiver.recv() => {
+                        match system_status{
+                            ControlStatus::P2PRequest(result) => {
+                                if let Err(e) = result {
+                                    if self.is_direct_only {
+                                        _ = control.msg_sender.send(ControlMsg::Shutdown(e));
+                                    } else {
+                                        warn!("Unable to create the direct (peer-to-peer) channel: {}",e);
+                                        info!("Continue in relay mode");
+                                    }
+                                }
                             }
                         }
                     }
@@ -364,6 +400,12 @@ pub struct Instruction {
     pub tunnel: TunnelInstruction,
     pub transport: TransportInstruction,
     pub manage: ManageInstruction,
+}
+
+impl Instruction {
+    pub fn is_direct_only(&self) -> bool {
+        matches!(self.transport, TransportInstruction::Direct(_, _))
+    }
 }
 
 pub enum ManageInstruction {

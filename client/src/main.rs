@@ -22,6 +22,8 @@ use tracing_subscriber::{
     util::SubscriberInitExt,
     Layer,
 };
+
+use crate::manage::ControlStatus;
 // todo: Fix exit if p2p connection not available
 pub fn main() -> Result<(), ClientError> {
     let args = Args::parse(env::args())?;
@@ -79,8 +81,8 @@ pub fn main() -> Result<(), ClientError> {
 #[tokio::main]
 async fn start(mut args: Args) -> Result<(), ClientError> {
     let conf = config::Config::load(args.take_conf_path())?;
-    let mut control = ControlFactory::new(conf)?;
     let instruction = Instruction::from(&args.arg_commands);
+    let mut control = ControlFactory::new(conf, instruction.is_direct_only())?;
     let mut transport = TransportFactory::new(instruction.transport);
     let mut tunnel = TunnelFactory::new(instruction.tunnel);
 
@@ -96,11 +98,14 @@ async fn start(mut args: Args) -> Result<(), ClientError> {
                         let t = transport.clone();
                         let direct_tunnel_status = control.direct_tunnel_status.clone();
                         tunnel.add_host(p2p.peer_ip); // todo del_host
+                        let system_status_sender = control.get_status_sender();
                         tokio::spawn(async move{
-                            if let Err(e) = t.create_direct(p2p,direct_tunnel_status).await {
-                                error!("create direct tunnel error: {}",e);
-                            }
+                            _ = system_status_sender.send(ControlStatus::P2PRequest(t.create_direct(p2p,direct_tunnel_status).await));
                         });
+                    }
+                    Ok(ControlMsg::Shutdown(err)) => {
+                        tunnel.stop();
+                        return Err(err);
                     }
                     Err(e) => {
                         if !(matches!(e, ClientError::ControlChannelNotConnected) || matches!(e, ClientError::ConnectionClosed)) {

@@ -117,7 +117,9 @@ impl TunnelFactory {
     }
     pub fn stop(&mut self) {
         self.wait = Some(Arc::new(Notify::new()));
-        self.listener.take();
+        if let Some(TunnelListener::Tun(t)) = self.listener.take() {
+            t.my_routes(false);
+        };
     }
     pub async fn accept(
         &mut self,
