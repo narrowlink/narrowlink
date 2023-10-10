@@ -19,7 +19,7 @@ include = [
 ]
 
 [dependencies]
-tokio = { version = "1.32.0", default-features = false, features = [
+tokio = { version = "1.33.0", default-features = false, features = [
   "macros",
   "rt",
   "time",

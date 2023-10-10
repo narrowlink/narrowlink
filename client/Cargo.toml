@@ -25,7 +25,7 @@ path = "src/main.rs"
 [dependencies]
 clap_lex = { version = "0.5.1", default-features = false }
 thiserror = { version = "1.0.49", default-features = false }
-tokio = { version = "1.32.0", features = [
+tokio = { version = "1.33.0", features = [
     "macros",
     "rt",
     "io-std",
@@ -44,7 +44,7 @@ serde = { version = "1.0.188", features = ["derive"], default-features = false }
 serde_json = { version = "1.0.107", default-features = false }
 serde_yaml = { version = "0.9.25", default-features = false }
 udp-stream = { version = "0.0.9", default-features = false }
-regex = { version = "1.9.5", features = ["std"], default-features = false }
+regex = { version = "1.10.0", features = ["std"], default-features = false }
 either = { version = "1.9.0", default-features = false }
 tracing = { version = "0.1.37", default-features = false, features = [
     "attributes",
@@ -69,7 +69,7 @@ narrowlink-network = { version = "0.2.0-git" }
 
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
 netstack-lwip = { git = "https://github.com/eycorsican/netstack-lwip.git", rev = "ebbd4e8" }
-tun = { version = "0.5", features = ["async"] }
+tun = { version = "0.6", features = ["async"] }
 net-route = { git = "https://github.com/SajjadPourali/net-route", branch = "patch-1" }
 etherparse = { version = "0.13.0" }
 

@@ -20,7 +20,7 @@ include = [
 ]
 
 [dependencies]
-tokio = { version = "1.32.0", features = ["full"] }
+tokio = { version = "1.33.0", features = ["full"] }
 hyper = { version = "0.14.27", features = ["full"] }
 tracing = { version = "0.1.37", default-features = false, features = [
     "attributes",
@@ -53,7 +53,7 @@ rustls-pemfile = { version = "1.0.3", default-features = false }
 validator = { version = "0.16.1", default-features = false, features = [
     "derive",
 ] }
-rcgen = { version = "0.11.2", default-features = false, features = [
+rcgen = { version = "0.11.3", default-features = false, features = [
     "pem",
     "x509-parser",
 ] }

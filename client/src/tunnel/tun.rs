@@ -194,25 +194,24 @@ impl TunListener {
                         };
                     },
                     res = udp_reader.recv() => {
-                        if cfg!(target_os = "linux") {
-                            match res {
-                                Some(v)=>device.write_all(&v).await?,
-                                None=>{
-                                    let _ = stack_sink.close().await;
-                                    let _ = device.shutdown().await;
-                                    return Ok::<(),io::Error>(())
-                                }
-                            };
-                        } else {
-                            match res {
-                                Some(mut v)=>device.write_all({v.splice(0..0, vec![0x00, 0x00, 0x00, 0x02]);&v}).await?,
-                                None=>{
-                                    let _ = stack_sink.close().await;
-                                    let _ = device.shutdown().await;
-                                    return Ok::<(),io::Error>(())
-                                }
-                            };
-                        }
+                        #[cfg(target_os = "linux")]
+                        match res {
+                            Some(v)=>device.write_all(&v).await?,
+                            None=>{
+                                let _ = stack_sink.close().await;
+                                let _ = device.shutdown().await;
+                                return Ok::<(),io::Error>(())
+                            }
+                        };
+                        #[cfg(not(target_os = "linux"))]
+                        match res {
+                            Some(mut v)=>device.write_all({v.splice(0..0, vec![0x00, 0x00, 0x00, 0x02]);&v}).await?,
+                            None=>{
+                                let _ = stack_sink.close().await;
+                                let _ = device.shutdown().await;
+                                return Ok::<(),io::Error>(())
+                            }
+                        };
                     },
                     res = device.read(&mut buffer) => {
                         match res {
