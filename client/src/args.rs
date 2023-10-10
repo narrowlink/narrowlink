@@ -3,7 +3,6 @@ use crate::error::ClientError;
 use regex::Regex;
 use std::{collections::HashMap, net::SocketAddr, process};
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
 use std::net::{IpAddr, Ipv4Addr};
 
 static HELP: &str = include_str!("../main.help.arg");

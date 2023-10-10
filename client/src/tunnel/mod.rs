@@ -22,10 +22,10 @@ use tokio::{net::TcpListener, sync::Notify};
 
 use crate::error::ClientError;
 
-use self::{
-    input_stream::InputStream,
-    tun::{RouteCommand, TunListener, TunStream},
-};
+use input_stream::InputStream;
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+use tun::{RouteCommand, TunListener, TunStream};
 
 pub enum TunnelInstruction {
     Connect(bool, (String, u16)),             // udp, endpoint
@@ -214,6 +214,7 @@ impl TunnelFactory {
     }
     pub fn add_host(&mut self, ip: IpAddr) {
         self.hosts.insert(ip);
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         if let Some(TunnelListener::Tun(tun)) = self.listener.as_ref() {
             if let Some(s) = tun.route_sender() {
                 let _ = s.send(RouteCommand::Add(ip));
@@ -223,6 +224,7 @@ impl TunnelFactory {
     #[allow(dead_code)]
     pub fn del_host(&mut self, ip: IpAddr) {
         self.hosts.remove(&ip);
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         if let Some(TunnelListener::Tun(tun)) = self.listener.as_ref() {
             if let Some(s) = tun.route_sender() {
                 let _ = s.send(RouteCommand::Del(ip));
