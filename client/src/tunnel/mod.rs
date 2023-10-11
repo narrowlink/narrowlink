@@ -117,6 +117,9 @@ impl TunnelFactory {
     }
     pub fn stop(&mut self) {
         self.wait = Some(Arc::new(Notify::new()));
+        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        self.listener.take();
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         if let Some(TunnelListener::Tun(t)) = self.listener.take() {
             t.my_routes(false);
         };
