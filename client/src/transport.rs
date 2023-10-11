@@ -126,7 +126,17 @@ impl TransportFactory {
     ) -> Result<(Box<dyn AsyncSocket>, Option<String>), ClientError> {
         let notify = self.notify_direct.read().await.clone();
         if let Some(notify) = notify.filter(|_| wait_for_tunnel) {
-            info!("Waiting to create a direct (peer-to-peer) channel");
+            let protocol = if connect.protocol == generic::Protocol::UDP {
+                "udp://"
+            } else if connect.protocol == generic::Protocol::TCP {
+                "tcp://"
+            } else {
+                ""
+            };
+            info!(
+                "{}{}:{} is on hold and waiting to create the direct channel",
+                protocol, connect.host, connect.port
+            );
             notify.notified().await;
         }
         let qs = self.direct.read().await;
