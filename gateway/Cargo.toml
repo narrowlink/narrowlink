@@ -22,7 +22,7 @@ include = [
 [dependencies]
 tokio = { version = "1.33.0", features = ["full"] }
 hyper = { version = "0.14.27", features = ["full"] }
-tracing = { version = "0.1.37", default-features = false, features = [
+tracing = { version = "0.1.39", default-features = false, features = [
     "attributes",
 ] }
 tracing-subscriber = { version = "0.3.17", default-features = false, features = [
@@ -34,12 +34,12 @@ tracing-appender = { version = "0.2.2" , default-features = false }
 dirs = { version = "5.0.1" , default-features = false }
 serde_json = { version = "1.0.107" , default-features = false }
 serde_yaml = { version = "0.9.25", default-features = false }
-serde = { version = "1.0.188", features = ["derive"], default-features = false }
-async-trait = { version = "0.1.73", default-features = false }
+serde = { version = "1.0.189", features = ["derive"], default-features = false }
+async-trait = { version = "0.1.74", default-features = false }
 futures-util = { version = "0.3.28", default-features = false }
 askama = { version = "0.12.1", default-features = false }
 pem = { version = "3.0.2", default-features = false, features = ["std"] }
-uuid = { version = "1.4.1", default-features = false, features = [
+uuid = { version = "1.5.0", default-features = false, features = [
     "v4",
     "serde",
 ] }

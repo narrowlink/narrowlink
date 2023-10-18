@@ -13,7 +13,7 @@ include = ["Cargo.toml", "LICENSE", "src/**/*"]
 
 [dependencies]
 bytes = { version = "1.5.0", default-features = false }
-serde = { version = "1.0.188", features = ["derive"], default-features = false }
+serde = { version = "1.0.189", features = ["derive"], default-features = false }
 serde_json = { version = "1.0.107", default-features = false, features = [
     "alloc",
 ] }
@@ -44,7 +44,7 @@ quinn = { version = "0.10.2", default-features = false, features = [
     "tls-rustls",
 ] }
 async-recursion = { version = "1.0.5", default-features = false }
-tracing = { version = "0.1.37", default-features = false }
+tracing = { version = "0.1.39", default-features = false }
 tokio-native-tls = { version = "0.3.1", optional = true, default-features = false }
 thiserror = { version = "1.0.49", default-features = false }
 

@@ -19,7 +19,8 @@ use tracing::warn;
 use crate::error::ClientError;
 
 const UDP_TIMEOUT: u64 = 5;
-const MTU: usize = 1500;
+// const MTU: usize = 1500;
+const MTU: usize = 65535;
 
 pub enum TunStream {
     Tcp(TunTcpStream),
