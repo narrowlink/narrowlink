@@ -68,10 +68,9 @@ narrowlink-network = { version = "0.2.0-git" }
 
 
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
-netstack-lwip = { git = "https://github.com/SajjadPourali/netstack-lwip" }
 tun = { version = "0.6", features = ["async"] }
+ipstack = {git = "https://github.com/SajjadPourali/ipstack"}
 net-route = { git = "https://github.com/SajjadPourali/net-route", branch = "patch-1" }
-etherparse = { version = "0.13.0" }
 
 [features]
 default = ["rustls"]

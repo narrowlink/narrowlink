@@ -7,6 +7,7 @@ use futures_util::{
     stream::{self, Once},
     StreamExt,
 };
+use ipstack::stream::IpStackStream;
 use narrowlink_network::AsyncSocket;
 use narrowlink_types::generic::{self};
 use proxy_stream::ProxyStream;
@@ -26,7 +27,7 @@ use crate::error::ClientError;
 use input_stream::InputStream;
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-use tun::{RouteCommand, TunListener, TunStream};
+use tun::{RouteCommand, TunListener};
 
 pub enum TunnelInstruction {
     Connect(bool, (String, u16)),             // udp, endpoint
@@ -207,16 +208,18 @@ impl TunnelFactory {
             }
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Some(TunnelListener::Tun(tun_listener)) => {
-                let (stream, addr) = tun_listener.accept().await.unwrap();
+                let stream = tun_listener.accept().await.unwrap();
+                let peer_addr = stream.peer_addr();
                 let (stream, udp): (Box<dyn AsyncSocket>, bool) = match stream {
-                    TunStream::Tcp(tcp) => (Box::new(tcp), false),
-                    TunStream::Udp(udp) => (Box::new(udp), true),
+                    IpStackStream::Tcp(tcp) => (Box::new(tcp), false),
+                    IpStackStream::Udp(udp) => (Box::new(udp), true),
                 };
+
                 Ok((
                     stream,
                     generic::Connect {
-                        host: addr.ip().to_string(),
-                        port: addr.port(),
+                        host: peer_addr.ip().to_string(),
+                        port: peer_addr.port(),
                         protocol: if udp {
                             generic::Protocol::UDP
                         } else {

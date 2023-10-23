@@ -36,8 +36,8 @@ pub enum ClientError {
     #[error("Unable To Create Tun: {0}")]
     UnableToCreateTun(#[from] tun::Error),
     #[cfg(any(target_os = "linux", target_os = "macos"))]
-    #[error("Unable To Create Net Stack: {0}")]
-    UnableToCreateNetStack(#[from] netstack_lwip::Error),
+    // #[error("Unable To Create Net Stack: {0}")]
+    // UnableToCreateNetStack(#[from] netstack_lwip::Error),
     #[error("Network Error: {0}")]
     NetworkError(#[from] NetworkError),
     #[error("STOP: #{0:#10x}")]
