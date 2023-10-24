@@ -1,0 +1,106 @@
+.\" Manpage for Narrowlink.
+.\" Contact support@narrowlink.com to correct errors or typos.
+.so .vars.roff
+.TH NARROWLINK 1 "23 October 2023" "\*(vN" "Narrowlink man page"
+.SH NAME
+narrowlink \- Command line utility for managing Narrowlink operations
+.SH SYNOPSIS
+.B narrowlink
+[OPTIONS] <COMMAND>
+.SH DESCRIPTION
+.B Narrowlink
+is a command line utility to manage various Narrowlink operations such as listing agents, creating port forwarding tunnels, connecting to a remote end node, creating a local SOCKS5 proxy server, and creating a TUN interface.
+.SH COMMANDS
+.TP
+.B list
+List agents.
+.TP
+.B forward
+Create a port forwarding tunnel.
+.TP
+.B connect
+Connect to a remote end node like netcat.
+.TP
+.B proxy
+Create a local socks5 proxy server.
+.TP
+.B tun
+Create a tun device and forward traffic (Linux and macOS only).
+.SH OPTIONS
+.TP
+.B -c, --config=
+Specify a config file.
+.TP
+.B -h, --help
+Print help information.
+.TP
+.B --version
+Print version information.
+.SH "COMMAND-SPECIFIC OPTIONS"
+.TP
+.B list
+.IP \[bu]
+\fB-v, --verbose\fR
+.SH
+.TP
+.B forward
+.IP \[bu]
+\fB-d, --direct\fR Direct connection to the remote endpoint (peer-to-peer).
+.IP \[bu]
+\fB-r, --relay\fR Relay connection to the remote endpoint (peer-to-gateway-to-peer).
+.IP \[bu]
+\fB-u, --udp\fR Use UDP instead of TCP.
+.IP \[bu]
+\fB-n, --name=\fR The name of the agent (required).
+.IP \[bu]
+\fB-k, --key=\fR The secret key for end-to-end encryption.
+.IP \[bu]
+\fB-l, --local=\fR The local address and port to bind.
+.SH
+.TP
+.B connect
+.IP \[bu]
+\fB-d, --direct\fR Direct connection to the remote endpoint (peer-to-peer).
+.IP \[bu]
+\fB-r, --relay\fR Relay connection to the remote endpoint (peer-to-gateway-to-peer).
+.IP \[bu]
+\fB-u, --udp\fR Use UDP instead of TCP.
+.IP \[bu]
+\fB-n, --name=\fR The name of the agent.
+.IP \[bu]
+\fB-k, --key=\fR The secret key for end-to-end encryption.
+.SH
+.TP
+.B proxy
+.IP \[bu]
+\fB-d, --direct\fR Direct connection to the remote endpoint (peer-to-peer).
+.IP \[bu]
+\fB-r, --relay\fR Relay connection to the remote endpoint (peer-to-gateway-to-peer).
+.IP \[bu]
+\fB-n, --name=\fR The name of the agent (required).
+.IP \[bu]
+\fB-k, --key=\fR The secret key for end-to-end encryption.
+.SH
+.TP
+.B tun
+.IP \[bu]
+\fB-g, --gateway\fR Use as default gateway.
+.IP \[bu]
+\fB-d, --direct\fR Direct connection to the remote endpoint (peer-to-peer).
+.IP \[bu]
+\fB-r, --relay\fR Relay connection to the remote endpoint (peer-to-gateway-to-peer).
+.IP \[bu]
+\fB-n, --name=\fR The name of the agent (required).
+.IP \[bu]
+\fB-k, --key=\fR The secret key for end-to-end encryption.
+.IP \[bu]
+\fB-l, --local=\fR The local address to bind to.
+.IP \[bu]
+\fB-m, --map=\fR The target address to connect to.
+.SH SEE ALSO
+Additional documentation for
+.B Narrowlink
+is available at https://narrowlink.com/docs/intro
+.SH AUTHOR
+This manpage was written by the Narrowlink development team.
+
