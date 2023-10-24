@@ -1,16 +1,15 @@
-.\" Include .vars.roff
+.\" Manpage for Narrowlink Agent.
+.\" Contact support@narrowlink.com to correct errors or typos.
 .so .vars.roff
-.\" Manpage for Narrowlink Gateway.
-.\" Contact support@narrowlink.io to correct errors or typos.
-.TH NARROWLINK-GATEWAY 1 "23 October 2023" "\*(vN" "Narrowlink Gateway man page"
+.TH NARROWLINK-AGENT 1 "23 October 2023" "\*(vN" "Narrowlink Agent man page"
 .SH NAME
-narrowlink-gateway \- Narrowlink Gateway command line utility
+narrowlink-agent \- Narrowlink Agent command line utility
 .SH SYNOPSIS
-.B narrowlink-gateway
+.B narrowlink-agent
 [options]
 .SH DESCRIPTION
-.B Narrowlink Gateway
-is a command line utility for managing and configuring the Narrowlink Gateway.
+.B Narrowlink Agent
+is a command line utility for managing and configuring the Narrowlink Agent.
 .SH OPTIONS
 .TP
 .B -c, --config=
@@ -18,6 +17,9 @@ Specify a config file.
 .TP
 .B -h, --help
 Print help information.
+.TP
+.B -d, --daemon
+Run as a daemon (Unix/Linux only).
 .TP
 .B --version
 Print version information.
@@ -29,7 +31,7 @@ Current directory \fB./\fR
 .IP 3.
 Config directory + narrowlink:
 .RS
-.IP \[bu] 
+.IP \[bu]
 Linux: \fB/home/$USER/.config/narrowlink\fR
 .IP \[bu]
 macOS: \fB/Users/$USER/Library/Application Support/narrowlink\fR
@@ -39,7 +41,7 @@ Windows: \fBC:\\Users\\$USER\\AppData\\Roaming\\narrowlink\fR
 .IP 4.
 Home directory + .narrowlink:
 .RS
-.IP \[bu] 
+.IP \[bu]
 Linux and macOS: \fB/home/$USER/.narrowlink\fR
 .IP \[bu]
 Windows: \fBC:\\Users\\$USER\\.narrowlink\fR
@@ -48,8 +50,8 @@ Windows: \fBC:\\Users\\$USER\\.narrowlink\fR
 \fB/etc/narrowlink\fR
 .SH SEE ALSO
 Additional documentation for
-.B Narrowlink Gateway
-is available at https://narrowlink.com/docs/gateway
+.B Narrowlink Agent
+is available at https://narrowlink.com/docs/agent
 .SH AUTHOR
 This manpage was written by the Narrowlink development team.
 
