@@ -1,8 +1,8 @@
 .\" Define version number
-.ds vN 0.2.0-git-1697976735 
+.ds vN 0.2.0-git-1697976735
 .\" Manpage for Narrowlink Gateway.
 .\" Contact support@narrowlink.io to correct errors or typos.
-.TH NARROWLINK-GATEWAY 1 "13 October 2023" "\*(vN" "Narrowlink Gateway man page"
+.TH NARROWLINK-GATEWAY 1 "23 October 2023" "\*(vN" "Narrowlink Gateway man page"
 .SH NAME
 narrowlink-gateway \- Narrowlink Gateway command line utility
 .SH SYNOPSIS
@@ -21,10 +21,35 @@ Print help information.
 .TP
 .B --version
 Print version information.
+.SH "PRIORITY TO LOAD CONFIG FILE"
+.IP 1.
+Custom path using \fB-c\fR command
+.IP 2.
+Current directory \fB./\fR
+.IP 3.
+Config directory + narrowlink:
+.RS
+.IP \[bu] 
+Linux: \fB/home/$USER/.config/narrowlink\fR
+.IP \[bu]
+macOS: \fB/Users/$USER/Library/Application Support/narrowlink\fR
+.IP \[bu]
+Windows: \fBC:\\Users\\$USER\\AppData\\Roaming\\narrowlink\fR
+.RE
+.IP 4.
+Home directory + .narrowlink:
+.RS
+.IP \[bu] 
+Linux and macOS: \fB/home/$USER/.narrowlink\fR
+.IP \[bu]
+Windows: \fBC:\\Users\\$USER\\.narrowlink\fR
+.RE
+.IP 5.
+\fB/etc/narrowlink\fR
 .SH SEE ALSO
 Additional documentation for
 .B Narrowlink Gateway
-is available at https://narrowlink.com/docs/intro
+is available at https://narrowlink.com/docs/gateway
 .SH AUTHOR
 This manpage was written by the Narrowlink development team.
 
