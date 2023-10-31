@@ -6,6 +6,8 @@ use thiserror::Error;
 pub enum ClientError {
     #[error("Invalid Address")]
     InvalidAddress,
+    #[error("Invalid Map")]
+    InvalidMap,
     #[error("Invalid Port")]
     InvalidPort,
     #[error("Agent Not Found")]

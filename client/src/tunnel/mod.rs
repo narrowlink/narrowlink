@@ -16,7 +16,7 @@ use tracing::info;
 use udp_stream::UdpListener;
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     net::{IpAddr, SocketAddr},
     sync::Arc,
 };
@@ -30,11 +30,11 @@ use input_stream::InputStream;
 use tun::{RouteCommand, TunListener};
 
 pub enum TunnelInstruction {
-    Connect(bool, (String, u16)),             // udp, endpoint
-    Forward(bool, SocketAddr, (String, u16)), // udp, local, endpoint
-    Proxy(SocketAddr),                        // endpoint
+    Connect(bool, (String, u16)),                // udp, endpoint
+    Forward(bool, SocketAddr, (String, u16)),    // udp, local, endpoint
+    Proxy(SocketAddr, Option<(IpAddr, IpAddr)>), // endpoint
     #[cfg(any(target_os = "linux", target_os = "macos"))]
-    Tun(bool, IpAddr), // default_gateway, addr
+    Tun(bool, IpAddr, Option<(IpAddr, IpAddr)>), // default_gateway, addr
     None,
 }
 
@@ -43,25 +43,23 @@ pub struct TunnelFactory {
     listener: Option<TunnelListener>,
     wait: Option<Arc<Notify>>,
     hosts: HashSet<IpAddr>,
-    map: HashMap<IpAddr, IpAddr>,
 }
 
 pub enum TunnelListener {
     Connect(Once<Ready<InputStream>>, bool, (String, u16)),
     Forward(Either<TcpListener, UdpListener>, (String, u16)),
-    Proxy(TcpListener),
+    Proxy(TcpListener, Option<(IpAddr, IpAddr)>),
     #[cfg(any(target_os = "linux", target_os = "macos"))]
-    Tun(TunListener),
+    Tun(TunListener, Option<(IpAddr, IpAddr)>),
 }
 
 impl TunnelFactory {
-    pub fn new(instruction: TunnelInstruction, map: HashMap<IpAddr, IpAddr>) -> Self {
+    pub fn new(instruction: TunnelInstruction) -> Self {
         Self {
             instruction,
             listener: None,
             wait: Some(Arc::new(Notify::new())),
             hosts: HashSet::new(),
-            map,
         }
     }
     pub async fn start(&mut self) -> Result<(), ClientError> {
@@ -93,15 +91,15 @@ impl TunnelFactory {
                 };
                 self.listener = Some(TunnelListener::Forward(listener, endpoint.clone()));
             }
-            TunnelInstruction::Proxy(endpoint) => {
+            TunnelInstruction::Proxy(endpoint, map) => {
                 let listener = TcpListener::bind(endpoint).await?;
                 if let Ok(addr) = listener.local_addr() {
                     info!("Listen on: socks5://{}:{}", addr.ip(), addr.port());
                 }
-                self.listener = Some(TunnelListener::Proxy(listener));
+                self.listener = Some(TunnelListener::Proxy(listener, map.clone()));
             }
             #[cfg(any(target_os = "linux", target_os = "macos"))]
-            TunnelInstruction::Tun(default_gateway, addr) => {
+            TunnelInstruction::Tun(default_gateway, addr, map) => {
                 let tun = TunListener::new(*addr).await?;
                 if let Some(s) = tun.route_sender() {
                     for ip in self.hosts.iter() {
@@ -109,7 +107,7 @@ impl TunnelFactory {
                     }
                 }
                 tun.my_routes(*default_gateway);
-                self.listener = Some(TunnelListener::Tun(tun));
+                self.listener = Some(TunnelListener::Tun(tun, map.clone()));
             }
             TunnelInstruction::None => Err(ClientError::Unexpected(0))?,
         };
@@ -123,7 +121,7 @@ impl TunnelFactory {
         #[cfg(not(any(target_os = "linux", target_os = "macos")))]
         self.listener.take();
         #[cfg(any(target_os = "linux", target_os = "macos"))]
-        if let Some(TunnelListener::Tun(t)) = self.listener.take() {
+        if let Some(TunnelListener::Tun(t, _)) = self.listener.take() {
             t.my_routes(false);
         };
     }
@@ -154,7 +152,7 @@ impl TunnelFactory {
                     },
                 ))
             }
-            Some(TunnelListener::Proxy(l)) => {
+            Some(TunnelListener::Proxy(l, map)) => {
                 let interrupted_stream = match ProxyStream::new(proxy_stream::ProxyType::SOCKS5)
                     .accept(l.accept().await?.0)
                     .await
@@ -169,10 +167,9 @@ impl TunnelFactory {
                     } else {
                         generic::Protocol::TCP
                     };
-                for (k, v) in self.map.iter() {
-                    if k.to_string() == addr.0 {
-                        addr.0 = v.to_string();
-                        break;
+                if let Some(m) = map {
+                    if addr.0 == m.0.to_string() {
+                        addr.0 = m.1.to_string();
                     }
                 }
                 Ok((
@@ -216,17 +213,16 @@ impl TunnelFactory {
                 ))
             }
             #[cfg(any(target_os = "linux", target_os = "macos"))]
-            Some(TunnelListener::Tun(tun_listener)) => {
+            Some(TunnelListener::Tun(tun_listener, map)) => {
                 let stream = tun_listener.accept().await.unwrap();
                 let mut peer_addr = stream.peer_addr();
                 let (stream, udp): (Box<dyn AsyncSocket>, bool) = match stream {
                     IpStackStream::Tcp(tcp) => (Box::new(tcp), false),
                     IpStackStream::Udp(udp) => (Box::new(udp), true),
                 };
-                for (k, v) in self.map.iter() {
-                    if k == &peer_addr.ip() {
-                        peer_addr.set_ip(*v);
-                        break;
+                if let Some(m) = map {
+                    if peer_addr.ip() == m.0 {
+                        peer_addr.set_ip(m.1);
                     }
                 }
                 Ok((
@@ -250,7 +246,7 @@ impl TunnelFactory {
     pub fn add_host(&mut self, ip: IpAddr) {
         self.hosts.insert(ip);
         #[cfg(any(target_os = "linux", target_os = "macos"))]
-        if let Some(TunnelListener::Tun(tun)) = self.listener.as_ref() {
+        if let Some(TunnelListener::Tun(tun, _)) = self.listener.as_ref() {
             if let Some(s) = tun.route_sender() {
                 let _ = s.send(RouteCommand::Add(ip));
             };
@@ -260,7 +256,7 @@ impl TunnelFactory {
     pub fn del_host(&mut self, ip: IpAddr) {
         self.hosts.remove(&ip);
         #[cfg(any(target_os = "linux", target_os = "macos"))]
-        if let Some(TunnelListener::Tun(tun)) = self.listener.as_ref() {
+        if let Some(TunnelListener::Tun(tun, _)) = self.listener.as_ref() {
             if let Some(s) = tun.route_sender() {
                 let _ = s.send(RouteCommand::Del(ip));
             };

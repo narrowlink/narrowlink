@@ -9,7 +9,7 @@ Description:
 
 Examples:
   narrowlink tun -n <agent name>
-  narrowlink t -gdn <agent name> -k <key>
+  narrowlink t -gdn <agent name> -k <key> -m <ip>=<ip>
 
 Options:
   -g, --gateway     Use as default gateway
@@ -18,4 +18,4 @@ Options:
   -n, --name=       The name of the agent (required)
   -k, --key=        The secret key for end-to-end encryption
   -l, --local=      The local address to bind to
-
+  -m, --map=        Map an IP address

@@ -57,11 +57,12 @@ pub struct ForwardArgs {
 
 #[derive(Debug, Clone)]
 pub struct ProxyArgs {
-    pub direct: bool,                 //d direct
-    pub relay: bool,                  //r relay
-    pub agent_name: String,           //i name
-    pub cryptography: Option<String>, //k key
-    pub local_addr: SocketAddr,       //<Local>
+    pub direct: bool,                       //d direct
+    pub relay: bool,                        //r relay
+    pub agent_name: String,                 //i name
+    pub cryptography: Option<String>,       //k key
+    pub local_addr: SocketAddr,             //<Local>
+    pub map_addr: Option<(IpAddr, IpAddr)>, //m map
 }
 
 #[derive(Debug, Clone)]
@@ -77,12 +78,13 @@ pub struct ConnectArgs {
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 #[derive(Debug, Clone)]
 pub struct TunArgs {
-    pub gateway: bool,                //g gateway
-    pub direct: bool,                 //d direct
-    pub relay: bool,                  //r relay
-    pub agent_name: String,           //i name
-    pub cryptography: Option<String>, //k key
-    pub local_addr: IpAddr,           //l local
+    pub gateway: bool,                      //g gateway
+    pub direct: bool,                       //d direct
+    pub relay: bool,                        //r relay
+    pub agent_name: String,                 //i name
+    pub cryptography: Option<String>,       //k key
+    pub local_addr: IpAddr,                 //l local
+    pub map_addr: Option<(IpAddr, IpAddr)>, //m map
 }
 
 #[derive(Debug)]
@@ -247,6 +249,7 @@ impl Args {
                         gateway: false,
                         relay: false,
                         local_addr: IpAddr::V4(Ipv4Addr::new(10, 10, 10, 10)),
+                        map_addr: None,
                     };
                     while let Some(arg) = raw.next(&mut cursor) {
                         if let Some((long, value)) = arg.to_long() {
@@ -283,6 +286,24 @@ impl Args {
                                         .ok_or(ClientError::Encoding)?
                                         .parse::<IpAddr>()
                                         .map_err(|_| ClientError::InvalidAddress)?;
+                                }
+                                Ok("map") => {
+                                    let map = value
+                                        .ok_or(ClientError::RequiredValue("map"))?
+                                        .to_str()
+                                        .and_then(|v| {
+                                            v.split_once("=").and_then(|(l, r)| {
+                                                l.parse::<IpAddr>()
+                                                    .and_then(|l| {
+                                                        r.parse::<IpAddr>().map(|r| (l, r))
+                                                    })
+                                                    .ok()
+                                            })
+                                        });
+                                    if map.is_none() {
+                                        return Err(ClientError::InvalidMap);
+                                    }
+                                    sub.map_addr = map;
                                 }
                                 Ok("help") => {
                                     print!("{}", TUN_HELP);
@@ -358,6 +379,36 @@ impl Args {
                                             .ok_or(ClientError::RequiredValue("local"))?
                                             .parse::<IpAddr>()
                                             .map_err(|_| ClientError::InvalidAddress)?;
+                                    }
+                                    Ok('m') => {
+                                        let next_value = if let Some(v) = shorts.next_value_os() {
+                                            v.to_str()
+                                        } else if let Some(v) = raw.next_os(&mut cursor) {
+                                            v.to_str().and_then(|v| {
+                                                if v.is_empty() || v.find('-') == Some(0) {
+                                                    None
+                                                } else {
+                                                    Some(v)
+                                                }
+                                            })
+                                        } else {
+                                            None
+                                        };
+
+                                        let map = next_value
+                                            .ok_or(ClientError::RequiredValue("map"))?
+                                            .split_once("=")
+                                            .and_then(|(l, r)| {
+                                                l.parse::<IpAddr>()
+                                                    .and_then(|l| {
+                                                        r.parse::<IpAddr>().map(|r| (l, r))
+                                                    })
+                                                    .ok()
+                                            });
+                                        if map.is_none() {
+                                            return Err(ClientError::InvalidMap);
+                                        }
+                                        sub.map_addr = map;
                                     }
                                     Ok('h') => {
                                         print!("{}", TUN_HELP);
@@ -675,6 +726,7 @@ impl Args {
                         relay: false,
                         direct: false,
                         local_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 1080),
+                        map_addr: None,
                     };
                     while let Some(arg) = raw.next(&mut cursor) {
                         if let Some((long, value)) = arg.to_long() {
@@ -702,6 +754,24 @@ impl Args {
                                             .ok_or(ClientError::Encoding)?
                                             .to_string(),
                                     );
+                                }
+                                Ok("map") => {
+                                    let map = value
+                                        .ok_or(ClientError::RequiredValue("map"))?
+                                        .to_str()
+                                        .and_then(|v| {
+                                            v.split_once("=").and_then(|(l, r)| {
+                                                l.parse::<IpAddr>()
+                                                    .and_then(|l| {
+                                                        r.parse::<IpAddr>().map(|r| (l, r))
+                                                    })
+                                                    .ok()
+                                            })
+                                        });
+                                    if map.is_none() {
+                                        return Err(ClientError::InvalidMap);
+                                    }
+                                    sub.map_addr = map;
                                 }
                                 Ok("help") => {
                                     print!("{}", PROXY_HELP);
@@ -755,6 +825,36 @@ impl Args {
                                                 .ok_or(ClientError::RequiredValue("key"))?
                                                 .to_string(),
                                         );
+                                    }
+                                    Ok('m') => {
+                                        let next_value = if let Some(v) = shorts.next_value_os() {
+                                            v.to_str()
+                                        } else if let Some(v) = raw.next_os(&mut cursor) {
+                                            v.to_str().and_then(|v| {
+                                                if v.is_empty() || v.find('-') == Some(0) {
+                                                    None
+                                                } else {
+                                                    Some(v)
+                                                }
+                                            })
+                                        } else {
+                                            None
+                                        };
+
+                                        let map = next_value
+                                            .ok_or(ClientError::RequiredValue("map"))?
+                                            .split_once("=")
+                                            .and_then(|(l, r)| {
+                                                l.parse::<IpAddr>()
+                                                    .and_then(|l| {
+                                                        r.parse::<IpAddr>().map(|r| (l, r))
+                                                    })
+                                                    .ok()
+                                            });
+                                        if map.is_none() {
+                                            return Err(ClientError::InvalidMap);
+                                        }
+                                        sub.map_addr = map;
                                     }
                                     Ok('h') => {
                                         print!("{}", PROXY_HELP);

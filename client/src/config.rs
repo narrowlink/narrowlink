@@ -1,6 +1,6 @@
 use narrowlink_types::ServiceType;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, env, fs::File, io::Read, net::IpAddr, path::PathBuf};
+use std::{env, fs::File, io::Read, path::PathBuf};
 use tracing::warn;
 
 use crate::error::ClientError;
@@ -24,7 +24,6 @@ pub enum Endpoint {
 #[derive(Deserialize, Serialize)]
 pub struct Config {
     pub endpoints: Vec<Endpoint>,
-    pub map: HashMap<IpAddr, IpAddr>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -107,7 +106,6 @@ impl Config {
                         acl: Vec::new(),
                         protocol: old_config.service_type,
                     })],
-                    map: HashMap::new(),
                 })
             })
     }

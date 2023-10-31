@@ -82,10 +82,9 @@ pub fn main() -> Result<(), ClientError> {
 async fn start(mut args: Args) -> Result<(), ClientError> {
     let conf = config::Config::load(args.take_conf_path())?;
     let instruction = Instruction::from(&args.arg_commands);
-    let map = conf.map.clone();
     let mut control = ControlFactory::new(conf, instruction.is_direct_only())?;
     let mut transport = TransportFactory::new(instruction.transport);
-    let mut tunnel = TunnelFactory::new(instruction.tunnel, map);
+    let mut tunnel = TunnelFactory::new(instruction.tunnel);
 
     loop {
         tokio::select! {

@@ -6,6 +6,3 @@ endpoints:
     #   - eyJ0eX....kNHYQ_4 # acl token
     #   - eyJ0eX....kNHYQ_4 # acl token
     protocol: Wss # Wss or Ws (default: Wss)
-map: # map the left IP to the right IP in the tunnel, effective only on tun or proxy modes (optional)
-  8.8.8.8: 1.1.1.1 # redirect 8.8.8.8 to 1.1.1.1 when a request is made from the tunnel
-  4.2.2.4: 1.1.1.1 # redirect 4.2.2.4 to 1.1.1.1 when a request is made from the tunnel
