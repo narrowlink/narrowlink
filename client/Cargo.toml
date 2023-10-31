@@ -69,8 +69,8 @@ narrowlink-network = { version = "0.2.0-git" }
 
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
 tun = { version = "0.6", features = ["async"] }
-# ipstack = {path = "../../ipstack"}
-ipstack = {git = "https://github.com/narrowlink/ipstack"}
+ipstack = {path = "../../ipstack"}
+# ipstack = {git = "https://github.com/narrowlink/ipstack"}
 net-route = { git = "https://github.com/SajjadPourali/net-route", branch = "patch-1" }
 
 [features]

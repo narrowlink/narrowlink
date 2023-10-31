@@ -16,7 +16,7 @@ use tracing::info;
 use udp_stream::UdpListener;
 
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     net::{IpAddr, SocketAddr},
     sync::Arc,
 };
@@ -34,7 +34,7 @@ pub enum TunnelInstruction {
     Forward(bool, SocketAddr, (String, u16)), // udp, local, endpoint
     Proxy(SocketAddr),                        // endpoint
     #[cfg(any(target_os = "linux", target_os = "macos"))]
-    Tun(bool, IpAddr, Option<IpAddr>), // default_gateway, addr, map
+    Tun(bool, IpAddr), // default_gateway, addr
     None,
 }
 
@@ -43,6 +43,7 @@ pub struct TunnelFactory {
     listener: Option<TunnelListener>,
     wait: Option<Arc<Notify>>,
     hosts: HashSet<IpAddr>,
+    map: HashMap<IpAddr, IpAddr>,
 }
 
 pub enum TunnelListener {
@@ -54,12 +55,13 @@ pub enum TunnelListener {
 }
 
 impl TunnelFactory {
-    pub fn new(instruction: TunnelInstruction) -> Self {
+    pub fn new(instruction: TunnelInstruction, map: HashMap<IpAddr, IpAddr>) -> Self {
         Self {
             instruction,
             listener: None,
             wait: Some(Arc::new(Notify::new())),
             hosts: HashSet::new(),
+            map,
         }
     }
     pub async fn start(&mut self) -> Result<(), ClientError> {
@@ -99,8 +101,8 @@ impl TunnelFactory {
                 self.listener = Some(TunnelListener::Proxy(listener));
             }
             #[cfg(any(target_os = "linux", target_os = "macos"))]
-            TunnelInstruction::Tun(default_gateway, addr, map) => {
-                let tun = TunListener::new(*addr, *map).await?;
+            TunnelInstruction::Tun(default_gateway, addr) => {
+                let tun = TunListener::new(*addr).await?;
                 if let Some(s) = tun.route_sender() {
                     for ip in self.hosts.iter() {
                         s.send(RouteCommand::Add(*ip)).unwrap();
@@ -160,13 +162,19 @@ impl TunnelFactory {
                     Ok(s) => s,
                     Err(_e) => return Err(ClientError::InvalidSocksRequest),
                 };
-                let addr: (String, u16) = interrupted_stream.addr().into();
+                let mut addr: (String, u16) = interrupted_stream.addr().into();
                 let protocol =
                     if interrupted_stream.command() == proxy_stream::Command::UdpAssociate {
                         generic::Protocol::UDP
                     } else {
                         generic::Protocol::TCP
                     };
+                for (k, v) in self.map.iter() {
+                    if k.to_string() == addr.0 {
+                        addr.0 = v.to_string();
+                        break;
+                    }
+                }
                 Ok((
                     Box::new(
                         interrupted_stream
@@ -195,6 +203,7 @@ impl TunnelFactory {
                     }
                 };
                 let addr: (String, u16) = end_point.clone();
+
                 Ok((
                     Box::new(socket),
                     generic::Connect {
@@ -209,12 +218,17 @@ impl TunnelFactory {
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             Some(TunnelListener::Tun(tun_listener)) => {
                 let stream = tun_listener.accept().await.unwrap();
-                let peer_addr = stream.peer_addr();
+                let mut peer_addr = stream.peer_addr();
                 let (stream, udp): (Box<dyn AsyncSocket>, bool) = match stream {
                     IpStackStream::Tcp(tcp) => (Box::new(tcp), false),
                     IpStackStream::Udp(udp) => (Box::new(udp), true),
                 };
-
+                for (k, v) in self.map.iter() {
+                    if k == &peer_addr.ip() {
+                        peer_addr.set_ip(*v);
+                        break;
+                    }
+                }
                 Ok((
                     stream,
                     generic::Connect {

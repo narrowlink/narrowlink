@@ -23,7 +23,6 @@ pub struct TunListener {
     ipstack: ipstack::IpStack,
     route: Option<TunRoute>,
     local_addr: IpAddr,
-    map_addr: Option<IpAddr>,
 }
 
 pub enum RouteCommand {
@@ -136,7 +135,7 @@ impl TunRoute {
 }
 
 impl TunListener {
-    pub async fn new(local_addr: IpAddr, map_addr: Option<IpAddr>) -> Result<Self, ClientError> {
+    pub async fn new(local_addr: IpAddr) -> Result<Self, ClientError> {
         let mut config = tun::Configuration::default();
 
         let ipv4 = match local_addr {
@@ -164,7 +163,6 @@ impl TunListener {
             ipstack: ip_stack,
             route,
             local_addr,
-            map_addr,
         })
     }
     pub async fn accept(&mut self) -> Result<IpStackStream, ClientError> {

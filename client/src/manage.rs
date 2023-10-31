@@ -481,7 +481,7 @@ impl From<&ArgCommands> for Instruction {
             },
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             ArgCommands::Tun(a) => Self {
-                tunnel: TunnelInstruction::Tun(a.gateway, a.local_addr, a.map_addr),
+                tunnel: TunnelInstruction::Tun(a.gateway, a.local_addr),
                 transport: TransportInstruction::determine(
                     a.direct,
                     a.relay,
