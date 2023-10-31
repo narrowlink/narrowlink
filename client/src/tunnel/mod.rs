@@ -32,7 +32,7 @@ use tun::{RouteCommand, TunListener};
 pub enum TunnelInstruction {
     Connect(bool, (String, u16)),                // udp, endpoint
     Forward(bool, SocketAddr, (String, u16)),    // udp, local, endpoint
-    Proxy(SocketAddr, Option<(IpAddr, IpAddr)>), // endpoint
+    Proxy(SocketAddr, Option<(String, String)>), // endpoint
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     Tun(bool, IpAddr, Option<(IpAddr, IpAddr)>), // default_gateway, addr
     None,
@@ -48,7 +48,7 @@ pub struct TunnelFactory {
 pub enum TunnelListener {
     Connect(Once<Ready<InputStream>>, bool, (String, u16)),
     Forward(Either<TcpListener, UdpListener>, (String, u16)),
-    Proxy(TcpListener, Option<(IpAddr, IpAddr)>),
+    Proxy(TcpListener, Option<(String, String)>),
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     Tun(TunListener, Option<(IpAddr, IpAddr)>),
 }
@@ -168,7 +168,7 @@ impl TunnelFactory {
                         generic::Protocol::TCP
                     };
                 if let Some(m) = map {
-                    if addr.0 == m.0.to_string() {
+                    if addr.0 == m.0 {
                         addr.0 = m.1.to_string();
                     }
                 }

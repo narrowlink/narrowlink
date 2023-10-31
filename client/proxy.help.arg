@@ -9,7 +9,7 @@ Description:
   The default listen address is 127.0.0.1:1080
 
 Examples:
-  narrowlink proxy -n <agent name> -m <ip>=<ip> <local_addr:local_port>
+  narrowlink proxy -n <agent name> -m <addr>=<addr> <local_addr:local_port>
   narrowlink p -n <agent name>
 
 Options:
@@ -17,4 +17,4 @@ Options:
   -r, --relay       Relay connection to the remote endpoint (peer-to-gateway-to-peer)
   -n, --name=       The name of the agent (required)
   -k, --key=        The secret key for end-to-end encryption
-  -m, --map=        Map an IP address
+  -m, --map=        Map an address

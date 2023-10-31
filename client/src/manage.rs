@@ -450,7 +450,7 @@ impl From<&ArgCommands> for Instruction {
                 manage: ManageInstruction::AgentList(*verbose),
             },
             ArgCommands::Proxy(a) => Self {
-                tunnel: TunnelInstruction::Proxy(a.local_addr, a.map_addr),
+                tunnel: TunnelInstruction::Proxy(a.local_addr, a.map_addr.to_owned()),
                 transport: TransportInstruction::determine(
                     a.direct,
                     a.relay,

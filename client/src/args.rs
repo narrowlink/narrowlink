@@ -62,7 +62,7 @@ pub struct ProxyArgs {
     pub agent_name: String,                 //i name
     pub cryptography: Option<String>,       //k key
     pub local_addr: SocketAddr,             //<Local>
-    pub map_addr: Option<(IpAddr, IpAddr)>, //m map
+    pub map_addr: Option<(String, String)>, //m map
 }
 
 #[derive(Debug, Clone)]
@@ -760,13 +760,8 @@ impl Args {
                                         .ok_or(ClientError::RequiredValue("map"))?
                                         .to_str()
                                         .and_then(|v| {
-                                            v.split_once("=").and_then(|(l, r)| {
-                                                l.parse::<IpAddr>()
-                                                    .and_then(|l| {
-                                                        r.parse::<IpAddr>().map(|r| (l, r))
-                                                    })
-                                                    .ok()
-                                            })
+                                            v.split_once("=")
+                                                .map(|(l, r)| (l.to_owned(), r.to_owned()))
                                         });
                                     if map.is_none() {
                                         return Err(ClientError::InvalidMap);
@@ -844,13 +839,7 @@ impl Args {
                                         let map = next_value
                                             .ok_or(ClientError::RequiredValue("map"))?
                                             .split_once("=")
-                                            .and_then(|(l, r)| {
-                                                l.parse::<IpAddr>()
-                                                    .and_then(|l| {
-                                                        r.parse::<IpAddr>().map(|r| (l, r))
-                                                    })
-                                                    .ok()
-                                            });
+                                            .map(|(l, r)| (l.to_owned(), r.to_owned()));
                                         if map.is_none() {
                                             return Err(ClientError::InvalidMap);
                                         }
