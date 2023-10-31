@@ -70,4 +70,6 @@ pub enum ClientError {
     AccessDenied,
     #[error("Control Channel Not Connected")]
     ControlChannelNotConnected,
+    #[error("IpStack Error: {0}")]
+    IpStackError(#[from] ipstack::IpStackError),
 }

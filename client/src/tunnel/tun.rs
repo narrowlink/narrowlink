@@ -168,7 +168,7 @@ impl TunListener {
         })
     }
     pub async fn accept(&mut self) -> Result<IpStackStream, ClientError> {
-        Ok(self.ipstack.accept().await)
+        Ok(self.ipstack.accept().await?)
     }
     pub fn route_sender(&self) -> Option<UnboundedSender<RouteCommand>> {
         self.route.as_ref().map(|f| f.get_sender())
