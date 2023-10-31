@@ -6,6 +6,6 @@ endpoints:
       - eyJ0eX....kNHYQ_4 # token for publishing webserver (optional)
     #protocol: Wss # Wss or Ws (default: Wss)
 e2ee:
-  - !PassPhrase # Enabling end to end encryption, effective only on tun or proxy modes (optional)
+  - !PassPhrase # Enabling end to end encryption (optional)
     phrase: "your_key" # key for end to end encryption
     policy: Lax # Lax or Strict (default: Lax) Lax allows clients to connect without a key, while Strict requires a key
