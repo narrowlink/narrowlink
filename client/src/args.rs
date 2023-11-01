@@ -10,7 +10,6 @@ static LIST_HELP: &str = include_str!("../list.help.arg");
 static FORWARD_HELP: &str = include_str!("../forward.help.arg");
 static PROXY_HELP: &str = include_str!("../proxy.help.arg");
 static CONNECT_HELP: &str = include_str!("../connect.help.arg");
-#[cfg(any(target_os = "linux", target_os = "macos"))]
 static TUN_HELP: &str = include_str!("../tun.help.arg");
 
 pub fn extract_addr(addr: &str, local: bool) -> Result<(String, u16), ClientError> {
@@ -75,7 +74,6 @@ pub struct ConnectArgs {
     pub remote_addr: (String, u16),   //<Local>
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[derive(Debug, Clone)]
 pub struct TunArgs {
     pub gateway: bool,                      //g gateway
@@ -92,7 +90,6 @@ enum SubCommands {
     Forward,
     List,
     Connect,
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
     Tun,
     Proxy,
 }
@@ -104,7 +101,6 @@ impl SubCommands {
             ("list", 0),
             ("proxy", 0),
             ("connect", 0),
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
             ("tun", 0),
         ]);
         for (i, c) in arg.chars().enumerate() {
@@ -133,7 +129,6 @@ impl SubCommands {
             "list" => Ok(Self::List),
             "connect" => Ok(Self::Connect),
             "proxy" => Ok(Self::Proxy),
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
             "tun" => Ok(Self::Tun),
             _ => Err(ClientError::CommandNotFound),
         }
@@ -240,7 +235,7 @@ impl Args {
                     }
                     Ok(ArgCommands::List(sub))
                 }
-                #[cfg(any(target_os = "linux", target_os = "macos"))]
+            
                 SubCommands::Tun => {
                     let mut sub = TunArgs {
                         agent_name: String::new(),
@@ -891,6 +886,5 @@ pub enum ArgCommands {
     List(ListArgs),
     Proxy(ProxyArgs),
     Connect(ConnectArgs),
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
     Tun(TunArgs),
 }

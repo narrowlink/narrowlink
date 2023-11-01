@@ -1,13 +1,17 @@
 use std::{
     io,
     net::{IpAddr, Ipv4Addr},
+    pin::Pin,
 };
 
-use futures_util::{FutureExt, StreamExt};
+use futures_util::{Future, FutureExt, StreamExt};
 use ipstack::stream::IpStackStream;
 use net_route::{Handle, Route};
 // use netstack_lwip::NetStack;
-use tokio::sync::mpsc::{self, UnboundedSender};
+use tokio::{
+    signal,
+    sync::mpsc::{self, UnboundedSender},
+};
 use tracing::warn;
 
 use crate::error::ClientError;
@@ -36,6 +40,9 @@ pub struct TunRoute {
     my_routes_sender: UnboundedSender<bool>,
 }
 
+trait SignalTrait: Future<Output = Option<()>> + Send {}
+impl<T> SignalTrait for T where T: Future<Output = Option<()>> + Send {}
+
 impl TunRoute {
     pub async fn new(local_addr: Ipv4Addr) -> Result<Self, io::Error> {
         let handle: Handle = Handle::new()?;
@@ -45,16 +52,36 @@ impl TunRoute {
                 "No default gateway found",
             ));
         };
+        dbg!(&default_gw);
         let (my_routes_sender, mut my_routes_receiver) = mpsc::unbounded_channel::<bool>();
         let (route_tx, mut route_rx) = mpsc::unbounded_channel::<RouteCommand>();
-        let mut signals = Vec::new();
+        let mut signals: Vec<Pin<Box<dyn SignalTrait>>> = Vec::new();
 
+        #[cfg(target_family = "windows")]
+        {
+            signals.push(Box::pin(async move {
+                if let Ok(mut s) = signal::windows::ctrl_c() {
+                    s.recv().await
+                } else {
+                    None
+                }
+            }));
+            signals.push(Box::pin(async move {
+                if let Ok(mut s) = signal::windows::ctrl_close() {
+                    s.recv().await
+                } else {
+                    None
+                }
+            }));
+        }
+
+        #[cfg(target_family = "unix")]
         for signal_number in [1, 2, 3, 6, 15, 20] {
             signals.push(Box::pin(async move {
-                if let Ok(mut signal) = tokio::signal::unix::signal(
+                if let Ok(mut s) = tokio::signal::unix::signal(
                     tokio::signal::unix::SignalKind::from_raw(signal_number),
                 ) {
-                    signal.recv().await
+                    s.recv().await
                 } else {
                     None
                 }
@@ -136,6 +163,7 @@ impl TunRoute {
 
 impl TunListener {
     pub async fn new(local_addr: IpAddr) -> Result<Self, ClientError> {
+        #[cfg(not(target_family = "windows"))]
         let mut config = tun::Configuration::default();
 
         let ipv4 = match local_addr {
@@ -144,13 +172,22 @@ impl TunListener {
                 todo!()
             }
         };
+        #[cfg(not(target_family = "windows"))]
         config
             .address(ipv4)
-            .destination(ipv4)
-            // .netmask((255, 255, 255, 255))
+            // .destination(ipv4)
+            .netmask((255, 255, 255, 255))
             .mtu(MTU as i32)
             .up();
+        #[cfg(target_os = "linux")]
+        config.platform(|config| {
+            config.packet_information(true);
+        });
+        #[cfg(not(target_family = "windows"))]
         let device = tun::create_as_async(&config).map_err(ClientError::UnableToCreateTun)?;
+        #[cfg(target_family = "windows")]
+        let device = wintun::WinTunDevice::new(ipv4, Ipv4Addr::new(255, 255, 255, 0));
+
         let route = TunRoute::new(ipv4)
             .await
             .map_err(|e| {
@@ -158,7 +195,7 @@ impl TunListener {
                 e
             })
             .ok();
-        let ip_stack = ipstack::IpStack::new(device, MTU as u16, true);
+        let ip_stack = ipstack::IpStack::new(device, MTU as u16, cfg!(target_family = "unix"));
         Ok(Self {
             ipstack: ip_stack,
             route,
@@ -174,6 +211,87 @@ impl TunListener {
     pub fn my_routes(&self, my_routes: bool) {
         if let Some(route) = self.route.as_ref() {
             route.my_routes(my_routes);
+        }
+    }
+}
+
+#[cfg(target_family = "windows")]
+mod wintun {
+    use std::{net::Ipv4Addr, sync::Arc, task::ready, thread};
+
+    use tokio::io::{AsyncRead, AsyncWrite};
+
+    pub struct WinTunDevice {
+        session: Arc<wintun::Session>,
+        receiver: tokio::sync::mpsc::UnboundedReceiver<Vec<u8>>,
+        _task: thread::JoinHandle<()>,
+    }
+
+    impl WinTunDevice {
+        pub fn new(ip: Ipv4Addr, netmask: Ipv4Addr) -> WinTunDevice {
+            let wintun = unsafe { wintun::load() }.unwrap();
+            let adapter = wintun::Adapter::create(&wintun, "Narrowlink", "Tunnel", None).unwrap();
+            adapter.set_address(ip).unwrap();
+            adapter.set_netmask(netmask).unwrap();
+            let session = Arc::new(adapter.start_session(wintun::MAX_RING_CAPACITY).unwrap());
+            let (receiver_tx, receiver_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
+            let session_reader = session.clone();
+            let task = thread::spawn(move || {
+                loop {
+                    let packet = session_reader.receive_blocking().unwrap();
+                    let bytes = packet.bytes().to_vec();
+                    // dbg!(&bytes);
+                    receiver_tx.send(bytes).unwrap();
+                }
+            });
+            WinTunDevice {
+                session,
+                receiver: receiver_rx,
+                _task: task,
+            }
+        }
+    }
+
+    impl AsyncRead for WinTunDevice {
+        fn poll_read(
+            mut self: std::pin::Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+            buf: &mut tokio::io::ReadBuf<'_>,
+        ) -> std::task::Poll<std::io::Result<()>> {
+            match ready!(self.receiver.poll_recv(cx)) {
+                Some(bytes) => {
+                    buf.put_slice(&bytes);
+                    std::task::Poll::Ready(Ok(()))
+                }
+                None => std::task::Poll::Ready(Ok(())),
+            }
+        }
+    }
+
+    impl AsyncWrite for WinTunDevice {
+        fn poll_write(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+            buf: &[u8],
+        ) -> std::task::Poll<Result<usize, std::io::Error>> {
+            let mut write_pack = self.session.allocate_send_packet(buf.len() as u16)?;
+            write_pack.bytes_mut().copy_from_slice(buf.as_ref());
+            self.session.send_packet(write_pack);
+            std::task::Poll::Ready(Ok(buf.len()))
+        }
+
+        fn poll_flush(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Result<(), std::io::Error>> {
+            std::task::Poll::Ready(Ok(()))
+        }
+
+        fn poll_shutdown(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Result<(), std::io::Error>> {
+            std::task::Poll::Ready(Ok(()))
         }
     }
 }
