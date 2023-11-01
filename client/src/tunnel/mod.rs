@@ -101,8 +101,8 @@ impl TunnelFactory {
                         s.send(RouteCommand::Add(*ip)).unwrap();
                     }
                 }
-                tun.my_routes(*default_gateway);
-                self.listener = Some(TunnelListener::Tun(tun, map.clone()));
+                tun.my_routes(*default_gateway).await;
+                self.listener = Some(TunnelListener::Tun(tun, *map));
             }
             TunnelInstruction::None => Err(ClientError::Unexpected(0))?,
         };
@@ -111,11 +111,10 @@ impl TunnelFactory {
         }
         Ok(())
     }
-    pub fn stop(&mut self) {
+    pub async fn stop(&mut self) {
         self.wait = Some(Arc::new(Notify::new()));
-        self.listener.take();
         if let Some(TunnelListener::Tun(t, _)) = self.listener.take() {
-            t.my_routes(false);
+            t.my_routes(false).await;
         };
     }
     pub async fn accept(

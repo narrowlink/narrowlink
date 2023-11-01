@@ -2,6 +2,7 @@ use std::{
     io,
     net::{IpAddr, Ipv4Addr},
     pin::Pin,
+    sync::Arc,
 };
 
 use futures_util::{Future, FutureExt, StreamExt};
@@ -10,7 +11,10 @@ use net_route::{Handle, Route};
 // use netstack_lwip::NetStack;
 use tokio::{
     signal,
-    sync::mpsc::{self, UnboundedSender},
+    sync::{
+        mpsc::{self, UnboundedSender},
+        Notify,
+    },
 };
 use tracing::warn;
 
@@ -37,7 +41,7 @@ pub enum RouteCommand {
 pub struct TunRoute {
     _task: tokio::task::JoinHandle<Result<(), io::Error>>,
     route_sender: UnboundedSender<RouteCommand>,
-    my_routes_sender: UnboundedSender<bool>,
+    my_routes_sender: UnboundedSender<(bool, Arc<Notify>)>,
 }
 
 trait SignalTrait: Future<Output = Option<()>> + Send {}
@@ -52,8 +56,8 @@ impl TunRoute {
                 "No default gateway found",
             ));
         };
-        dbg!(&default_gw);
-        let (my_routes_sender, mut my_routes_receiver) = mpsc::unbounded_channel::<bool>();
+        let (my_routes_sender, mut my_routes_receiver) =
+            mpsc::unbounded_channel::<(bool, Arc<Notify>)>();
         let (route_tx, mut route_rx) = mpsc::unbounded_channel::<RouteCommand>();
         let mut signals: Vec<Pin<Box<dyn SignalTrait>>> = Vec::new();
 
@@ -78,9 +82,9 @@ impl TunRoute {
         #[cfg(target_family = "unix")]
         for signal_number in [1, 2, 3, 6, 15, 20] {
             signals.push(Box::pin(async move {
-                if let Ok(mut s) = tokio::signal::unix::signal(
-                    tokio::signal::unix::SignalKind::from_raw(signal_number),
-                ) {
+                if let Ok(mut s) =
+                    signal::unix::signal(signal::unix::SignalKind::from_raw(signal_number))
+                {
                     s.recv().await
                 } else {
                     None
@@ -104,7 +108,7 @@ impl TunRoute {
                         }
                         std::process::exit(0x0)
                     },
-                    Some(route_action) = my_routes_receiver.recv() => {
+                    Some((route_action, notify)) = my_routes_receiver.recv() => {
                         if route_action && !my_routes{
                             if !init {
                                 routes.push(Route::new(default_gw.destination, 0).with_gateway(IpAddr::V4(local_addr)));
@@ -122,6 +126,7 @@ impl TunRoute {
                             handle.add(&default_gw).await.unwrap();
                             my_routes = false;
                         }
+                        notify.notify_waiters();
                     },
                     Some(cmd) = route_rx.recv() =>{
                         match cmd {
@@ -134,6 +139,7 @@ impl TunRoute {
 
                             },
                             RouteCommand::Del(ip) => {
+
                                 if let Some(index) = routes.iter().position(|x| x.destination == ip){
                                     if my_routes {
                                         handle.delete(&routes[index]).await.unwrap();
@@ -156,8 +162,10 @@ impl TunRoute {
     pub fn get_sender(&self) -> UnboundedSender<RouteCommand> {
         self.route_sender.clone()
     }
-    pub fn my_routes(&self, my_routes: bool) {
-        let _ = self.my_routes_sender.send(my_routes);
+    pub async fn my_routes(&self, my_routes: bool) {
+        let notify = Arc::new(Notify::new());
+        let _ = self.my_routes_sender.send((my_routes, notify.clone()));
+        notify.notified().await;
     }
 }
 
@@ -208,9 +216,9 @@ impl TunListener {
     pub fn route_sender(&self) -> Option<UnboundedSender<RouteCommand>> {
         self.route.as_ref().map(|f| f.get_sender())
     }
-    pub fn my_routes(&self, my_routes: bool) {
+    pub async fn my_routes(&self, my_routes: bool) {
         if let Some(route) = self.route.as_ref() {
-            route.my_routes(my_routes);
+            route.my_routes(my_routes).await;
         }
     }
 }

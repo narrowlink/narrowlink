@@ -104,15 +104,15 @@ async fn start(mut args: Args) -> Result<(), ClientError> {
                         });
                     }
                     Ok(ControlMsg::Shutdown(err)) => {
-                        tunnel.stop();
+                        tunnel.stop().await;
                         return Err(err);
                     }
                     Err(e) => {
+                        if !transport.is_direct_available().await {
+                            tunnel.stop().await;
+                        }
                         if !(matches!(e, ClientError::ControlChannelNotConnected) || matches!(e, ClientError::ConnectionClosed)) {
                             return Err(e);
-                        }
-                        if !transport.is_direct_available().await {
-                            tunnel.stop();
                         }
 
                         let relay_info = control.connect(matches!(args.arg_commands, args::ArgCommands::List(_))).await?;

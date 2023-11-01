@@ -235,7 +235,7 @@ impl Args {
                     }
                     Ok(ArgCommands::List(sub))
                 }
-            
+
                 SubCommands::Tun => {
                     let mut sub = TunArgs {
                         agent_name: String::new(),
@@ -287,7 +287,7 @@ impl Args {
                                         .ok_or(ClientError::RequiredValue("map"))?
                                         .to_str()
                                         .and_then(|v| {
-                                            v.split_once("=").and_then(|(l, r)| {
+                                            v.split_once('=').and_then(|(l, r)| {
                                                 l.parse::<IpAddr>()
                                                     .and_then(|l| {
                                                         r.parse::<IpAddr>().map(|r| (l, r))
@@ -392,7 +392,7 @@ impl Args {
 
                                         let map = next_value
                                             .ok_or(ClientError::RequiredValue("map"))?
-                                            .split_once("=")
+                                            .split_once('=')
                                             .and_then(|(l, r)| {
                                                 l.parse::<IpAddr>()
                                                     .and_then(|l| {
@@ -755,7 +755,7 @@ impl Args {
                                         .ok_or(ClientError::RequiredValue("map"))?
                                         .to_str()
                                         .and_then(|v| {
-                                            v.split_once("=")
+                                            v.split_once('=')
                                                 .map(|(l, r)| (l.to_owned(), r.to_owned()))
                                         });
                                     if map.is_none() {
@@ -833,7 +833,7 @@ impl Args {
 
                                         let map = next_value
                                             .ok_or(ClientError::RequiredValue("map"))?
-                                            .split_once("=")
+                                            .split_once('=')
                                             .map(|(l, r)| (l.to_owned(), r.to_owned()));
                                         if map.is_none() {
                                             return Err(ClientError::InvalidMap);
