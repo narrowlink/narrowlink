@@ -104,14 +104,12 @@ async fn start(mut args: Args) -> Result<(), ClientError> {
                         });
                     }
                     Ok(ControlMsg::Shutdown(err)) => {
-                        println!("Shutdown: {:?}", err);
                         tunnel.stop().await;
                         return Err(err);
                     }
                     Err(e) => {
                         dbg!(&e);
                         if transport.is_direct_required_and_unavailable().await {
-                            println!("Direct connection not available, exit");
                             tunnel.stop().await;
                         }
                         if !(matches!(e, ClientError::ControlChannelNotConnected) || matches!(e, ClientError::ConnectionClosed)) {
@@ -122,16 +120,16 @@ async fn start(mut args: Args) -> Result<(), ClientError> {
                         if let Some(addr) = control.control.as_ref().map(|c| c.address.ip()) {
                             tunnel.add_host(addr);
                         }
-                        // relay_info.
                         transport.set_relay(relay_info);
-                        // if let Some(manage) = manage.take() {
+                        tunnel.start().await?;
+
                         if let Err(e) = control.manage(&instruction.manage).await{
                             if !matches!(e, ClientError::ConnectionClosed) {
+
                                 return Err(e);
                             }
                             warn!("{}",e);
                         }
-                        tunnel.start().await?;
 
                     }
                 }
