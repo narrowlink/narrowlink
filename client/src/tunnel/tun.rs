@@ -48,7 +48,7 @@ trait SignalTrait: Future<Output = Option<()>> + Send {}
 impl<T> SignalTrait for T where T: Future<Output = Option<()>> + Send {}
 
 impl TunRoute {
-    pub async fn new(local_addr: Ipv4Addr) -> Result<Self, io::Error> {
+    pub async fn new(local_addr: Ipv4Addr, _ifaceid: u32) -> Result<Self, io::Error> {
         let handle: Handle = Handle::new()?;
         let Some(default_gw) = handle.default_route().await? else {
             return Err(io::Error::new(
@@ -56,6 +56,7 @@ impl TunRoute {
                 "No default gateway found",
             ));
         };
+
         let (my_routes_sender, mut my_routes_receiver) =
             mpsc::unbounded_channel::<(bool, Arc<Notify>)>();
         let (route_tx, mut route_rx) = mpsc::unbounded_channel::<RouteCommand>();
@@ -111,6 +112,9 @@ impl TunRoute {
                     Some((route_action, notify)) = my_routes_receiver.recv() => {
                         if route_action && !my_routes{
                             if !init {
+                                #[cfg(target_family = "windows")]
+                                routes.push(Route::new(default_gw.destination, 0).with_gateway(IpAddr::V4(local_addr)).with_ifindex(_ifaceid));
+                                #[cfg(target_family = "unix")]
                                 routes.push(Route::new(default_gw.destination, 0).with_gateway(IpAddr::V4(local_addr)));
                                 init = true;
                             }
@@ -131,6 +135,9 @@ impl TunRoute {
                     Some(cmd) = route_rx.recv() =>{
                         match cmd {
                             RouteCommand::Add(ip) => {
+                                #[cfg(target_family = "windows")]
+                                let r = Route::new(ip, 32).with_gateway(default_gw.gateway.unwrap()).with_ifindex(default_gw.ifindex.unwrap());
+                                #[cfg(target_family = "unix")]
                                 let r = Route::new(ip, 32).with_gateway(default_gw.gateway.unwrap());
                                 if my_routes {
                                     let _ = handle.add(&r).await;
@@ -173,7 +180,6 @@ impl TunListener {
     pub async fn new(local_addr: IpAddr) -> Result<Self, ClientError> {
         #[cfg(not(target_family = "windows"))]
         let mut config = tun::Configuration::default();
-
         let ipv4 = match local_addr {
             IpAddr::V4(v4) => v4,
             IpAddr::V6(_v6) => {
@@ -194,9 +200,16 @@ impl TunListener {
         #[cfg(not(target_family = "windows"))]
         let device = tun::create_as_async(&config).map_err(ClientError::UnableToCreateTun)?;
         #[cfg(target_family = "windows")]
-        let device = wintun::WinTunDevice::new(ipv4, Ipv4Addr::new(255, 255, 255, 0));
+        let device = wintun::WinTunDevice::new(ipv4, Ipv4Addr::new(255, 255, 255, 255));
+        
+        #[cfg(not(target_family = "windows"))]
+        let route = TunRoute::new(ipv4, 0);
 
-        let route = TunRoute::new(ipv4)
+        #[cfg(target_family = "windows")]
+        let route = TunRoute::new(ipv4, device.get_adapter_index());
+
+
+        let route = route
             .await
             .map_err(|e| {
                 warn!("Unable to manage routes");
@@ -232,15 +245,19 @@ mod wintun {
     pub struct WinTunDevice {
         session: Arc<wintun::Session>,
         receiver: tokio::sync::mpsc::UnboundedReceiver<Vec<u8>>,
+        iface_id: u32,
         _task: thread::JoinHandle<()>,
     }
 
     impl WinTunDevice {
         pub fn new(ip: Ipv4Addr, netmask: Ipv4Addr) -> WinTunDevice {
             let wintun = unsafe { wintun::load() }.unwrap();
-            let adapter = wintun::Adapter::create(&wintun, "Narrowlink", "Tunnel", None).unwrap();
+            let adapter =
+                wintun::Adapter::create(&wintun, "Narrowlink", "Narrowlink", None).unwrap();
             adapter.set_address(ip).unwrap();
             adapter.set_netmask(netmask).unwrap();
+            let iface_id = adapter.get_adapter_index().unwrap();
+            // adapter.set_gateway(Some(ip)).unwrap();
             let session = Arc::new(adapter.start_session(wintun::MAX_RING_CAPACITY).unwrap());
             let (receiver_tx, receiver_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
             let session_reader = session.clone();
@@ -255,8 +272,12 @@ mod wintun {
             WinTunDevice {
                 session,
                 receiver: receiver_rx,
+                iface_id,
                 _task: task,
             }
+        }
+        pub(crate) fn get_adapter_index(&self) -> u32 {
+            self.iface_id
         }
     }
 

@@ -104,11 +104,14 @@ async fn start(mut args: Args) -> Result<(), ClientError> {
                         });
                     }
                     Ok(ControlMsg::Shutdown(err)) => {
+                        println!("Shutdown: {:?}", err);
                         tunnel.stop().await;
                         return Err(err);
                     }
                     Err(e) => {
-                        if !transport.is_direct_available().await {
+                        dbg!(&e);
+                        if transport.is_direct_required_and_unavailable().await {
+                            println!("Direct connection not available, exit");
                             tunnel.stop().await;
                         }
                         if !(matches!(e, ClientError::ControlChannelNotConnected) || matches!(e, ClientError::ConnectionClosed)) {

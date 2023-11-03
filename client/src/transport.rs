@@ -236,8 +236,8 @@ impl TransportFactory {
             Ok((Box::new(quic_socket), None))
         }
     }
-    pub async fn is_direct_available(&self) -> bool {
-        self.direct.read().await.is_some()
+    pub async fn is_direct_required_and_unavailable(&self) -> bool {
+        matches!(self.i, TransportInstruction::Direct(_, _)) && self.direct.read().await.is_none()
     }
     async fn connect_relay(
         &self,
