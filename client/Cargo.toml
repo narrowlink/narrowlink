@@ -66,8 +66,8 @@ chrono = { version = "0.4.31", default-features = false }
 narrowlink-types = { version = "0.2.0-git" }
 narrowlink-network = { version = "0.2.0-git" }
 
-# ipstack = { git = "https://github.com/narrowlink/ipstack" }
-ipstack = { path = "../../ipstack" }
+ipstack = { git = "https://github.com/narrowlink/ipstack" }
+# ipstack = { path = "../../ipstack" }
 net-route = { git = "https://github.com/SajjadPourali/net-route", branch = "patch-1" }
 
 [target.'cfg(not(target_family = "windows"))'.dependencies]

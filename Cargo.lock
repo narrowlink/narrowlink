@@ -920,6 +920,7 @@ dependencies = [
 [[package]]
 name = "ipstack"
 version = "0.0.1"
+source = "git+https://github.com/narrowlink/ipstack#24caf6a88be577bbd7f64af953e87e75e1d573a0"
 dependencies = [
  "etherparse",
  "thiserror",
