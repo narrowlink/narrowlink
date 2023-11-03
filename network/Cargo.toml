@@ -24,9 +24,9 @@ tokio = { version = "1.33.0", features = [
     "net",
     "rt-multi-thread",
 ], default-features = false }
-tokio-rustls = { version = "0.24.1", default-features = false, optional = true }
+tokio-rustls = { version = "0.24.1", default-features = false }
 rustls = { version = "0.21.8", default-features = false }
-webpki-roots = { version = "0.25.2", default-features = false, optional = true }
+webpki-roots = { version = "0.25.2", default-features = false }
 hyper = { version = "0.14.27", features = [
     "client",
     "http1",
@@ -45,7 +45,6 @@ quinn = { version = "0.10.2", default-features = false, features = [
 ] }
 async-recursion = { version = "1.0.5", default-features = false }
 tracing = { version = "0.1.40", default-features = false }
-tokio-native-tls = { version = "0.3.1", optional = true, default-features = false }
 thiserror = { version = "1.0.50", default-features = false }
 
 narrowlink-types = { version = "0.2.0-git" }
@@ -56,9 +55,5 @@ rlimit = { version = "0.10", default-features = false }
 
 
 [features]
-default = ["rustls"]
-rustls = ["dep:tokio-rustls", "dep:webpki-roots"]
-native-tls = ["dep:tokio-native-tls"]
-native-tls-vendored = ["dep:tokio-native-tls", "tokio-native-tls/vendored"]
 agent = []
 client = []

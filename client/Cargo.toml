@@ -66,7 +66,8 @@ chrono = { version = "0.4.31", default-features = false }
 narrowlink-types = { version = "0.2.0-git" }
 narrowlink-network = { version = "0.2.0-git" }
 
-ipstack = { git = "https://github.com/narrowlink/ipstack" }
+# ipstack = { git = "https://github.com/narrowlink/ipstack" }
+ipstack = { path = "../../ipstack" }
 net-route = { git = "https://github.com/SajjadPourali/net-route", branch = "patch-1" }
 
 [target.'cfg(not(target_family = "windows"))'.dependencies]
@@ -75,8 +76,3 @@ tun = { version = "0.6", features = ["async"] }
 [target.'cfg(target_family = "windows")'.dependencies]
 wintun = { version = "0.3.2", default-features = false }
 
-[features]
-default = ["rustls"]
-rustls = ["narrowlink-network/rustls"]
-native-tls = ["narrowlink-network/native-tls"]
-native-tls-vendored = ["narrowlink-network/native-tls-vendored"]

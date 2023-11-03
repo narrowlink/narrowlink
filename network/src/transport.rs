@@ -36,7 +36,6 @@ impl UnifiedSocket {
                 let peer_addr = tcp_stream.peer_addr()?;
                 let mut stream: Box<dyn AsyncSocket> = Box::new(tcp_stream);
                 if let StreamType::Tls(conf) = transport_type {
-                    #[cfg(feature = "rustls")]
                     {
                         debug!("using rustls to connect to {}", peer_addr.to_string());
                         use std::sync::Arc;
@@ -70,21 +69,6 @@ impl UnifiedSocket {
                             io::Error::new(io::ErrorKind::InvalidInput, "invalid dnsname"),
                         ))?;
                         stream = Box::new(config.connect(dnsname, stream).await?);
-                    }
-
-                    #[cfg(feature = "native-tls")]
-                    {
-                        debug!("using native-ls to connect to {}", peer_addr.to_string());
-                        let cx = tokio_native_tls::native_tls::TlsConnector::builder()
-                            .build()
-                            .or(Err(NetworkError::TlsError))?;
-                        let cx = tokio_native_tls::TlsConnector::from(cx);
-
-                        stream = Box::new(
-                            cx.connect(conf.sni.as_str(), stream)
-                                .await
-                                .or(Err(io::Error::from(io::ErrorKind::WouldBlock)))?,
-                        );
                     }
                 }
 
