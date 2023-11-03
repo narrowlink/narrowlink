@@ -8,7 +8,7 @@ use std::{
 use futures_util::{Future, FutureExt, StreamExt};
 use ipstack::stream::IpStackStream;
 use net_route::{Handle, Route};
-// use netstack_lwip::NetStack;
+
 use tokio::{
     signal,
     sync::{
@@ -23,11 +23,8 @@ use crate::error::ClientError;
 // const MTU: usize = 1500;
 const MTU: usize = 65535;
 
-#[allow(unused)] // temp - todo implement map addr
+#[allow(unused)]
 pub struct TunListener {
-    // tcp: netstack_lwip::TcpListener,
-    // udp: TunUdpListener,
-    // _task: tokio::task::JoinHandle<Result<(), io::Error>>,
     ipstack: ipstack::IpStack,
     route: Option<TunRoute>,
     local_addr: IpAddr,
@@ -105,7 +102,9 @@ impl TunRoute {
                             for route in &routes {
                                 let _ = handle.delete(route).await;
                             }
-                            handle.add(&default_gw).await.unwrap();
+                            if let Err(e) = handle.add(&default_gw).await{
+                                warn!("Unable to recover default route: {}", e);
+                            }
                         }
                         std::process::exit(0x0)
                     },
@@ -120,14 +119,18 @@ impl TunRoute {
                             }
                             handle.delete(&default_gw).await?;
                             for route in &routes {
-                                handle.add(route).await.unwrap(); // handle!!
+                                if let Err(e) = handle.add(route).await{
+                                    warn!("Unable to add route: {}", e);
+                                }
                             }
                             my_routes = true;
                         }else if !route_action && my_routes{
                             for route in &routes {
                                 let _ = handle.delete(route).await;
                             }
-                            handle.add(&default_gw).await.unwrap();
+                            if let Err(e) = handle.add(&default_gw).await{
+                                warn!("Unable to recover default route: {}", e);
+                            }
                             my_routes = false;
                         }
                         notify.notify_waiters();
@@ -135,10 +138,19 @@ impl TunRoute {
                     Some(cmd) = route_rx.recv() =>{
                         match cmd {
                             RouteCommand::Add(ip) => {
+                                let Some(gateway_address) = default_gw.gateway else{
+                                    warn!("No default gateway found");
+                                    continue;
+                                };
                                 #[cfg(target_family = "windows")]
-                                let r = Route::new(ip, 32).with_gateway(default_gw.gateway.unwrap()).with_ifindex(default_gw.ifindex.unwrap());
+                                let Some(gateway_ifindex) = default_gw.ifindex else{
+                                    warn!("Unable to get default gateway interface index");
+                                    continue;
+                                };
+                                #[cfg(target_family = "windows")]
+                                let r = Route::new(ip, 32).with_gateway(gateway_address).with_ifindex(gateway_ifindex);
                                 #[cfg(target_family = "unix")]
-                                let r = Route::new(ip, 32).with_gateway(default_gw.gateway.unwrap());
+                                let r = Route::new(ip, 32).with_gateway(gateway_address);
                                 if my_routes {
                                     let _ = handle.add(&r).await;
                                 }
@@ -146,10 +158,11 @@ impl TunRoute {
 
                             },
                             RouteCommand::Del(ip) => {
-
                                 if let Some(index) = routes.iter().position(|x| x.destination == ip){
                                     if my_routes {
-                                        handle.delete(&routes[index]).await.unwrap();
+                                        if let Err(e) = handle.delete(&routes[index]).await{
+                                            warn!("Unable to delete route: {}", e);
+                                        }
                                     }
                                     routes.remove(index);
                                 }

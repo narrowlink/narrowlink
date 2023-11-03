@@ -98,7 +98,7 @@ impl TunnelFactory {
                 let tun = TunListener::new(*addr).await?;
                 if let Some(s) = tun.route_sender() {
                     for ip in self.hosts.iter() {
-                        s.send(RouteCommand::Add(*ip)).unwrap();
+                        _ = s.send(RouteCommand::Add(*ip));
                     }
                 }
                 tun.my_routes(*default_gateway).await;
@@ -205,7 +205,7 @@ impl TunnelFactory {
                 ))
             }
             Some(TunnelListener::Tun(tun_listener, map)) => {
-                let stream = tun_listener.accept().await.unwrap();
+                let stream = tun_listener.accept().await?;
                 let mut peer_addr = stream.peer_addr();
                 let (stream, udp): (Box<dyn AsyncSocket>, bool) = match stream {
                     IpStackStream::Tcp(tcp) => (Box::new(tcp), false),
