@@ -108,7 +108,6 @@ async fn start(mut args: Args) -> Result<(), ClientError> {
                         return Err(err);
                     }
                     Err(e) => {
-                        dbg!(&e);
                         if transport.is_direct_required_and_unavailable().await {
                             tunnel.stop().await;
                         }
