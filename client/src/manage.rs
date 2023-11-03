@@ -450,7 +450,7 @@ impl From<&ArgCommands> for Instruction {
                 manage: ManageInstruction::AgentList(*verbose),
             },
             ArgCommands::Proxy(a) => Self {
-                tunnel: TunnelInstruction::Proxy(a.local_addr),
+                tunnel: TunnelInstruction::Proxy(a.local_addr, a.map_addr.to_owned()),
                 transport: TransportInstruction::determine(
                     a.direct,
                     a.relay,
@@ -479,7 +479,7 @@ impl From<&ArgCommands> for Instruction {
                     ManageInstruction::AgentCheck(a.agent_name.clone())
                 },
             },
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
+
             ArgCommands::Tun(a) => Self {
                 tunnel: TunnelInstruction::Tun(a.gateway, a.local_addr, a.map_addr),
                 transport: TransportInstruction::determine(

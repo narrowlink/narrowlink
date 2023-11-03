@@ -6,6 +6,8 @@ use thiserror::Error;
 pub enum ClientError {
     #[error("Invalid Address")]
     InvalidAddress,
+    #[error("Invalid Map")]
+    InvalidMap,
     #[error("Invalid Port")]
     InvalidPort,
     #[error("Agent Not Found")]
@@ -32,12 +34,14 @@ pub enum ClientError {
     UnableToConnect,
     #[error("Connection Closed")]
     ConnectionClosed,
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[cfg(not(target_family = "windows"))]
     #[error("Unable To Create Tun: {0}")]
     UnableToCreateTun(#[from] tun::Error),
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    #[error("Unable To Create Net Stack: {0}")]
-    UnableToCreateNetStack(#[from] netstack_lwip::Error),
+    #[cfg(target_family = "windows")]
+    #[error("Unable To Create Tun: {0}")]
+    UnableToCreateTun(#[from] wintun::Error),
+    // #[error("Unable To Create Net Stack: {0}")]
+    // UnableToCreateNetStack(#[from] netstack_lwip::Error),
     #[error("Network Error: {0}")]
     NetworkError(#[from] NetworkError),
     #[error("STOP: #{0:#10x}")]
@@ -70,4 +74,6 @@ pub enum ClientError {
     AccessDenied,
     #[error("Control Channel Not Connected")]
     ControlChannelNotConnected,
+    #[error("IpStack Error: {0}")]
+    IpStackError(#[from] ipstack::IpStackError),
 }

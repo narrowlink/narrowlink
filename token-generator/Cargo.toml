@@ -17,12 +17,12 @@ name = "narrowlink-token-generator"
 path = "src/main.rs"
 
 [dependencies]
-jsonwebtoken = { version = "8.3.0" }
-serde = { version = "1.0.189", features = ["derive"] }
-serde_yaml = { version = "0.9.25" }
+jsonwebtoken = { version = "9.1.0" }
+serde = { version = "1.0.190", features = ["derive"] }
+serde_yaml = { version = "0.9.27" }
 dirs = { version = "5.0.1" }
-clap_lex = { version = "0.5.1" }
+clap_lex = { version = "0.6.0", default-features = false }
 uuid = { version = "1.5.0", features = ["serde", "v4"] }
-thiserror = { version = "1.0.49", default-features = false }
+thiserror = { version = "1.0.50", default-features = false }
 
 narrowlink-types = { version = "0.2.0-git" }

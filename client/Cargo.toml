@@ -23,8 +23,8 @@ name = "narrowlink"
 path = "src/main.rs"
 
 [dependencies]
-clap_lex = { version = "0.5.1", default-features = false }
-thiserror = { version = "1.0.49", default-features = false }
+clap_lex = { version = "0.6.0", default-features = false }
+thiserror = { version = "1.0.50", default-features = false }
 tokio = { version = "1.33.0", features = [
     "macros",
     "rt",
@@ -33,20 +33,20 @@ tokio = { version = "1.33.0", features = [
     "time",
     "signal",
 ], default-features = false }
-futures-util = { version = "0.3.28", default-features = false }
-futures-sink = { version = "0.3.28", features = [
+futures-util = { version = "0.3.29", default-features = false }
+futures-sink = { version = "0.3.29", features = [
     "alloc",
 ], default-features = false }
 futures-timer = { version = "3.0.2", default-features = false }
 tokio-tungstenite = { version = "0.20.1", default-features = false }
 tungstenite = { version = "0.20.1", default-features = false }
-serde = { version = "1.0.189", features = ["derive"], default-features = false }
-serde_json = { version = "1.0.107", default-features = false }
-serde_yaml = { version = "0.9.25", default-features = false }
+serde = { version = "1.0.190", features = ["derive"], default-features = false }
+serde_json = { version = "1.0.108", default-features = false }
+serde_yaml = { version = "0.9.27", default-features = false }
 udp-stream = { version = "0.0.9", default-features = false }
 regex = { version = "1.10.2", features = ["std"], default-features = false }
 either = { version = "1.9.0", default-features = false }
-tracing = { version = "0.1.39", default-features = false, features = [
+tracing = { version = "0.1.40", default-features = false, features = [
     "attributes",
 ] }
 tracing-subscriber = { version = "0.3.17", default-features = false, features = [
@@ -66,12 +66,14 @@ chrono = { version = "0.4.31", default-features = false }
 narrowlink-types = { version = "0.2.0-git" }
 narrowlink-network = { version = "0.2.0-git" }
 
-
-[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
-netstack-lwip = { git = "https://github.com/SajjadPourali/netstack-lwip" }
-tun = { version = "0.6", features = ["async"] }
+ipstack = { git = "https://github.com/narrowlink/ipstack" }
 net-route = { git = "https://github.com/SajjadPourali/net-route", branch = "patch-1" }
-etherparse = { version = "0.13.0" }
+
+[target.'cfg(not(target_family = "windows"))'.dependencies]
+tun = { version = "0.6", features = ["async"] }
+
+[target.'cfg(target_family = "windows")'.dependencies]
+wintun = { version = "0.3.2", default-features = false }
 
 [features]
 default = ["rustls"]

@@ -1,5 +1,4 @@
 mod input_stream;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod tun;
 use either::Either;
 use futures_util::{
@@ -7,6 +6,7 @@ use futures_util::{
     stream::{self, Once},
     StreamExt,
 };
+use ipstack::stream::IpStackStream;
 use narrowlink_network::AsyncSocket;
 use narrowlink_types::generic::{self};
 use proxy_stream::ProxyStream;
@@ -25,15 +25,13 @@ use crate::error::ClientError;
 
 use input_stream::InputStream;
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-use tun::{RouteCommand, TunListener, TunStream};
+use tun::{RouteCommand, TunListener};
 
 pub enum TunnelInstruction {
-    Connect(bool, (String, u16)),             // udp, endpoint
-    Forward(bool, SocketAddr, (String, u16)), // udp, local, endpoint
-    Proxy(SocketAddr),                        // endpoint
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    Tun(bool, IpAddr, Option<IpAddr>), // default_gateway, addr, map
+    Connect(bool, (String, u16)),                // udp, endpoint
+    Forward(bool, SocketAddr, (String, u16)),    // udp, local, endpoint
+    Proxy(SocketAddr, Option<(String, String)>), // endpoint, map
+    Tun(bool, IpAddr, Option<(IpAddr, IpAddr)>), // default_gateway, addr, map
     None,
 }
 
@@ -47,9 +45,8 @@ pub struct TunnelFactory {
 pub enum TunnelListener {
     Connect(Once<Ready<InputStream>>, bool, (String, u16)),
     Forward(Either<TcpListener, UdpListener>, (String, u16)),
-    Proxy(TcpListener),
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    Tun(TunListener),
+    Proxy(TcpListener, Option<(String, String)>),
+    Tun(TunListener, Option<(IpAddr, IpAddr)>),
 }
 
 impl TunnelFactory {
@@ -90,23 +87,22 @@ impl TunnelFactory {
                 };
                 self.listener = Some(TunnelListener::Forward(listener, endpoint.clone()));
             }
-            TunnelInstruction::Proxy(endpoint) => {
+            TunnelInstruction::Proxy(endpoint, map) => {
                 let listener = TcpListener::bind(endpoint).await?;
                 if let Ok(addr) = listener.local_addr() {
                     info!("Listen on: socks5://{}:{}", addr.ip(), addr.port());
                 }
-                self.listener = Some(TunnelListener::Proxy(listener));
+                self.listener = Some(TunnelListener::Proxy(listener, map.clone()));
             }
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
             TunnelInstruction::Tun(default_gateway, addr, map) => {
-                let tun = TunListener::new(*addr, *map).await?;
+                let tun = TunListener::new(*addr).await?;
                 if let Some(s) = tun.route_sender() {
                     for ip in self.hosts.iter() {
-                        s.send(RouteCommand::Add(*ip)).unwrap();
+                        _ = s.send(RouteCommand::Add(*ip));
                     }
                 }
-                tun.my_routes(*default_gateway);
-                self.listener = Some(TunnelListener::Tun(tun));
+                tun.my_routes(*default_gateway).await;
+                self.listener = Some(TunnelListener::Tun(tun, *map));
             }
             TunnelInstruction::None => Err(ClientError::Unexpected(0))?,
         };
@@ -115,13 +111,10 @@ impl TunnelFactory {
         }
         Ok(())
     }
-    pub fn stop(&mut self) {
+    pub async fn stop(&mut self) {
         self.wait = Some(Arc::new(Notify::new()));
-        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-        self.listener.take();
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
-        if let Some(TunnelListener::Tun(t)) = self.listener.take() {
-            t.my_routes(false);
+        if let Some(TunnelListener::Tun(t, _)) = self.listener.take() {
+            t.my_routes(false).await;
         };
     }
     pub async fn accept(
@@ -151,7 +144,7 @@ impl TunnelFactory {
                     },
                 ))
             }
-            Some(TunnelListener::Proxy(l)) => {
+            Some(TunnelListener::Proxy(l, map)) => {
                 let interrupted_stream = match ProxyStream::new(proxy_stream::ProxyType::SOCKS5)
                     .accept(l.accept().await?.0)
                     .await
@@ -159,13 +152,18 @@ impl TunnelFactory {
                     Ok(s) => s,
                     Err(_e) => return Err(ClientError::InvalidSocksRequest),
                 };
-                let addr: (String, u16) = interrupted_stream.addr().into();
+                let mut addr: (String, u16) = interrupted_stream.addr().into();
                 let protocol =
                     if interrupted_stream.command() == proxy_stream::Command::UdpAssociate {
                         generic::Protocol::UDP
                     } else {
                         generic::Protocol::TCP
                     };
+                if let Some(m) = map {
+                    if addr.0 == m.0 {
+                        addr.0 = m.1.to_string();
+                    }
+                }
                 Ok((
                     Box::new(
                         interrupted_stream
@@ -194,6 +192,7 @@ impl TunnelFactory {
                     }
                 };
                 let addr: (String, u16) = end_point.clone();
+
                 Ok((
                     Box::new(socket),
                     generic::Connect {
@@ -205,18 +204,23 @@ impl TunnelFactory {
                     },
                 ))
             }
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
-            Some(TunnelListener::Tun(tun_listener)) => {
-                let (stream, addr) = tun_listener.accept().await.unwrap();
+            Some(TunnelListener::Tun(tun_listener, map)) => {
+                let stream = tun_listener.accept().await?;
+                let mut peer_addr = stream.peer_addr();
                 let (stream, udp): (Box<dyn AsyncSocket>, bool) = match stream {
-                    TunStream::Tcp(tcp) => (Box::new(tcp), false),
-                    TunStream::Udp(udp) => (Box::new(udp), true),
+                    IpStackStream::Tcp(tcp) => (Box::new(tcp), false),
+                    IpStackStream::Udp(udp) => (Box::new(udp), true),
                 };
+                if let Some(m) = map {
+                    if peer_addr.ip() == m.0 {
+                        peer_addr.set_ip(m.1);
+                    }
+                }
                 Ok((
                     stream,
                     generic::Connect {
-                        host: addr.ip().to_string(),
-                        port: addr.port(),
+                        host: peer_addr.ip().to_string(),
+                        port: peer_addr.port(),
                         protocol: if udp {
                             generic::Protocol::UDP
                         } else {
@@ -232,8 +236,7 @@ impl TunnelFactory {
     }
     pub fn add_host(&mut self, ip: IpAddr) {
         self.hosts.insert(ip);
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
-        if let Some(TunnelListener::Tun(tun)) = self.listener.as_ref() {
+        if let Some(TunnelListener::Tun(tun, _)) = self.listener.as_ref() {
             if let Some(s) = tun.route_sender() {
                 let _ = s.send(RouteCommand::Add(ip));
             };
@@ -242,8 +245,7 @@ impl TunnelFactory {
     #[allow(dead_code)]
     pub fn del_host(&mut self, ip: IpAddr) {
         self.hosts.remove(&ip);
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
-        if let Some(TunnelListener::Tun(tun)) = self.listener.as_ref() {
+        if let Some(TunnelListener::Tun(tun, _)) = self.listener.as_ref() {
             if let Some(s) = tun.route_sender() {
                 let _ = s.send(RouteCommand::Del(ip));
             };

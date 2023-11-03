@@ -10,7 +10,6 @@ static LIST_HELP: &str = include_str!("../list.help.arg");
 static FORWARD_HELP: &str = include_str!("../forward.help.arg");
 static PROXY_HELP: &str = include_str!("../proxy.help.arg");
 static CONNECT_HELP: &str = include_str!("../connect.help.arg");
-#[cfg(any(target_os = "linux", target_os = "macos"))]
 static TUN_HELP: &str = include_str!("../tun.help.arg");
 
 pub fn extract_addr(addr: &str, local: bool) -> Result<(String, u16), ClientError> {
@@ -57,11 +56,12 @@ pub struct ForwardArgs {
 
 #[derive(Debug, Clone)]
 pub struct ProxyArgs {
-    pub direct: bool,                 //d direct
-    pub relay: bool,                  //r relay
-    pub agent_name: String,           //i name
-    pub cryptography: Option<String>, //k key
-    pub local_addr: SocketAddr,       //<Local>
+    pub direct: bool,                       //d direct
+    pub relay: bool,                        //r relay
+    pub agent_name: String,                 //i name
+    pub cryptography: Option<String>,       //k key
+    pub local_addr: SocketAddr,             //<Local>
+    pub map_addr: Option<(String, String)>, //m map
 }
 
 #[derive(Debug, Clone)]
@@ -74,16 +74,15 @@ pub struct ConnectArgs {
     pub remote_addr: (String, u16),   //<Local>
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[derive(Debug, Clone)]
 pub struct TunArgs {
-    pub gateway: bool,                //g gateway
-    pub direct: bool,                 //d direct
-    pub relay: bool,                  //r relay
-    pub agent_name: String,           //i name
-    pub cryptography: Option<String>, //k key
-    pub local_addr: IpAddr,           //l local
-    pub map_addr: Option<IpAddr>,     //m map
+    pub gateway: bool,                      //g gateway
+    pub direct: bool,                       //d direct
+    pub relay: bool,                        //r relay
+    pub agent_name: String,                 //i name
+    pub cryptography: Option<String>,       //k key
+    pub local_addr: IpAddr,                 //l local
+    pub map_addr: Option<(IpAddr, IpAddr)>, //m map
 }
 
 #[derive(Debug)]
@@ -91,7 +90,6 @@ enum SubCommands {
     Forward,
     List,
     Connect,
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
     Tun,
     Proxy,
 }
@@ -103,7 +101,6 @@ impl SubCommands {
             ("list", 0),
             ("proxy", 0),
             ("connect", 0),
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
             ("tun", 0),
         ]);
         for (i, c) in arg.chars().enumerate() {
@@ -132,7 +129,6 @@ impl SubCommands {
             "list" => Ok(Self::List),
             "connect" => Ok(Self::Connect),
             "proxy" => Ok(Self::Proxy),
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
             "tun" => Ok(Self::Tun),
             _ => Err(ClientError::CommandNotFound),
         }
@@ -239,7 +235,7 @@ impl Args {
                     }
                     Ok(ArgCommands::List(sub))
                 }
-                #[cfg(any(target_os = "linux", target_os = "macos"))]
+
                 SubCommands::Tun => {
                     let mut sub = TunArgs {
                         agent_name: String::new(),
@@ -287,14 +283,22 @@ impl Args {
                                         .map_err(|_| ClientError::InvalidAddress)?;
                                 }
                                 Ok("map") => {
-                                    sub.map_addr = Some(
-                                        value
-                                            .ok_or(ClientError::RequiredValue("map"))?
-                                            .to_str()
-                                            .ok_or(ClientError::Encoding)?
-                                            .parse::<IpAddr>()
-                                            .map_err(|_| ClientError::InvalidAddress)?,
-                                    );
+                                    let map = value
+                                        .ok_or(ClientError::RequiredValue("map"))?
+                                        .to_str()
+                                        .and_then(|v| {
+                                            v.split_once('=').and_then(|(l, r)| {
+                                                l.parse::<IpAddr>()
+                                                    .and_then(|l| {
+                                                        r.parse::<IpAddr>().map(|r| (l, r))
+                                                    })
+                                                    .ok()
+                                            })
+                                        });
+                                    if map.is_none() {
+                                        return Err(ClientError::InvalidMap);
+                                    }
+                                    sub.map_addr = map;
                                 }
                                 Ok("help") => {
                                     print!("{}", TUN_HELP);
@@ -386,12 +390,20 @@ impl Args {
                                             None
                                         };
 
-                                        sub.map_addr = Some(
-                                            next_value
-                                                .ok_or(ClientError::RequiredValue("map"))?
-                                                .parse::<IpAddr>()
-                                                .map_err(|_| ClientError::InvalidAddress)?,
-                                        );
+                                        let map = next_value
+                                            .ok_or(ClientError::RequiredValue("map"))?
+                                            .split_once('=')
+                                            .and_then(|(l, r)| {
+                                                l.parse::<IpAddr>()
+                                                    .and_then(|l| {
+                                                        r.parse::<IpAddr>().map(|r| (l, r))
+                                                    })
+                                                    .ok()
+                                            });
+                                        if map.is_none() {
+                                            return Err(ClientError::InvalidMap);
+                                        }
+                                        sub.map_addr = map;
                                     }
                                     Ok('h') => {
                                         print!("{}", TUN_HELP);
@@ -709,6 +721,7 @@ impl Args {
                         relay: false,
                         direct: false,
                         local_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 1080),
+                        map_addr: None,
                     };
                     while let Some(arg) = raw.next(&mut cursor) {
                         if let Some((long, value)) = arg.to_long() {
@@ -736,6 +749,19 @@ impl Args {
                                             .ok_or(ClientError::Encoding)?
                                             .to_string(),
                                     );
+                                }
+                                Ok("map") => {
+                                    let map = value
+                                        .ok_or(ClientError::RequiredValue("map"))?
+                                        .to_str()
+                                        .and_then(|v| {
+                                            v.split_once('=')
+                                                .map(|(l, r)| (l.to_owned(), r.to_owned()))
+                                        });
+                                    if map.is_none() {
+                                        return Err(ClientError::InvalidMap);
+                                    }
+                                    sub.map_addr = map;
                                 }
                                 Ok("help") => {
                                     print!("{}", PROXY_HELP);
@@ -790,6 +816,30 @@ impl Args {
                                                 .to_string(),
                                         );
                                     }
+                                    Ok('m') => {
+                                        let next_value = if let Some(v) = shorts.next_value_os() {
+                                            v.to_str()
+                                        } else if let Some(v) = raw.next_os(&mut cursor) {
+                                            v.to_str().and_then(|v| {
+                                                if v.is_empty() || v.find('-') == Some(0) {
+                                                    None
+                                                } else {
+                                                    Some(v)
+                                                }
+                                            })
+                                        } else {
+                                            None
+                                        };
+
+                                        let map = next_value
+                                            .ok_or(ClientError::RequiredValue("map"))?
+                                            .split_once('=')
+                                            .map(|(l, r)| (l.to_owned(), r.to_owned()));
+                                        if map.is_none() {
+                                            return Err(ClientError::InvalidMap);
+                                        }
+                                        sub.map_addr = map;
+                                    }
                                     Ok('h') => {
                                         print!("{}", PROXY_HELP);
                                         process::exit(0x0);
@@ -836,6 +886,5 @@ pub enum ArgCommands {
     List(ListArgs),
     Proxy(ProxyArgs),
     Connect(ConnectArgs),
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
     Tun(TunArgs),
 }
