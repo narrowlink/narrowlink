@@ -189,7 +189,7 @@ impl TunListener {
         #[cfg(not(target_family = "windows"))]
         config
             .address(ipv4)
-            // .destination(ipv4)
+            .destination(ipv4)
             .netmask((255, 255, 255, 255))
             .mtu(MTU as i32)
             .up();
@@ -201,13 +201,12 @@ impl TunListener {
         let device = tun::create_as_async(&config).map_err(ClientError::UnableToCreateTun)?;
         #[cfg(target_family = "windows")]
         let device = wintun::WinTunDevice::new(ipv4, Ipv4Addr::new(255, 255, 255, 255));
-        
+
         #[cfg(not(target_family = "windows"))]
         let route = TunRoute::new(ipv4, 0);
 
         #[cfg(target_family = "windows")]
         let route = TunRoute::new(ipv4, device.get_adapter_index());
-
 
         let route = route
             .await
