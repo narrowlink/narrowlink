@@ -37,6 +37,9 @@ pub enum ClientError {
     #[cfg(not(target_family = "windows"))]
     #[error("Unable To Create Tun: {0}")]
     UnableToCreateTun(#[from] tun::Error),
+    #[cfg(target_family = "windows")]
+    #[error("Unable To Create Tun: {0}")]
+    UnableToCreateTun(#[from] wintun::Error),
     // #[error("Unable To Create Net Stack: {0}")]
     // UnableToCreateNetStack(#[from] netstack_lwip::Error),
     #[error("Network Error: {0}")]

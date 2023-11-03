@@ -213,7 +213,7 @@ impl TunListener {
         #[cfg(not(target_family = "windows"))]
         let device = tun::create_as_async(&config).map_err(ClientError::UnableToCreateTun)?;
         #[cfg(target_family = "windows")]
-        let device = wintun::WinTunDevice::new(ipv4, Ipv4Addr::new(255, 255, 255, 255));
+        let device = wintun::WinTunDevice::new(ipv4, Ipv4Addr::new(255, 255, 255, 255))?;
 
         #[cfg(not(target_family = "windows"))]
         let route = TunRoute::new(ipv4, 0);
@@ -254,6 +254,8 @@ mod wintun {
 
     use tokio::io::{AsyncRead, AsyncWrite};
 
+    use crate::error::ClientError;
+
     pub struct WinTunDevice {
         session: Arc<wintun::Session>,
         receiver: tokio::sync::mpsc::UnboundedReceiver<Vec<u8>>,
@@ -262,31 +264,27 @@ mod wintun {
     }
 
     impl WinTunDevice {
-        pub fn new(ip: Ipv4Addr, netmask: Ipv4Addr) -> WinTunDevice {
-            let wintun = unsafe { wintun::load() }.unwrap();
-            let adapter =
-                wintun::Adapter::create(&wintun, "Narrowlink", "Narrowlink", None).unwrap();
-            adapter.set_address(ip).unwrap();
-            adapter.set_netmask(netmask).unwrap();
-            let iface_id = adapter.get_adapter_index().unwrap();
-            // adapter.set_gateway(Some(ip)).unwrap();
-            let session = Arc::new(adapter.start_session(wintun::MAX_RING_CAPACITY).unwrap());
+        pub fn new(ip: Ipv4Addr, netmask: Ipv4Addr) -> Result<WinTunDevice, ClientError> {
+            let wintun = unsafe { wintun::load() }?;
+            let adapter = wintun::Adapter::create(&wintun, "Narrowlink", "Narrowlink", None)?;
+            adapter.set_address(ip)?;
+            adapter.set_netmask(netmask)?;
+            let iface_id = adapter.get_adapter_index()?;
+            let session = Arc::new(adapter.start_session(wintun::MAX_RING_CAPACITY)?);
             let (receiver_tx, receiver_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
             let session_reader = session.clone();
-            let task = thread::spawn(move || {
-                loop {
-                    let packet = session_reader.receive_blocking().unwrap();
-                    let bytes = packet.bytes().to_vec();
-                    // dbg!(&bytes);
-                    receiver_tx.send(bytes).unwrap();
-                }
+            let task = thread::spawn(move || loop {
+                let Ok(packet) = session_reader.receive_blocking() else {
+                    break;
+                };
+                _ = receiver_tx.send(packet.bytes().to_vec());
             });
-            WinTunDevice {
+            Ok(WinTunDevice {
                 session,
                 receiver: receiver_rx,
                 iface_id,
                 _task: task,
-            }
+            })
         }
         pub(crate) fn get_adapter_index(&self) -> u32 {
             self.iface_id
