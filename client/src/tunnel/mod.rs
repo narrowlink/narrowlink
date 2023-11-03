@@ -104,7 +104,7 @@ impl TunnelFactory {
                 tun.my_routes(*default_gateway).await;
                 self.listener = Some(TunnelListener::Tun(tun, *map));
             }
-            TunnelInstruction::None => Err(ClientError::Unexpected(0))?,
+            TunnelInstruction::None => {}
         };
         if let Some(wait) = self.wait.take() {
             wait.notify_waiters();
