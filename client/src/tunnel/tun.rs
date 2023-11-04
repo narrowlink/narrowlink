@@ -7,8 +7,8 @@ use std::{
 
 use futures_util::{Future, FutureExt, StreamExt};
 use ipstack::stream::IpStackStream;
+use narrowlink_custom_dependencies as net_route;
 use net_route::{Handle, Route};
-
 use tokio::{
     signal,
     sync::{
@@ -265,7 +265,7 @@ mod wintun {
 
     impl WinTunDevice {
         pub fn new(ip: Ipv4Addr, netmask: Ipv4Addr) -> Result<WinTunDevice, ClientError> {
-            let wintun = unsafe { wintun::load() }.map_err(|_|ClientError::WinTunDLLNotFound)?;
+            let wintun = unsafe { wintun::load() }.map_err(|_| ClientError::WinTunDLLNotFound)?;
             let adapter = wintun::Adapter::create(&wintun, "Narrowlink", "Narrowlink", None)?;
             adapter.set_address(ip)?;
             adapter.set_netmask(netmask)?;
