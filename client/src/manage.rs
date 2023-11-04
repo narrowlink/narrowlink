@@ -479,7 +479,7 @@ impl From<&ArgCommands> for Instruction {
                     ManageInstruction::AgentCheck(a.agent_name.clone())
                 },
             },
-
+            #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
             ArgCommands::Tun(a) => Self {
                 tunnel: TunnelInstruction::Tun(a.gateway, a.local_addr, a.map_addr),
                 transport: TransportInstruction::determine(

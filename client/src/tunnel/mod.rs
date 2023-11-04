@@ -1,4 +1,5 @@
 mod input_stream;
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 mod tun;
 use either::Either;
 use futures_util::{
@@ -6,6 +7,7 @@ use futures_util::{
     stream::{self, Once},
     StreamExt,
 };
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 use ipstack::stream::IpStackStream;
 use narrowlink_network::AsyncSocket;
 use narrowlink_types::generic::{self};
@@ -25,12 +27,14 @@ use crate::error::ClientError;
 
 use input_stream::InputStream;
 
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 use tun::{RouteCommand, TunListener};
 
 pub enum TunnelInstruction {
     Connect(bool, (String, u16)),                // udp, endpoint
     Forward(bool, SocketAddr, (String, u16)),    // udp, local, endpoint
     Proxy(SocketAddr, Option<(String, String)>), // endpoint, map
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     Tun(bool, IpAddr, Option<(IpAddr, IpAddr)>), // default_gateway, addr, map
     None,
 }
@@ -46,6 +50,7 @@ pub enum TunnelListener {
     Connect(Once<Ready<InputStream>>, bool, (String, u16)),
     Forward(Either<TcpListener, UdpListener>, (String, u16)),
     Proxy(TcpListener, Option<(String, String)>),
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     Tun(TunListener, Option<(IpAddr, IpAddr)>),
 }
 
@@ -94,6 +99,7 @@ impl TunnelFactory {
                 }
                 self.listener = Some(TunnelListener::Proxy(listener, map.clone()));
             }
+            #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
             TunnelInstruction::Tun(default_gateway, addr, map) => {
                 let tun = TunListener::new(*addr).await?;
                 if let Some(s) = tun.route_sender() {
@@ -113,6 +119,7 @@ impl TunnelFactory {
     }
     pub async fn stop(&mut self) {
         self.wait = Some(Arc::new(Notify::new()));
+        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
         if let Some(TunnelListener::Tun(t, _)) = self.listener.take() {
             t.my_routes(false).await;
         };
@@ -204,6 +211,7 @@ impl TunnelFactory {
                     },
                 ))
             }
+            #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
             Some(TunnelListener::Tun(tun_listener, map)) => {
                 let stream = tun_listener.accept().await?;
                 let mut peer_addr = stream.peer_addr();
@@ -236,6 +244,7 @@ impl TunnelFactory {
     }
     pub fn add_host(&mut self, ip: IpAddr) {
         self.hosts.insert(ip);
+        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
         if let Some(TunnelListener::Tun(tun, _)) = self.listener.as_ref() {
             if let Some(s) = tun.route_sender() {
                 let _ = s.send(RouteCommand::Add(ip));
@@ -245,6 +254,7 @@ impl TunnelFactory {
     #[allow(dead_code)]
     pub fn del_host(&mut self, ip: IpAddr) {
         self.hosts.remove(&ip);
+        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
         if let Some(TunnelListener::Tun(tun, _)) = self.listener.as_ref() {
             if let Some(s) = tun.route_sender() {
                 let _ = s.send(RouteCommand::Del(ip));

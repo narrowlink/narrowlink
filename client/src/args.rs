@@ -10,6 +10,7 @@ static LIST_HELP: &str = include_str!("../list.help.arg");
 static FORWARD_HELP: &str = include_str!("../forward.help.arg");
 static PROXY_HELP: &str = include_str!("../proxy.help.arg");
 static CONNECT_HELP: &str = include_str!("../connect.help.arg");
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 static TUN_HELP: &str = include_str!("../tun.help.arg");
 
 pub fn extract_addr(addr: &str, local: bool) -> Result<(String, u16), ClientError> {
@@ -235,7 +236,9 @@ impl Args {
                     }
                     Ok(ArgCommands::List(sub))
                 }
-
+                #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+                SubCommands::Tun => Err(ClientError::NotSupported),
+                #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
                 SubCommands::Tun => {
                     let mut sub = TunArgs {
                         agent_name: String::new(),
@@ -886,5 +889,6 @@ pub enum ArgCommands {
     List(ListArgs),
     Proxy(ProxyArgs),
     Connect(ConnectArgs),
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     Tun(TunArgs),
 }

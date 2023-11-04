@@ -34,10 +34,10 @@ pub enum ClientError {
     UnableToConnect,
     #[error("Connection Closed")]
     ConnectionClosed,
-    #[cfg(not(target_family = "windows"))]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     #[error("Unable To Create Tun: {0}")]
     UnableToCreateTun(#[from] tun::Error),
-    #[cfg(target_family = "windows")]
+    #[cfg(target_os = "windows")]
     #[error("Unable To Create Tun: {0}")]
     UnableToCreateTun(#[from] wintun::Error),
     // #[error("Unable To Create Net Stack: {0}")]
@@ -74,6 +74,10 @@ pub enum ClientError {
     AccessDenied,
     #[error("Control Channel Not Connected")]
     ControlChannelNotConnected,
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     #[error("IpStack Error: {0}")]
     IpStackError(#[from] ipstack::IpStackError),
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    #[error("Not Supported")]
+    NotSupported,
 }
