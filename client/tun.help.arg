@@ -5,7 +5,9 @@ Usage:
 
 Description:
   Creates a TUN interface to connect to a remote endpoint
-   ***           For testing purposes only           ***
+   ***          Experimental and Unreliable          ***
+   **      Use it at your own risk and discretion     **
+   *This is a work in progress and not production ready*
 
 Examples:
   narrowlink tun -n <agent name>

@@ -8,7 +8,7 @@ Available Commands:
   forward       Create a port forwarding tunnel
   connect       Connect to a remote end node like netcat
   proxy         Create a local socks5 proxy server
-  tun           Create a tun device and forward traffic
+  tun           Create a tun device and forward traffic (experimental)
 
 Options:
   -c, --config=    Specify a config file
