@@ -80,4 +80,7 @@ pub enum ClientError {
     #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
     #[error("Not Supported")]
     NotSupported,
+    #[cfg(target_os = "windows")]
+    #[error("wintun.dll not found, please download from https://www.wintun.net/ and put it in the same directory as narrowlink.exe")]
+    WinTunDLLNotFound,
 }
