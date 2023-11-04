@@ -41,7 +41,8 @@ pub fn main() -> Result<(), ClientError> {
                 true
             } else {
                 io::stdout().is_terminal()
-            } && io::stderr().is_terminal(),
+            } && io::stderr().is_terminal()
+                && !cfg!(target_os = "windows"),
         )
         .compact()
         // .with_target(false)
