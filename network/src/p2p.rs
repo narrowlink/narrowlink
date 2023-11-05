@@ -329,8 +329,9 @@ impl QuicStream {
         )
         .map_err(|_| NetworkError::TlsError)?;
         if let Some(conf) = std::sync::Arc::get_mut(&mut server_config.transport) {
-            conf.keep_alive_interval(Some(Duration::from_secs(5)));
-            // conf.max_concurrent_uni_streams(0_u8.into());
+            conf.keep_alive_interval(Some(Duration::from_secs(4)));
+            conf.max_concurrent_uni_streams(0_u8.into());
+            conf.max_concurrent_bidi_streams(1024_u16.into());
         };
         let end = Endpoint::new(
             EndpointConfig::default(),
