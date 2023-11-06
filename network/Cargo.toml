@@ -13,7 +13,7 @@ include = ["Cargo.toml", "LICENSE", "src/**/*"]
 
 [dependencies]
 bytes = { version = "1.5.0", default-features = false }
-serde = { version = "1.0.190", features = ["derive"], default-features = false }
+serde = { version = "1.0.191", features = ["derive"], default-features = false }
 serde_json = { version = "1.0.108", default-features = false, features = [
     "alloc",
 ] }
@@ -47,7 +47,7 @@ async-recursion = { version = "1.0.5", default-features = false }
 tracing = { version = "0.1.40", default-features = false }
 thiserror = { version = "1.0.50", default-features = false }
 
-narrowlink-types = { version = "0.2.0-git" }
+narrowlink-types = { version = "0.2.0-git", default-features = false }
 
 
 [target.'cfg(unix)'.dependencies]

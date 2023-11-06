@@ -30,11 +30,11 @@ tracing-subscriber = { version = "0.3.17", default-features = false, features = 
     "ansi",
     "json",
 ] }
-tracing-appender = { version = "0.2.2" , default-features = false }
-dirs = { version = "5.0.1" , default-features = false }
-serde_json = { version = "1.0.108" , default-features = false }
+tracing-appender = { version = "0.2.2", default-features = false }
+dirs = { version = "5.0.1", default-features = false }
+serde_json = { version = "1.0.108", default-features = false }
 serde_yaml = { version = "0.9.27", default-features = false }
-serde = { version = "1.0.190", features = ["derive"], default-features = false }
+serde = { version = "1.0.191", features = ["derive"], default-features = false }
 async-trait = { version = "0.1.74", default-features = false }
 futures-util = { version = "0.3.29", default-features = false }
 askama = { version = "0.12.1", default-features = false }

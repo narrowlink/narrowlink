@@ -10,19 +10,25 @@ keywords = ["narrowlink"]
 authors = ['Narrowlink <opensource@narrowlink.com>']
 edition = "2021"
 
-include = ["Cargo.toml", "LICENSE", "sample_token-generator.yaml", "src/**/*", "*help.arg"]
+include = [
+    "Cargo.toml",
+    "LICENSE",
+    "sample_token-generator.yaml",
+    "src/**/*",
+    "*help.arg",
+]
 
 [[bin]]
 name = "narrowlink-token-generator"
 path = "src/main.rs"
 
 [dependencies]
-jsonwebtoken = { version = "9.1.0" }
-serde = { version = "1.0.190", features = ["derive"] }
-serde_yaml = { version = "0.9.27" }
-dirs = { version = "5.0.1" }
+jsonwebtoken = { version = "9.1.0", default-features = false }
+serde = { version = "1.0.191", features = ["derive"], default-features = false }
+serde_yaml = { version = "0.9.27", default-features = false }
+dirs = { version = "5.0.1", default-features = false }
 clap_lex = { version = "0.6.0", default-features = false }
 uuid = { version = "1.5.0", features = ["serde", "v4"] }
 thiserror = { version = "1.0.50", default-features = false }
 
-narrowlink-types = { version = "0.2.0-git" }
+narrowlink-types = { version = "0.2.0-git", default-features = false }
