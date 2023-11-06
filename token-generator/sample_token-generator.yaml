@@ -9,13 +9,13 @@ tokens: # list of tokens
     uid: 00000000-0000-0000-0000-000000000000 # client uid, please use a unique uid for each user
     name: client_name_2 # client name, please use a unique name for each client
     exp: 1710227806 # expiration time in seconds since epoch
-    policies: [1] # list of policy ids, it must be the same as the policy id in the client policy token, all the policies must be satisfied
+    policies: [1025] # list of policy ids, it must be the same as the policy id in the client policy token, all the policies must be satisfied
 
   - !ClientPolicy # client policy token
     uid: 00000000-0000-0000-0000-000000000000 # client uid, please use a unique uid for each user
     name: client_name_1 # client name, please use a unique name for each client
     exp: 1710227806 # expiration time in seconds since epoch
-    pid: 1 # policy id, it must be the same as the policy id in the client token
+    pid: 1025 # policy id, it must be the same as the policy id in the client token
     policy: # policies for this client
       type: !WhiteList # !WhiteList or !BlackList
       policies: # list of policies

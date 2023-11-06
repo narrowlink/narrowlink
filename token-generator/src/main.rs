@@ -26,6 +26,9 @@ fn main() -> Result<(), TokenGeneratorError> {
                 println!("Client Token: {}:{}\r\n{}", client.uid, client.name, ct);
             }
             TokenType::ClientPolicy(policy) => {
+                if policy.pid < 1024 {
+                    return Err(TokenGeneratorError::InvalidPolicyId);
+                }
                 let Ok(ct) = jsonwebtoken::encode(
                     &Header::new(Algorithm::default()),
                     &policy,

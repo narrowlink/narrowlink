@@ -20,4 +20,6 @@ pub enum TokenGeneratorError {
     TokenGenerationError,
     #[error("IO Error: {0}")]
     IoError(#[from] std::io::Error),
+    #[error("Invalid Policy Id, must be between 1025 and 65535")]
+    InvalidPolicyId,
 }
