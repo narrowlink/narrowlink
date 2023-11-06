@@ -16,3 +16,4 @@ Options:
   -u, --udp         Use UDP instead of TCP
   -n, --name=       The name of the agent
   -k, --key=        The secret key for end-to-end encryption
+

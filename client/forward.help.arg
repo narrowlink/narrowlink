@@ -17,3 +17,4 @@ Options:
   -n, --name=       The name of the agent (required)
   -k, --key=        The secret key for end-to-end encryption
   -l, --local=      The local address and port to bind
+
