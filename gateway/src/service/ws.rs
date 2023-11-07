@@ -24,6 +24,8 @@ use crate::{
 
 use super::{certificate::manager::CertificateManager, wss::TlsEngine, Service};
 
+const INDEX_HTML: &str = include_str!("../../templates/index.html");
+
 #[derive(Clone)]
 pub struct Ws {
     listen_addr: SocketAddr,
@@ -343,6 +345,7 @@ impl HyperService<Request<Body>> for WsService {
                     }
                 }
             } else {
+                let is_homepage = req.uri().path().eq("/");
                 let (response_sender, response_receiver) = oneshot::channel();
                 let _ = status_sender.send(InBound::HttpTransparent(
                     host,
@@ -358,6 +361,12 @@ impl HyperService<Request<Body>> for WsService {
                         Ok(res)
                     }
                     Ok(Err(e)) => {
+                        if matches!(e, crate::state::ResponseErrors::NotFound(_)) && is_homepage {
+                            return Response::builder()
+                                .version(req_version)
+                                .status(StatusCode::OK)
+                                .body::<Body>(INDEX_HTML.into());
+                        }
                         debug!("an expected response error received: {:?}", e);
                         Ok(crate::service::http_templates::response_error(
                             crate::service::http_templates::ErrorFormat::Html,
