@@ -2,9 +2,9 @@
 members = ["gateway", "network", "client", "agent", "types","token-generator"]
 resolver = "2"
 
-[patch.crates-io]
-narrowlink-types = { path = "types" }
-narrowlink-network = { path = "network" }
+# [patch.crates-io]
+# narrowlink-types = { path = "types" }
+# narrowlink-network = { path = "network" }
 
 [profile.release]
 opt-level = "z"          # Optimize for size.
