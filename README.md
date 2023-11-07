@@ -1,15 +1,17 @@
-# Narrowlink
+# [Narrowlink](https://narrowlink.com/docs/intro)
 <p align="center"><img src="https://raw.githubusercontent.com/narrowlink/homepage/main/static/img/NarrowLink-888.svg" alt="Narrowlink Logo" width="50%"></p>
 Narrowlink is a self-hosted platform that allows you to establish secure remote connections between devices within a network that may be hindered by network address translation (NAT) or firewalls. Whether you need to access a home computer from your laptop, share internet access with remote devices, or publish a local web server on the internet, Narrowlink provides the solution.
 
 
-## Use Cases
+## Example of Narrowlink Use Cases and Scenarios
 
--   **Port Forwarding without a Public IP Address:** Access devices within your home network from external locations without public IP addresses.
-    
--   **Sharing Internet Access:** Enable remote devices to access the internet through your network.
-    
--   **Publishing Your Local Webserver:** Make your local webserver accessible on the internet, even without a public IP address.
+- **[Sharing Network Access](/docs/extended-tutorial/share-network-access-socks5)** - If you need to work from home and access your company's internal network, which only allows access from within the network, you can install the Narrowlink agent on a computer located within your company's premises. This will enable you to utilize its internet access[^1] without depending on the company's remote access tools.
+
+- **[Access to Devices Without VPN Support](/docs/category/extended-tutorial/)** - Suppose you have a device that does not support VPN, such as an IoT sensor, CCTV camera, or smart TV, and you want to access them from your laptop on a different network that cannot directly reach the device. In this case, you can install the Narrowlink agent on a device within the same network as these devices. Then, you can connect using your laptop through Narrowlink from anywhere.
+
+- **[Using Native Services like RDP/SSH Across Different Networks](/docs/extended-tutorial/ssh-integration/)** - You can use Narrowlink to access your computer's native services like RDP (Remote Desktop) or SSH directly, without relying on third-party services. This is especially useful when both machines cannot reach each other directly, and neither has a public IP address. Narrowlink allows you to use your SSH or RDP client (e.g., OpenSSH client or Microsoft Remote Desktop) without the need for any modifications or additional software to connect to your computer. The connection can even be established directly using peer-to-peer functionality.
+
+- **[Publishing a Local Webserver](/docs/extended-tutorial/webserver-publish)** - Suppose you have a webserver running on your local network that you want to make accessible on the internet. If your ISP doesn't provide you with a public IP address or you wish to let others publish their webservers on your public IP address from their local networks, Narrowlink can help you publish your webserver to the internet.
     
 
 ## Key Features
@@ -51,3 +53,6 @@ We welcome contributions to the Narrowlink project. To contribute, please read t
 ## License
 
 Narrowlink is released under the MPL-V2 and AGPL-3.0 licenses. Please see the [LICENSE](LICENSE.md) file for more details.
+
+
+[^1]: Please ensure you have permission from your company and comply with your company's security policies before sharing internet access using Narrowlink. Narrowlink is not responsible for any misuse of the software.
