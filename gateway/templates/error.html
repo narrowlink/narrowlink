@@ -8,6 +8,7 @@
         body {
             color: #777;
             background-color: #fff;
+            font-family: sans-serif;
         }
 
         @media (prefers-color-scheme: dark) {
@@ -17,21 +18,15 @@
             }
         }
 
-        p,
-        h1 {
-            font-family: sans-serif;
-        }
-
         a {
             text-decoration: none;
             color: #35A7E4;
         }
 
         p#down {
-            position: absolute;
+            position: fixed;
             bottom: 5px;
-            right: 5px;
-            font-family: Tahoma, 'Trebuchet MS', Arial, Sans-Serif;
+            left: 5px;
             font-size: 12px
         }
     </style>
@@ -40,9 +35,7 @@
 <body>
     <h1>{{title}}</h1>
     <p>{{body}}</p>
-    <hr>
-    <p>Powered By <a href='https://narrowlink.com'>Narrowlink</a></p>
-    <p id='down'>narrowlink.com</p>
+    <p id='down'>Powered By <a href='https://narrowlink.com'>Narrowlink</a></p>
 </body>
 
 </html>
