@@ -191,11 +191,11 @@ impl TunnelFactory {
                 let (socket, protocol): (Box<dyn AsyncSocket>, generic::Protocol) = match listener {
                     either::Left(tcp_listener) => {
                         let (socket, _local_addr) = tcp_listener.accept().await?;
-                        (Box::new(socket), generic::Protocol::UDP)
+                        (Box::new(socket), generic::Protocol::TCP)
                     }
                     either::Right(udp_listener) => {
                         let (socket, _local_addr) = udp_listener.accept().await?;
-                        (Box::new(socket), generic::Protocol::TCP)
+                        (Box::new(socket), generic::Protocol::UDP)
                     }
                 };
                 let addr: (String, u16) = end_point.clone();

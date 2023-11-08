@@ -1,6 +1,6 @@
 [package]
 name = "narrowlink-agent"
-version = "0.2.0"
+version = "0.2.1"
 description = 'Narrowlink Agent'
 readme = "README.md"
 homepage = "https://narrowlink.com"
@@ -52,8 +52,8 @@ clap_lex = { version = "0.6.0", default-features = false }
 thiserror = { version = "1.0.50", default-features = false }
 # base64 = { version = "0.21.0", default-features = false }
 
-narrowlink-types = { version = "0.2.0", default-features = false }
-narrowlink-network = { version = "0.2.0", default-features = false }
+narrowlink-types = { version = "0.2.1", default-features = false }
+narrowlink-network = { version = "0.2.1", default-features = false }
 
 [target.'cfg(unix)'.dependencies]
 daemonize = { version = "0.5.0", default-features = false }
