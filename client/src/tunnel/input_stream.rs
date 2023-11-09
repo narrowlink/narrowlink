@@ -1,5 +1,6 @@
 use std::{
     pin::Pin,
+    process,
     task::{Context, Poll},
 };
 
@@ -48,5 +49,11 @@ impl AsyncWrite for InputStream {
         ctx: &mut Context<'_>,
     ) -> Poll<Result<(), std::io::Error>> {
         Pin::new(&mut self.stdout).poll_shutdown(ctx)
+    }
+}
+
+impl Drop for InputStream {
+    fn drop(&mut self) {
+        process::exit(0);
     }
 }
