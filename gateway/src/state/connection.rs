@@ -7,7 +7,7 @@ use tokio::{net::TcpStream, sync::oneshot};
 use tracing::{debug, Instrument};
 use uuid::Uuid;
 
-use crate::error::GatewayError;
+use crate::{error::GatewayError, service::RequestProtocol};
 
 use super::{ResponseErrors, ResponseHeaders};
 
@@ -25,6 +25,7 @@ pub enum ClientConnection {
         Request<Body>,
         SocketAddr,
         oneshot::Sender<Result<Response<Body>, ResponseErrors>>,
+        RequestProtocol,
     ),
     TlsTransparent(TcpStream),
     Client(
@@ -160,7 +161,7 @@ impl ConnectionData {
                 .await
                 .map_err(|e| e.into())
             }
-            ClientConnection::HttpTransparent(mut request, peer_addr, replay) => {
+            ClientConnection::HttpTransparent(mut request, peer_addr, replay, service_protocol) => {
                 let agent_stream = agent_socket_receiver
                     .await
                     .map_err(|_| GatewayError::Other("Agent Connection gone"))?;
@@ -195,6 +196,14 @@ impl ConnectionData {
                         if let Ok(peer_addr) = peer_addr.to_string().parse() {
                             request.headers_mut().insert("NL-Connecting-IP", peer_addr);
                         };
+                        request.headers_mut().insert(
+                            "X-Forwarded-Proto",
+                            match service_protocol {
+                                RequestProtocol::Http(_) => HeaderValue::from_static("http"),
+                                RequestProtocol::Https(_) => HeaderValue::from_static("https"),
+                            },
+                        );
+
                         *request.uri_mut() = uri;
                         request
                             .headers_mut()

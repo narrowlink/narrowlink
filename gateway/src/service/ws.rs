@@ -22,7 +22,7 @@ use crate::{
     state::{InBound, ResponseHeaders},
 };
 
-use super::{certificate::manager::CertificateManager, wss::TlsEngine, Service};
+use super::{certificate::manager::CertificateManager, wss::TlsEngine, RequestProtocol, Service};
 
 const INDEX_HTML: &str = include_str!("../../templates/index.html");
 
@@ -76,7 +76,7 @@ impl Service for Ws {
                     .serve_connection(
                         tcp_stream,
                         WsService {
-                            listen_addr,
+                            listen_addr: RequestProtocol::Http(listen_addr),
                             domains: ws.domains,
                             sni: None,
                             status_sender: ws.status_sender,
@@ -95,9 +95,10 @@ impl Service for Ws {
         }
     }
 }
+
 //response header
 pub struct WsService {
-    pub listen_addr: SocketAddr,
+    pub listen_addr: RequestProtocol,
     pub domains: Vec<String>,
     pub sni: Option<String>,
     pub status_sender: UnboundedSender<InBound>,
@@ -143,7 +144,7 @@ impl HyperService<Request<Body>> for WsService {
         let cm = self.cm.clone().filter(|_| self.sni.is_none());
         let status_sender = self.status_sender.clone();
         let peer_addr = self.peer_addr;
-        let listen_addr = self.listen_addr;
+        let listen_addr = self.listen_addr.clone();
 
         let handler = async move {
             let req_version = req.version();
@@ -352,7 +353,7 @@ impl HyperService<Request<Body>> for WsService {
                     req,
                     peer_addr,
                     response_sender,
-                    listen_addr.port(),
+                    listen_addr,
                 ));
                 trace!("http transparent request found and sent and waiting for response");
                 match response_receiver.await {

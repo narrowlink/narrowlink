@@ -9,7 +9,7 @@ use tokio::{net::TcpListener, sync::mpsc::UnboundedSender};
 use tokio_rustls::TlsAcceptor;
 use tracing::{debug, instrument, span, trace, warn, Instrument};
 
-use super::{certificate::manager::CertificateManager, ws::WsService, Service};
+use super::{certificate::manager::CertificateManager, ws::WsService, RequestProtocol, Service};
 
 #[derive(Clone)]
 pub struct Wss {
@@ -200,7 +200,7 @@ impl Service for Wss {
                     .serve_connection(
                         secure_stream,
                         WsService {
-                            listen_addr: self.listen_addr,
+                            listen_addr: RequestProtocol::Https(self.listen_addr),
                             domains: wss.domains,
                             sni: Some(sni),
                             status_sender: wss.status_sender,

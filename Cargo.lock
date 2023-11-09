@@ -1086,7 +1086,7 @@ dependencies = [
 
 [[package]]
 name = "narrowlink-agent"
-version = "0.2.1"
+version = "0.2.2-git"
 dependencies = [
  "clap_lex",
  "daemonize",
@@ -1094,8 +1094,8 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "hmac",
- "narrowlink-network 0.2.0",
- "narrowlink-types 0.2.0",
+ "narrowlink-network",
+ "narrowlink-types",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -1113,7 +1113,7 @@ dependencies = [
 
 [[package]]
 name = "narrowlink-client"
-version = "0.2.1"
+version = "0.2.2-git"
 dependencies = [
  "chrono",
  "clap_lex",
@@ -1125,8 +1125,8 @@ dependencies = [
  "hmac",
  "ipstack",
  "narrowlink-custom-dependencies",
- "narrowlink-network 0.2.0",
- "narrowlink-types 0.2.0",
+ "narrowlink-network",
+ "narrowlink-types",
  "proxy-stream",
  "rand",
  "regex",
@@ -1166,7 +1166,7 @@ dependencies = [
 
 [[package]]
 name = "narrowlink-gateway"
-version = "0.2.1"
+version = "0.2.2-git"
 dependencies = [
  "askama",
  "async-trait",
@@ -1176,8 +1176,8 @@ dependencies = [
  "futures-util",
  "hyper",
  "instant-acme",
- "narrowlink-network 0.2.0",
- "narrowlink-types 0.2.0",
+ "narrowlink-network",
+ "narrowlink-types",
  "pem",
  "rcgen",
  "rustls",
@@ -1199,40 +1199,14 @@ dependencies = [
 
 [[package]]
 name = "narrowlink-network"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6841a4c665f5ccec2936a3fc5d295bd7f3d9bbe01eaf9754274095f21cf169e2"
+version = "0.2.2-git"
 dependencies = [
  "async-recursion",
  "bytes",
  "chacha20poly1305",
  "futures-util",
  "hyper",
- "narrowlink-types 0.2.0",
- "quinn",
- "rlimit",
- "rustls",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "tokio-rustls",
- "tokio-tungstenite",
- "tracing",
- "tungstenite",
- "webpki-roots",
-]
-
-[[package]]
-name = "narrowlink-network"
-version = "0.2.1"
-dependencies = [
- "async-recursion",
- "bytes",
- "chacha20poly1305",
- "futures-util",
- "hyper",
- "narrowlink-types 0.2.0",
+ "narrowlink-types",
  "quinn",
  "rlimit",
  "rustls",
@@ -1249,12 +1223,12 @@ dependencies = [
 
 [[package]]
 name = "narrowlink-token-generator"
-version = "0.2.1"
+version = "0.2.2-git"
 dependencies = [
  "clap_lex",
  "dirs",
  "jsonwebtoken",
- "narrowlink-types 0.2.0",
+ "narrowlink-types",
  "serde",
  "serde_yaml",
  "thiserror",
@@ -1263,27 +1237,7 @@ dependencies = [
 
 [[package]]
 name = "narrowlink-types"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0c517978a032956af8695c1a85071c067cb37e3c9c65d54207ebaabf2c58c07"
-dependencies = [
- "chrono",
- "hmac",
- "ipnet",
- "jsonwebtoken",
- "regex-lite",
- "serde",
- "serde_json",
- "sha3",
- "thiserror",
- "uuid",
- "validator",
- "wildmatch",
-]
-
-[[package]]
-name = "narrowlink-types"
-version = "0.2.1"
+version = "0.2.2-git"
 dependencies = [
  "chrono",
  "hmac",
@@ -1899,9 +1853,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-pemfile"
-version = "1.0.3"
+version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d3987094b1d07b653b7dfdc3f70ce9a1da9c51ac18c1b06b662e4f9a0e9f4b2"
+checksum = "1c74cae0a4cf6ccbbf5f359f08efdf8ee7e1dc532573bf0db71968cb56b1448c"
 dependencies = [
  "base64",
 ]
@@ -2236,9 +2190,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.33.0"
+version = "1.34.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f38200e3ef7995e5ef13baec2f432a6da0aa9ac495b2c0e8f3b7eec2c92d653"
+checksum = "d0c014766411e834f7af5b8f4cf46257aab4036ca95e9d2c144a10f59ad6f5b9"
 dependencies = [
  "backtrace",
  "bytes",
@@ -2255,9 +2209,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-macros"
-version = "2.1.0"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "630bdcf245f78637c13ec01ffae6187cca34625e8c63150d424b59e55af2675e"
+checksum = "5b8a1e28f2deaa14e508979454cb3a223b10b938b45af148bc0986de36f1923b"
 dependencies = [
  "proc-macro2",
  "quote",
