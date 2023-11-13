@@ -26,7 +26,7 @@ tokens: # list of tokens
           - TCP # protocol
         - !Domain # policy based on the destination domain name
           - !Agent agent_name # !Any means any agent, !Agent agent_name means the agent with the name agent_name
-          - narrow.host # destination domain name
+          - narrow.page # destination domain name
           - 443 # destination port
           - TCP # protocol
 
@@ -40,13 +40,13 @@ tokens: # list of tokens
     name: agent_name_3 # agent name, it must be the same name as the agent name in the agent token
     exp: 1710227806 # expiration time in seconds since epoch
     publish_hosts: # list of the services that this agent will publish
-      - host: narrow.host # domain name
+      - host: narrow.page # domain name
         port: 0 # gateway's service port, 0 means any port
         connect: # the address that the agent will connect to publish the service
           host: 127.0.0.1 # ip address or domain name
           port: 80 # port
           protocol: HTTP # protocol
-      - host: tls.narrow.host # domain name
+      - host: tls.narrow.page # domain name
         port: 0 # gateway's service port, 0 means any port
         connect: # the address that the agent will connect to publish the service
           host: 127.0.0.1 # ip address or domain name
