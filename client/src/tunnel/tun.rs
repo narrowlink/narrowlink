@@ -7,7 +7,6 @@ use std::{
 
 use futures_util::{Future, FutureExt, StreamExt};
 use ipstack::stream::IpStackStream;
-use narrowlink_custom_dependencies as net_route;
 use net_route::{Handle, Route};
 use tokio::{
     signal,

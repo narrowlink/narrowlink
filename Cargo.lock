@@ -1124,9 +1124,9 @@ dependencies = [
  "futures-util",
  "hmac",
  "ipstack",
- "narrowlink-custom-dependencies",
  "narrowlink-network",
  "narrowlink-types",
+ "net-route",
  "proxy-stream",
  "rand",
  "regex",
@@ -1145,23 +1145,6 @@ dependencies = [
  "udp-stream",
  "uuid",
  "wintun",
-]
-
-[[package]]
-name = "narrowlink-custom-dependencies"
-version = "0.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9a64fa08273f67b7d2a62faac7c7ef6184fadf9329723962d46d79c27c88055"
-dependencies = [
- "async-stream",
- "bindgen",
- "futures",
- "netlink-packet-core",
- "netlink-packet-route",
- "netlink-sys",
- "rtnetlink",
- "tokio",
- "winapi",
 ]
 
 [[package]]
@@ -1251,6 +1234,23 @@ dependencies = [
  "uuid",
  "validator",
  "wildmatch",
+]
+
+[[package]]
+name = "net-route"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0cad7d178faefcae6a1b639fcc8ea96554119c45710382af31ba8b456e42c23"
+dependencies = [
+ "async-stream",
+ "bindgen",
+ "futures",
+ "netlink-packet-core",
+ "netlink-packet-route",
+ "netlink-sys",
+ "rtnetlink",
+ "tokio",
+ "winapi",
 ]
 
 [[package]]
