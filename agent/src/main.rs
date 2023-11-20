@@ -443,7 +443,7 @@ async fn start(args: Args) -> Result<(), AgentError> {
                                     }
                                 };
                                 if let (Some(k), Some(n)) = (k, n) {
-                                    s = Box::new(AsyncSocketCrypt::new(k, n, s, false).await);
+                                    s = Box::new(AsyncSocketCrypt::new(k, n, s).await);
                                 }
                                 if let Err(_e) = async_forward(s, stream).await {
                                     trace!("Data channel closed: {}", _e.to_string());
@@ -606,7 +606,7 @@ async fn data_connect(
         Box::new(WsConnectionBinary::new(gateway_addr, headers, &service_type).await?);
     trace!("Connected to gateway for Data channel");
     if let (Some(k), Some(n)) = (k, n) {
-        data_stream = Box::new(AsyncSocketCrypt::new(k, n, data_stream, false).await);
+        data_stream = Box::new(AsyncSocketCrypt::new(k, n, data_stream).await);
     }
 
     if let Err(_e) = async_forward(data_stream, socket).await {

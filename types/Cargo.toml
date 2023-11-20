@@ -12,7 +12,7 @@ authors = ['Narrowlink <opensource@narrowlink.com>']
 include = ["Cargo.toml", "LICENSE", "src/**/*"]
 
 [dependencies]
-uuid = { version = "1.5.0", default-features = false, features = ["serde"] }
+uuid = { version = "1.6.0", default-features = false, features = ["serde"] }
 serde = { version = "1.0.192", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0.108", default-features = false }
 jsonwebtoken = { version = "9.1.0", default-features = false }

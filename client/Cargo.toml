@@ -49,18 +49,18 @@ either = { version = "1.9.0", default-features = false }
 tracing = { version = "0.1.40", default-features = false, features = [
     "attributes",
 ] }
-tracing-subscriber = { version = "0.3.17", default-features = false, features = [
+tracing-subscriber = { version = "0.3.18", default-features = false, features = [
     "fmt",
     "ansi",
     "json",
 ] }
-tracing-appender = { version = "0.2.2" }
+tracing-appender = { version = "0.2.3" }
 proxy-stream = { version = "0.0.2", default-features = false }
 sha3 = { version = "0.10.8", default-features = false }
 hmac = { version = "0.12.1", default-features = false }
 rand = { version = "0.8.5", default-features = false }
 dirs = { version = "5.0.1", default-features = false }
-uuid = { version = "1.5.0", features = ["v4"], default-features = false }
+uuid = { version = "1.6.0", features = ["v4"], default-features = false }
 chrono = { version = "0.4.31", default-features = false }
 
 narrowlink-types = { version = "0.2.2-git", default-features = false }

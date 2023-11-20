@@ -25,12 +25,12 @@ hyper = { version = "0.14.27", features = ["full"] }
 tracing = { version = "0.1.40", default-features = false, features = [
     "attributes",
 ] }
-tracing-subscriber = { version = "0.3.17", default-features = false, features = [
+tracing-subscriber = { version = "0.3.18", default-features = false, features = [
     "fmt",
     "ansi",
     "json",
 ] }
-tracing-appender = { version = "0.2.2", default-features = false }
+tracing-appender = { version = "0.2.3", default-features = false }
 dirs = { version = "5.0.1", default-features = false }
 serde_json = { version = "1.0.108", default-features = false }
 serde_yaml = { version = "0.9.27", default-features = false }
@@ -39,7 +39,7 @@ async-trait = { version = "0.1.74", default-features = false }
 futures-util = { version = "0.3.29", default-features = false }
 askama = { version = "0.12.1", default-features = false }
 pem = { version = "3.0.2", default-features = false, features = ["std"] }
-uuid = { version = "1.5.0", default-features = false, features = [
+uuid = { version = "1.6.0", default-features = false, features = [
     "v4",
     "serde",
 ] }
@@ -48,7 +48,7 @@ instant-acme = { version = "0.4.1", default-features = false, features = [
     "hyper-rustls",
 ] }
 tokio-rustls = { version = "0.24.1", default-features = false }
-rustls = { version = "0.21.8", default-features = false }
+rustls = { version = "0.21.9", default-features = false }
 rustls-pemfile = { version = "1.0.4", default-features = false }
 validator = { version = "0.16.1", default-features = false, features = [
     "derive",
