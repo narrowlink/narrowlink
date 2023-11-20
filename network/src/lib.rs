@@ -132,30 +132,30 @@ impl AsyncRead for AsyncSocketCrypt {
                     return Poll::Ready(Ok(()));
                 }
             }
-            if let Some((encrypted_receive_buf, expected_len)) = self.encrypted_receive_buf.take() {
+            if let Some((mut encrypted_receive_buf, expected_len)) =
+                self.encrypted_receive_buf.take()
+            {
                 if encrypted_receive_buf.len() >= expected_len as usize {
+                    let remaining = encrypted_receive_buf.split_off(expected_len as usize);
+
+                    if !remaining.is_empty() {
+                        if remaining.len() == 1 {
+                            self.encrypted_receive_buf = Some((remaining, 0));
+                        } else {
+                            let expected_len = u16::from_be_bytes([remaining[0], remaining[1]]);
+                            self.encrypted_receive_buf =
+                                Some((remaining[2..].to_vec(), expected_len));
+                        }
+                    }
+
                     self.plaintext_receive_buf = Some(
                         self.cipher
-                            .decrypt(
-                                &self.nonce.into(),
-                                &encrypted_receive_buf[..expected_len as usize],
-                            )
+                            .decrypt(&self.nonce.into(), encrypted_receive_buf.as_slice())
                             .map_err(|e| {
                                 std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
                             })?,
                     );
-                    if encrypted_receive_buf.len() > expected_len as usize {
-                        if encrypted_receive_buf.len() == 1 {
-                            self.encrypted_receive_buf = Some((encrypted_receive_buf, 0));
-                        } else {
-                            let expected_len = u16::from_be_bytes([
-                                encrypted_receive_buf[0],
-                                encrypted_receive_buf[1],
-                            ]);
-                            self.encrypted_receive_buf =
-                                Some((encrypted_receive_buf[2..].to_vec(), expected_len));
-                        }
-                    }
+
                     continue;
                 } else {
                     self.encrypted_receive_buf = Some((encrypted_receive_buf, expected_len));
@@ -164,7 +164,6 @@ impl AsyncRead for AsyncSocketCrypt {
 
             let mut tmp_buf = vec![0; buf.capacity()];
             let mut tmp_buf_reader = tokio::io::ReadBuf::new(&mut tmp_buf);
-
             ready!(Pin::new(&mut self.inner).poll_read(cx, &mut tmp_buf_reader)?);
             let tmp_buf = tmp_buf_reader.filled();
             if tmp_buf.is_empty() {
@@ -178,9 +177,9 @@ impl AsyncRead for AsyncSocketCrypt {
                 if tmp_buf.len() == 1 {
                     return Poll::Pending;
                 }
-                if buf.filled().len() >= encrypted_buf.len() - expected_len as usize {
+                if buf.filled().len() >= expected_len as usize - encrypted_buf.len() {
                     encrypted_buf
-                        .extend_from_slice(&tmp_buf[..encrypted_buf.len() - expected_len as usize]);
+                        .extend_from_slice(&tmp_buf[..expected_len as usize - encrypted_buf.len()]);
                     self.plaintext_receive_buf = Some(
                         self.cipher
                             .decrypt(&self.nonce.into(), encrypted_buf.as_slice())
@@ -190,9 +189,10 @@ impl AsyncRead for AsyncSocketCrypt {
                     );
                     return Poll::Ready(Ok(()));
                 } else {
-                    encrypted_buf.extend_from_slice(tmp_buf_reader.filled());
+                    encrypted_buf.extend_from_slice(tmp_buf);
                     self.encrypted_receive_buf = Some((encrypted_buf, expected_len));
-                    return Poll::Pending;
+                    continue;
+                    // return Poll::Pending;
                 }
             } else {
                 if tmp_buf.len() == 1 {
