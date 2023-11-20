@@ -1,7 +1,6 @@
 use narrowlink_types::ServiceType;
 use serde::{Deserialize, Serialize};
 use std::{env, fs::File, io::Read, path::PathBuf};
-use tracing::warn;
 
 use crate::error::ClientError;
 
@@ -24,14 +23,6 @@ pub enum Endpoint {
 #[derive(Deserialize, Serialize)]
 pub struct Config {
     pub endpoints: Vec<Endpoint>,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct OldConfig {
-    pub gateway: String,
-    pub token: String,
-    #[serde(default = "ServiceType::default")]
-    pub service_type: ServiceType,
 }
 
 impl Config {
@@ -94,19 +85,6 @@ impl Config {
         let mut file = File::open(path)?;
         let mut configuration_data = String::new();
         file.read_to_string(&mut configuration_data)?;
-        serde_yaml::from_str(&configuration_data)
-            .or(Err(ClientError::InvalidConfig))
-            .or_else(|e| {
-                let old_config: OldConfig = serde_yaml::from_str(&configuration_data).or(Err(e))?;
-                warn!("Update your config file; old format will be deprecated in the next release");
-                Ok(Config {
-                    endpoints: vec![Endpoint::SelfHosted(SelfHosted {
-                        gateway: old_config.gateway,
-                        token: old_config.token,
-                        acl: Vec::new(),
-                        protocol: old_config.service_type,
-                    })],
-                })
-            })
+        serde_yaml::from_str(&configuration_data).or(Err(ClientError::InvalidConfig))
     }
 }

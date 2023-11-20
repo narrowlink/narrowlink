@@ -1,7 +1,6 @@
 use narrowlink_types::ServiceType;
 use serde::{Deserialize, Serialize};
-use std::{env, fs::File, io::Read, path::PathBuf, vec};
-use tracing::warn;
+use std::{env, fs::File, io::Read, path::PathBuf};
 
 use crate::error::AgentError;
 
@@ -44,18 +43,6 @@ pub struct Config {
     pub endpoints: Vec<Endpoint>,
     #[serde(default = "Vec::new")]
     pub e2ee: Vec<E2EE>,
-}
-
-#[derive(Deserialize)]
-pub struct OldConfig {
-    pub gateway: String,
-    pub token: String,
-    pub publish: Option<String>,
-    pub key: Option<String>,
-    #[serde(default = "KeyPolicy::default")]
-    pub key_policy: KeyPolicy,
-    #[serde(default = "ServiceType::default")]
-    pub service_type: ServiceType,
 }
 
 impl Config {
@@ -118,30 +105,7 @@ impl Config {
         let mut file = File::open(path)?;
         let mut configuration_data = String::new();
         file.read_to_string(&mut configuration_data)?;
-        serde_yaml::from_str(&configuration_data)
-            .or(Err(AgentError::InvalidConfig))
-            .or_else(|e| {
-                let old_config =
-                    serde_yaml::from_str::<OldConfig>(&configuration_data).or(Err(e))?;
-                warn!("Update your config file; old format will be deprecated in the next release");
-                Ok(Config {
-                    endpoints: vec![Endpoint::SelfHosted(SelfHosted {
-                        gateway: old_config.gateway,
-                        token: old_config.token,
-                        publish: old_config.publish.map(|p| vec![p]),
-                        protocol: old_config.service_type,
-                    })],
-                    e2ee: old_config
-                        .key
-                        .map(|k| {
-                            vec![E2EE::PassPhrase(PassPhrase {
-                                phrase: k,
-                                policy: old_config.key_policy,
-                            })]
-                        })
-                        .unwrap_or(vec![]),
-                })
-            })
+        serde_yaml::from_str(&configuration_data).or(Err(AgentError::InvalidConfig))
     }
 }
 
