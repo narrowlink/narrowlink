@@ -12,6 +12,7 @@ static PROXY_HELP: &str = include_str!("../proxy.help.arg");
 static CONNECT_HELP: &str = include_str!("../connect.help.arg");
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 static TUN_HELP: &str = include_str!("../tun.help.arg");
+static BRIEF_LICENCE: &str = "This program is licensed under the Mozilla Public License 2.0.";
 
 pub fn extract_addr(addr: &str, local: bool) -> Result<(String, u16), ClientError> {
     match addr.parse::<SocketAddr>() {
@@ -172,7 +173,8 @@ impl Args {
                         process::exit(0x0);
                     }
                     Ok("version") => {
-                        print!("{}", env!("CARGO_PKG_VERSION"));
+                        println!("Narrowlink Client, version {}", env!("CARGO_PKG_VERSION"));
+                        println!("{}", BRIEF_LICENCE);
                         process::exit(0x0);
                     }
                     _ => {}

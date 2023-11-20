@@ -3,7 +3,7 @@ use std::process;
 use crate::error::TokenGeneratorError;
 
 static HELP: &str = include_str!("../main.help.arg");
-
+static BRIEF_LICENCE: &str = "This program is licensed under the Mozilla Public License 2.0.";
 pub struct Args {
     pub config_path: Option<String>,
 }
@@ -37,7 +37,8 @@ impl Args {
                         process::exit(0x0);
                     }
                     Ok("version") => {
-                        print!("{}", env!("CARGO_PKG_VERSION"));
+                        println!("Narrowlink Token Generator, version {}", env!("CARGO_PKG_VERSION"));
+                        println!("{}", BRIEF_LICENCE);
                         process::exit(0x0);
                     }
                     _ => {

@@ -3,7 +3,7 @@ use crate::error::AgentError;
 use std::process;
 
 static HELP: &str = include_str!("../main.help.arg");
-
+static BRIEF_LICENCE: &str = "This program is licensed under the Mozilla Public License 2.0.";
 pub struct Args {
     pub config_path: Option<String>,
     pub daemon: bool,
@@ -43,7 +43,8 @@ impl Args {
                         process::exit(0x0);
                     }
                     Ok("version") => {
-                        print!("{}", env!("CARGO_PKG_VERSION"));
+                        println!("Narrowlink Agent, version {}", env!("CARGO_PKG_VERSION"));
+                        println!("{}", BRIEF_LICENCE);
                         process::exit(0x0);
                     }
                     _ => {
