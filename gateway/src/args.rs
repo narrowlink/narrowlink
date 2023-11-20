@@ -5,7 +5,8 @@ use crate::error::GatewayError;
 use std::process;
 
 static HELP: &str = include_str!("../main.help.arg");
-static BRIEF_LICENCE: &str = "This program is licensed under the GNU Affero General Public License v3.0.";
+static BRIEF_LICENCE: &str =
+    "This program is licensed under the GNU Affero General Public License v3.0.";
 pub struct Args {
     pub config_path: Option<String>,
 }

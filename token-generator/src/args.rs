@@ -37,7 +37,10 @@ impl Args {
                         process::exit(0x0);
                     }
                     Ok("version") => {
-                        println!("Narrowlink Token Generator, version {}", env!("CARGO_PKG_VERSION"));
+                        println!(
+                            "Narrowlink Token Generator, version {}",
+                            env!("CARGO_PKG_VERSION")
+                        );
                         println!("{}", BRIEF_LICENCE);
                         process::exit(0x0);
                     }
