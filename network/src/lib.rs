@@ -177,7 +177,7 @@ impl AsyncRead for AsyncSocketCrypt {
                 if tmp_buf.len() == 1 {
                     return Poll::Pending;
                 }
-                if buf.filled().len() >= expected_len as usize - encrypted_buf.len() {
+                if tmp_buf.len() >= expected_len as usize - encrypted_buf.len() {
                     encrypted_buf
                         .extend_from_slice(&tmp_buf[..expected_len as usize - encrypted_buf.len()]);
                     self.plaintext_receive_buf = Some(
