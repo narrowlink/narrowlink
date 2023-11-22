@@ -1,10 +1,8 @@
 pub use async_tools::{AsyncToStream, StreamToAsync};
 use chacha20poly1305::{aead::Aead, KeyInit, XChaCha20Poly1305};
-use std::{
-    pin::Pin,
-    task::{ready, Poll},
-};
-
+use std::{io, pin::Pin, task::Poll};
+use tokio_tungstenite::WebSocketStream;
+use tungstenite::{protocol::Role, Message};
 mod async_tools;
 pub mod error;
 pub mod event;
@@ -86,27 +84,94 @@ pub async fn async_forward(
     }
 }
 
-const MAX_ENCRYPTED_LEN: usize = 65536 + 16 + 2; // 16 is the size of the tag + 2 is the size of the length
 pub struct AsyncSocketCrypt {
-    inner: Box<dyn AsyncSocket>,
+    inner: WebSocketStream<Box<dyn AsyncSocket>>,
     cipher: XChaCha20Poly1305,
     nonce: [u8; 24],
-    encrypted_receive_buf: Option<(Vec<u8>, u16)>, // encrypted, expected_len
-    plaintext_receive_buf: Option<Vec<u8>>,
-    send_buf: Option<(Vec<u8>, u16)>, // encrypted, original_len
 }
 
 impl AsyncSocketCrypt {
-    pub async fn new(key: [u8; 32], nonce: [u8; 24], inner: Box<dyn AsyncSocket>) -> Self {
+    pub async fn new(
+        key: [u8; 32],
+        nonce: [u8; 24],
+        inner: Box<dyn AsyncSocket>,
+        left: bool,
+    ) -> Self {
         let cipher = XChaCha20Poly1305::new(&key.into());
+        let inner = tokio_tungstenite::WebSocketStream::from_raw_socket(
+            inner,
+            if left { Role::Client } else { Role::Server },
+            None,
+        )
+        .await;
         Self {
             inner,
             cipher,
             nonce,
-            encrypted_receive_buf: None,
-            plaintext_receive_buf: None,
-            send_buf: None,
         }
+    }
+}
+
+impl Stream for AsyncSocketCrypt {
+    type Item = Result<Vec<u8>, std::io::Error>;
+
+    fn poll_next(
+        mut self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
+        match self
+            .inner
+            .poll_next_unpin(cx)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?
+        {
+            Poll::Ready(Some(Message::Binary(buf))) => Poll::Ready(Some(
+                self.cipher
+                    .decrypt(&self.nonce.into(), buf.as_ref())
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string())),
+            )),
+            Poll::Pending => Poll::Pending,
+            _ => Poll::Ready(None),
+        }
+    }
+}
+impl Sink<Vec<u8>> for AsyncSocketCrypt {
+    type Error = std::io::Error;
+
+    fn poll_ready(
+        mut self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
+        self.inner
+            .poll_ready_unpin(cx)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+    }
+
+    fn start_send(mut self: Pin<&mut Self>, item: Vec<u8>) -> Result<(), Self::Error> {
+        let buf = self
+            .cipher
+            .encrypt(&self.nonce.into(), item.as_ref())
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+        self.inner
+            .start_send_unpin(Message::Binary(buf))
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+    }
+
+    fn poll_flush(
+        mut self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
+        self.inner
+            .poll_flush_unpin(cx)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+    }
+
+    fn poll_close(
+        mut self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Result<(), Self::Error>> {
+        self.inner
+            .poll_close_unpin(cx)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
     }
 }
 
@@ -116,120 +181,18 @@ impl AsyncRead for AsyncSocketCrypt {
         cx: &mut std::task::Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> Poll<std::io::Result<()>> {
-        loop {
-            if let Some(mut plaintext_buf) = self.plaintext_receive_buf.take() {
-                if plaintext_buf.len() > buf.remaining() {
-                    if buf.remaining() == 0 {
-                        self.plaintext_receive_buf = Some(plaintext_buf);
-                        return Poll::Pending;
-                    }
-                    let remaining = plaintext_buf.split_off(buf.remaining());
-                    buf.put_slice(&plaintext_buf);
-                    self.plaintext_receive_buf = Some(remaining);
-                    return Poll::Ready(Ok(()));
-                } else {
-                    buf.put_slice(&plaintext_buf);
-                    return Poll::Ready(Ok(()));
-                }
+        match Pin::new(&mut self).poll_next(cx)? {
+            Poll::Ready(Some(item)) => {
+                let b = self
+                    .cipher
+                    .decrypt(&self.nonce.into(), item.as_slice())
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+                    .unwrap();
+                buf.put_slice(&b);
+                Poll::Ready(Ok(()))
             }
-            if let Some((mut encrypted_receive_buf, expected_len)) =
-                self.encrypted_receive_buf.take()
-            {
-                if encrypted_receive_buf.len() >= expected_len as usize {
-                    let remaining = encrypted_receive_buf.split_off(expected_len as usize);
-
-                    if !remaining.is_empty() {
-                        if remaining.len() == 1 {
-                            self.encrypted_receive_buf = Some((remaining, 0));
-                        } else {
-                            let expected_len = u16::from_be_bytes([remaining[0], remaining[1]]);
-                            self.encrypted_receive_buf =
-                                Some((remaining[2..].to_vec(), expected_len));
-                        }
-                    }
-
-                    self.plaintext_receive_buf = Some(
-                        self.cipher
-                            .decrypt(&self.nonce.into(), encrypted_receive_buf.as_slice())
-                            .map_err(|e| {
-                                std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
-                            })?,
-                    );
-
-                    continue;
-                } else {
-                    self.encrypted_receive_buf = Some((encrypted_receive_buf, expected_len));
-                }
-            }
-
-            let mut tmp_buf = vec![0; buf.capacity()];
-            let mut tmp_buf_reader = tokio::io::ReadBuf::new(&mut tmp_buf);
-            ready!(Pin::new(&mut self.inner).poll_read(cx, &mut tmp_buf_reader)?);
-            let tmp_buf = tmp_buf_reader.filled();
-            if tmp_buf.is_empty() {
-                return Poll::Ready(Ok(()));
-            };
-            if let Some((mut encrypted_buf, mut expected_len)) = self.encrypted_receive_buf.take() {
-                if expected_len == 0 {
-                    expected_len = u16::from_be_bytes([encrypted_buf[0], tmp_buf[0]]);
-                    encrypted_buf.clear();
-                }
-                if tmp_buf.len() == 1 {
-                    return Poll::Pending;
-                }
-                let encrypted_chunk_index = expected_len as usize - encrypted_buf.len();
-                if tmp_buf.len() >= encrypted_chunk_index {
-                    encrypted_buf.extend_from_slice(&tmp_buf[..encrypted_chunk_index]);
-                    self.plaintext_receive_buf = Some(
-                        self.cipher
-                            .decrypt(&self.nonce.into(), encrypted_buf.as_slice())
-                            .map_err(|e| {
-                                std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
-                            })?,
-                    );
-                    if tmp_buf.len() > encrypted_chunk_index {
-                        let rest = tmp_buf[encrypted_chunk_index..].to_vec();
-                        if rest.len() == 1 {
-                            self.encrypted_receive_buf = Some((rest, 0));
-                        } else {
-                            let expected_len = u16::from_be_bytes([rest[0], rest[1]]);
-                            self.encrypted_receive_buf = Some((rest[2..].to_vec(), expected_len));
-                        }
-                    }
-                } else {
-                    encrypted_buf.extend_from_slice(tmp_buf);
-                    self.encrypted_receive_buf = Some((encrypted_buf, expected_len));
-                }
-                continue;
-            } else {
-                if tmp_buf.len() == 1 {
-                    self.encrypted_receive_buf = Some((tmp_buf.to_vec(), 0));
-                } else {
-                    let expected_len = u16::from_be_bytes([tmp_buf[0], tmp_buf[1]]);
-                    if tmp_buf.len() as u16 >= expected_len + 2 {
-                        self.plaintext_receive_buf = Some(
-                            self.cipher
-                                .decrypt(&self.nonce.into(), &tmp_buf[2..expected_len as usize + 2])
-                                .map_err(|e| {
-                                    std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
-                                })?,
-                        );
-                        if tmp_buf.len() as u16 > expected_len + 2 {
-                            let rest = tmp_buf[expected_len as usize + 2..].to_vec();
-                            if rest.len() == 1 {
-                                self.encrypted_receive_buf = Some((rest, 0));
-                            } else {
-                                let expected_len = u16::from_be_bytes([rest[0], rest[1]]);
-                                self.encrypted_receive_buf =
-                                    Some((rest[2..].to_vec(), expected_len));
-                            }
-                        }
-                    } else {
-                        self.encrypted_receive_buf = Some((tmp_buf[2..].to_vec(), expected_len));
-                    }
-                }
-                continue;
-            }
+            Poll::Ready(None) => Poll::Ready(Ok(())),
+            Poll::Pending => Poll::Pending,
         }
     }
 }
@@ -240,57 +203,33 @@ impl AsyncWrite for AsyncSocketCrypt {
         cx: &mut std::task::Context<'_>,
         buf: &[u8],
     ) -> Poll<Result<usize, std::io::Error>> {
-        loop {
-            if let Some((mut send_buf, original_len)) = self.send_buf.take() {
-                match Pin::new(&mut self.inner).poll_write(cx, send_buf.as_ref())? {
-                    Poll::Ready(n) => {
-                        if n == send_buf.len() {
-                            return Poll::Ready(Ok(original_len as usize));
-                        } else {
-                            self.send_buf = Some((send_buf.split_off(n), original_len));
-                        }
-                    }
-                    Poll::Pending => {
-                        self.send_buf = Some((send_buf, original_len));
-                        return Poll::Pending;
-                    }
+        match self.as_mut().poll_ready(cx) {
+            Poll::Ready(Ok(())) => {
+                let cipher_text = self
+                    .cipher
+                    .encrypt(&self.nonce.into(), buf)
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+                match self.start_send_unpin(cipher_text) {
+                    Ok(()) => Poll::Ready(Ok(buf.len())),
+                    Err(e) => Poll::Ready(Err(e)),
                 }
             }
-            if buf.is_empty() {
-                return Poll::Ready(Ok(0));
-            }
-            let buf: &[u8] = if buf.len() > MAX_ENCRYPTED_LEN {
-                &buf[..MAX_ENCRYPTED_LEN]
-            } else {
-                buf
-            };
-            let original_len = buf.len() as u16;
-            let encrypted = self
-                .cipher
-                .encrypt(&self.nonce.into(), buf)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
-            self.send_buf = Some((
-                [
-                    (encrypted.len() as u16).to_be_bytes().as_slice(),
-                    &encrypted,
-                ]
-                .concat(),
-                original_len,
-            ));
+            Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
+            Poll::Pending => Poll::Pending,
         }
     }
 
     fn poll_flush(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> Poll<Result<(), std::io::Error>> {
-        Pin::new(&mut self.inner).poll_flush(cx)
+        <dyn Sink<Vec<u8>, Error = std::io::Error>>::poll_flush(self, cx)
     }
 
     fn poll_shutdown(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> Poll<Result<(), std::io::Error>> {
-        Pin::new(&mut self.inner).poll_shutdown(cx)
+        self.poll_close(cx)
     }
 }
