@@ -177,9 +177,9 @@ impl AsyncRead for AsyncSocketCrypt {
                 if tmp_buf.len() == 1 {
                     return Poll::Pending;
                 }
-                if tmp_buf.len() >= expected_len as usize - encrypted_buf.len() {
-                    encrypted_buf
-                        .extend_from_slice(&tmp_buf[..expected_len as usize - encrypted_buf.len()]);
+                let encrypted_chunk_index = expected_len as usize - encrypted_buf.len();
+                if tmp_buf.len() >= encrypted_chunk_index {
+                    encrypted_buf.extend_from_slice(&tmp_buf[..encrypted_chunk_index]);
                     self.plaintext_receive_buf = Some(
                         self.cipher
                             .decrypt(&self.nonce.into(), encrypted_buf.as_slice())
@@ -187,13 +187,20 @@ impl AsyncRead for AsyncSocketCrypt {
                                 std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
                             })?,
                     );
-                    return Poll::Ready(Ok(()));
+                    if tmp_buf.len() > encrypted_chunk_index {
+                        let rest = tmp_buf[encrypted_chunk_index..].to_vec();
+                        if rest.len() == 1 {
+                            self.encrypted_receive_buf = Some((rest, 0));
+                        } else {
+                            let expected_len = u16::from_be_bytes([rest[0], rest[1]]);
+                            self.encrypted_receive_buf = Some((rest[2..].to_vec(), expected_len));
+                        }
+                    }
                 } else {
                     encrypted_buf.extend_from_slice(tmp_buf);
                     self.encrypted_receive_buf = Some((encrypted_buf, expected_len));
-                    continue;
-                    // return Poll::Pending;
                 }
+                continue;
             } else {
                 if tmp_buf.len() == 1 {
                     self.encrypted_receive_buf = Some((tmp_buf.to_vec(), 0));
