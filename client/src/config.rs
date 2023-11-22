@@ -6,6 +6,8 @@ use crate::error::ClientError;
 
 #[derive(Deserialize, Serialize)]
 pub struct SelfHosted {
+    #[serde(default = "Option::default")]
+    pub namespace: Option<String>,
     pub gateway: String,
     pub token: String,
     #[serde(default = "Vec::new")]
