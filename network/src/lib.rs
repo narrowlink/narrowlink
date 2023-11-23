@@ -1,8 +1,8 @@
 pub use async_tools::{AsyncToStream, StreamToAsync};
+use bytes::Buf;
 use chacha20poly1305::{aead::Aead, KeyInit, XChaCha20Poly1305};
-use std::{io, pin::Pin, task::Poll};
-use tokio_tungstenite::WebSocketStream;
-use tungstenite::{protocol::Role, Message};
+use std::{io, ops::Deref, pin::Pin, task::Poll};
+use thiserror::Error;
 mod async_tools;
 pub mod error;
 pub mod event;
@@ -12,6 +12,7 @@ pub mod ws;
 use error::NetworkError;
 use futures_util::{Sink, SinkExt, Stream, StreamExt};
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
+use tokio_util::codec::{Decoder, Encoder, Framed};
 
 pub trait AsyncSocket: AsyncRead + AsyncWrite + Unpin + Send + 'static {}
 impl<T> AsyncSocket for T where T: AsyncRead + AsyncWrite + Unpin + Send + 'static {}
@@ -85,27 +86,17 @@ pub async fn async_forward(
 }
 
 pub struct AsyncSocketCrypt {
-    inner: WebSocketStream<Box<dyn AsyncSocket>>,
+    inner: Framed<Box<dyn AsyncSocket>, ChunkStream>,
     cipher: XChaCha20Poly1305,
     nonce: [u8; 24],
 }
 
 impl AsyncSocketCrypt {
-    pub async fn new(
-        key: [u8; 32],
-        nonce: [u8; 24],
-        inner: Box<dyn AsyncSocket>,
-        left: bool,
-    ) -> Self {
+    pub async fn new(key: [u8; 32], nonce: [u8; 24], inner: Box<dyn AsyncSocket>) -> Self {
         let cipher = XChaCha20Poly1305::new(&key.into());
-        let inner = tokio_tungstenite::WebSocketStream::from_raw_socket(
-            inner,
-            if left { Role::Client } else { Role::Server },
-            None,
-        )
-        .await;
+        let chunk_stream = ChunkStream::new(None);
         Self {
-            inner,
+            inner: tokio_util::codec::Framed::new(inner, chunk_stream),
             cipher,
             nonce,
         }
@@ -124,9 +115,9 @@ impl Stream for AsyncSocketCrypt {
             .poll_next_unpin(cx)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?
         {
-            Poll::Ready(Some(Message::Binary(buf))) => Poll::Ready(Some(
+            Poll::Ready(Some(chunk)) => Poll::Ready(Some(
                 self.cipher
-                    .decrypt(&self.nonce.into(), buf.as_ref())
+                    .decrypt(&self.nonce.into(), chunk.as_ref())
                     .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string())),
             )),
             Poll::Pending => Poll::Pending,
@@ -152,7 +143,7 @@ impl Sink<Vec<u8>> for AsyncSocketCrypt {
             .encrypt(&self.nonce.into(), item.as_ref())
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
         self.inner
-            .start_send_unpin(Message::Binary(buf))
+            .start_send_unpin(buf)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
     }
 
@@ -231,5 +222,146 @@ impl AsyncWrite for AsyncSocketCrypt {
         cx: &mut std::task::Context<'_>,
     ) -> Poll<Result<(), std::io::Error>> {
         self.poll_close(cx)
+    }
+}
+
+#[derive(Error, Debug)]
+enum ChunkError {
+    #[error("Chunk is empty")]
+    InvalidChunk,
+    #[error("Chunk is out of order")]
+    OutOfOrder,
+    #[error("IO error {0}")]
+    Future(#[from] std::io::Error),
+}
+
+struct ChunkStream {
+    current_index: Option<(u64, u64)>, // send index, receive index
+}
+
+impl ChunkStream {
+    fn new(current_index: Option<(u64, u64)>) -> ChunkStream {
+        ChunkStream { current_index }
+    }
+}
+
+struct Chunk {
+    #[allow(dead_code)]
+    index: u64,
+    #[allow(dead_code)]
+    length: u64,
+    data: Vec<u8>,
+}
+
+impl Deref for Chunk {
+    type Target = Vec<u8>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl Decoder for ChunkStream {
+    type Item = Chunk;
+
+    type Error = ChunkError;
+
+    fn decode(
+        &mut self,
+        src: &mut tokio_util::bytes::BytesMut,
+    ) -> Result<Option<Self::Item>, Self::Error> {
+        if src.len() < 2 {
+            return Ok(None);
+        }
+        let index_pointer = (src[0] & 0xf0) as u64;
+        let len_pointer = (src[0] & 0x7f) as u64;
+        if index_pointer > 8 || len_pointer > 8 || len_pointer == 0 {
+            return Err(ChunkError::InvalidChunk);
+        }
+        if (src.len() as u64) < (len_pointer + index_pointer + 1) {
+            return Ok(None);
+        }
+        let index = match index_pointer {
+            0 => 0_u64,
+            1 => u8::from_be_bytes([src[1]]) as u64,
+            2 => u16::from_be_bytes([src[1], src[2]]) as u64,
+            3..=4 => u32::from_be_bytes(
+                src[1..index_pointer as usize]
+                    .try_into()
+                    .map_err(|_| ChunkError::InvalidChunk)?,
+            ) as u64,
+            5..=8 => u64::from_be_bytes(
+                src[1..index_pointer as usize]
+                    .try_into()
+                    .map_err(|_| ChunkError::InvalidChunk)?,
+            ),
+            _ => return Err(ChunkError::InvalidChunk),
+        };
+
+        if self.current_index.filter(|(_, i)| i != &index).is_some() {
+            return Err(ChunkError::OutOfOrder);
+        }
+
+        let length = match len_pointer {
+            1 => u8::from_be_bytes([src[1 + index_pointer as usize]]) as u64,
+            2 => u16::from_be_bytes([
+                src[1 + index_pointer as usize],
+                src[2 + index_pointer as usize],
+            ]) as u64,
+            3..=4 => u32::from_be_bytes(
+                src[1 + (index_pointer as usize)..((index_pointer + len_pointer) as usize)]
+                    .try_into()
+                    .map_err(|_| ChunkError::InvalidChunk)?,
+            ) as u64,
+            5..=8 => u64::from_be_bytes(
+                src[1 + index_pointer as usize..(index_pointer + len_pointer) as usize]
+                    .try_into()
+                    .map_err(|_| ChunkError::InvalidChunk)?,
+            ),
+            _ => return Err(ChunkError::InvalidChunk),
+        };
+        if src.len() < (index_pointer + len_pointer + length + 1) as usize {
+            Ok(None)
+        } else {
+            src.advance((index_pointer + len_pointer + 1) as usize);
+            Ok(Some(Chunk {
+                index,
+                length,
+                data: src.split_to(length as usize).to_vec(),
+            }))
+        }
+    }
+}
+
+impl Encoder<Vec<u8>> for ChunkStream {
+    type Error = ChunkError;
+
+    fn encode(
+        &mut self,
+        item: Vec<u8>,
+        dst: &mut tokio_util::bytes::BytesMut,
+    ) -> Result<(), Self::Error> {
+        let index = self
+            .current_index
+            .map(|(i, _)| i)
+            .unwrap_or(0)
+            .to_be_bytes()
+            .into_iter()
+            .skip_while(|x| x == &0)
+            .collect::<Vec<u8>>();
+
+        let length = item
+            .len()
+            .to_be_bytes()
+            .into_iter()
+            .skip_while(|x| x == &0)
+            .collect::<Vec<u8>>();
+        dst.extend_from_slice(&[((index.len() as u8) << 4) | (length.len() as u8)]);
+        dst.extend_from_slice(&index);
+        dst.extend_from_slice(&length);
+        dst.extend_from_slice(&item);
+        self.current_index = self.current_index.map(|(i, y)| (i + item.len() as u64, y));
+
+        Ok(())
     }
 }

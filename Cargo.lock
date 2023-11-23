@@ -1183,6 +1183,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-tungstenite",
+ "tokio-util",
  "tracing",
  "tungstenite",
  "webpki-roots",

@@ -229,7 +229,7 @@ impl TransportFactory {
 
         if let Some((key, nonce)) = e2ee_params {
             Ok((
-                Box::new(AsyncSocketCrypt::new(key, nonce, Box::new(quic_socket), true).await),
+                Box::new(AsyncSocketCrypt::new(key, nonce, Box::new(quic_socket)).await),
                 None,
             ))
         } else {
@@ -319,7 +319,7 @@ impl TransportFactory {
 
         if let Some((key, nonce)) = e2ee_params {
             Ok((
-                Box::new(AsyncSocketCrypt::new(key, nonce, Box::new(connection), true).await),
+                Box::new(AsyncSocketCrypt::new(key, nonce, Box::new(connection)).await),
                 connection_id,
             ))
         } else {
