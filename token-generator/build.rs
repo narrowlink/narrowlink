@@ -6,7 +6,7 @@ fn main() {
             .ok()
             .filter(|v| v.ends_with("-git")),
         Command::new("git")
-            .args(&["rev-parse", "--short", "HEAD"])
+            .args(["rev-parse", "--short", "HEAD"])
             .output()
             .ok()
             .and_then(|output| String::from_utf8(output.stdout).ok()),
