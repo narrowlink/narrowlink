@@ -177,9 +177,8 @@ impl AsyncRead for AsyncSocketCrypt {
                 let b = self
                     .cipher
                     .decrypt(&self.nonce.into(), item.as_slice())
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
-                    .unwrap();
-                buf.put_slice(&b);
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+                buf.put_slice(&b); // todo: fix
                 Poll::Ready(Ok(()))
             }
             Poll::Ready(None) => Poll::Ready(Ok(())),

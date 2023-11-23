@@ -18,6 +18,9 @@ include = [
   "*help.arg",
 ]
 
+[lints]
+workspace = true
+
 [dependencies]
 tokio = { version = "1.34.0", default-features = false, features = [
   "macros",

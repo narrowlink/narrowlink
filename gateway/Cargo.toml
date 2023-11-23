@@ -19,6 +19,9 @@ include = [
     "templates/*.html",
 ]
 
+[lints]
+workspace = true
+
 [dependencies]
 tokio = { version = "1.34.0", features = ["full"] }
 hyper = { version = "0.14.27", features = ["full"] }

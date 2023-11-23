@@ -11,6 +11,9 @@ authors = ['Narrowlink <opensource@narrowlink.com>']
 
 include = ["Cargo.toml", "LICENSE", "src/**/*"]
 
+[lints]
+workspace = true
+
 [dependencies]
 uuid = { version = "1.6.0", default-features = false, features = ["serde"] }
 serde = { version = "1.0.192", default-features = false, features = ["derive"] }

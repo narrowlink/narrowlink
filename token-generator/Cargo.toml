@@ -22,6 +22,9 @@ include = [
 name = "narrowlink-token-generator"
 path = "src/main.rs"
 
+[lints]
+workspace = true
+
 [dependencies]
 jsonwebtoken = { version = "9.1.0", default-features = false }
 serde = { version = "1.0.192", features = ["derive"], default-features = false }

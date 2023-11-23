@@ -11,6 +11,9 @@ authors = ['Narrowlink <opensource@narrowlink.com>']
 
 include = ["Cargo.toml", "LICENSE", "src/**/*"]
 
+[lints]
+workspace = true
+
 [dependencies]
 bytes = { version = "1.5.0", default-features = false }
 serde = { version = "1.0.192", features = ["derive"], default-features = false }

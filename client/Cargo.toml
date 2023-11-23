@@ -22,6 +22,9 @@ include = [
 name = "narrowlink"
 path = "src/main.rs"
 
+[lints]
+workspace = true
+
 [dependencies]
 clap_lex = { version = "0.6.0", default-features = false }
 thiserror = { version = "1.0.50", default-features = false }
