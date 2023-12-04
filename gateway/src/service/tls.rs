@@ -9,10 +9,10 @@ use tokio::{net::TcpListener, sync::mpsc::UnboundedSender};
 use tokio_rustls::TlsAcceptor;
 use tracing::{debug, instrument, span, trace, warn, Instrument};
 
-use super::{certificate::manager::CertificateManager, ws::WsService, RequestProtocol, Service};
+use super::{certificate::manager::CertificateManager, http::HttpService, RequestProtocol, Service};
 
 #[derive(Clone)]
-pub struct Wss {
+pub struct Tls {
     listen_addr: SocketAddr,
     domains: Vec<String>,
     status_sender: UnboundedSender<InBound>,
@@ -58,7 +58,7 @@ impl TlsEngine {
     }
 }
 
-impl Wss {
+impl Tls {
     pub fn from(
         ws: &crate::config::WsSecureService,
         status_sender: UnboundedSender<InBound>,
@@ -106,7 +106,7 @@ impl Wss {
 }
 
 #[async_trait]
-impl Service for Wss {
+impl Service for Tls {
     async fn run(self) -> Result<(), GatewayError> {
         let span = span!(tracing::Level::TRACE, "wss", listen_addr = %self.listen_addr, domains = ?self.domains);
 
@@ -199,7 +199,7 @@ impl Service for Wss {
                 if let Err(http_err) = Http::new()
                     .serve_connection(
                         secure_stream,
-                        WsService {
+                        HttpService {
                             listen_addr: RequestProtocol::Https(self.listen_addr),
                             domains: wss.domains,
                             sni: Some(sni),

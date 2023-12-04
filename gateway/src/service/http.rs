@@ -22,7 +22,7 @@ use crate::{
     state::{InBound, ResponseHeaders},
 };
 
-use super::{certificate::manager::CertificateManager, wss::TlsEngine, RequestProtocol, Service};
+use super::{certificate::manager::CertificateManager, tls::TlsEngine, RequestProtocol, Service};
 
 const INDEX_HTML: &str = include_str!("../../templates/index.html");
 
@@ -75,7 +75,7 @@ impl Service for Ws {
                 if let Err(http_err) = Http::new()
                     .serve_connection(
                         tcp_stream,
-                        WsService {
+                        HttpService {
                             listen_addr: RequestProtocol::Http(listen_addr),
                             domains: ws.domains,
                             sni: None,
@@ -97,7 +97,7 @@ impl Service for Ws {
 }
 
 //response header
-pub struct WsService {
+pub struct HttpService {
     pub listen_addr: RequestProtocol,
     pub domains: Vec<String>,
     pub sni: Option<String>,
@@ -106,7 +106,7 @@ pub struct WsService {
     pub cm: Option<Arc<CertificateManager>>,
 }
 
-impl HyperService<Request<Body>> for WsService {
+impl HyperService<Request<Body>> for HttpService {
     type Response = Response<Body>;
     type Error = http::Error;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;

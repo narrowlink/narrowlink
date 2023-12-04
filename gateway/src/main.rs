@@ -71,7 +71,7 @@ async fn main() -> Result<(), GatewayError> {
     drop(_gaurd);
     let cm = if let Some(tls_config) = conf.tls_config() {
         span.in_scope(|| trace!("setting up tls engine"));
-        let tls_engine = service::wss::TlsEngine::new(tls_config)
+        let tls_engine = service::tls::TlsEngine::new(tls_config)
             .instrument(span.clone())
             .await?;
         span.in_scope(|| trace!("tls engine successfully created"));
@@ -84,7 +84,7 @@ async fn main() -> Result<(), GatewayError> {
     let mut state = State::from(
         &conf,
         cm.clone().and_then(|cm| match cm {
-            service::wss::TlsEngine::Acme(cm) => Some(cm.get_service_sender()),
+            service::tls::TlsEngine::Acme(cm) => Some(cm.get_service_sender()),
             _ => None,
         }),
     );
@@ -95,7 +95,7 @@ async fn main() -> Result<(), GatewayError> {
         match service {
             config::Service::Ws(ws) => {
                 services.push(
-                    service::ws::Ws::from(ws, state.get_sender(), cm.clone())
+                    service::http::Ws::from(ws, state.get_sender(), cm.clone())
                         .run()
                         .instrument(span.clone()),
                 );
@@ -107,7 +107,7 @@ async fn main() -> Result<(), GatewayError> {
             config::Service::Wss(wss) => {
                 if let Some(cm) = &cm {
                     services.push(
-                        service::wss::Wss::from(wss, state.get_sender(), cm.clone())
+                        service::tls::Tls::from(wss, state.get_sender(), cm.clone())
                             .run()
                             .instrument(span.clone()),
                     );

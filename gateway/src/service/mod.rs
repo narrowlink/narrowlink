@@ -6,8 +6,8 @@ use crate::error::GatewayError;
 
 pub mod certificate;
 pub mod http_templates;
-pub mod ws;
-pub mod wss;
+pub mod http;
+pub mod tls;
 pub struct ServiceEventRequest {
     pub(crate) token: String,
     pub(crate) acl: Option<String>,
