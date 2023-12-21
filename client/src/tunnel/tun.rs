@@ -3,6 +3,7 @@ use std::{
     net::{IpAddr, Ipv4Addr},
     pin::Pin,
     sync::Arc,
+    time::Duration,
 };
 
 use futures_util::{Future, FutureExt, StreamExt};
@@ -227,7 +228,13 @@ impl TunListener {
                 e
             })
             .ok();
-        let ip_stack = ipstack::IpStack::new(device, MTU as u16, cfg!(target_family = "unix"));
+
+        let mut ipstack_config = ipstack::IpStackConfig::default();
+        ipstack_config.mtu(MTU as u16);
+        ipstack_config.packet_info(cfg!(target_family = "unix"));
+        ipstack_config.udp_timeout(Duration::from_secs(5));
+        let ip_stack = ipstack::IpStack::new(ipstack_config, device);
+
         Ok(Self {
             ipstack: ip_stack,
             route,
