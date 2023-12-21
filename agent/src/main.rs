@@ -31,7 +31,6 @@ use narrowlink_types::{
     ServiceType,
 };
 use sha3::{Digest, Sha3_256};
-use sysinfo::SystemExt;
 use tokio::{
     net::{lookup_host, TcpStream},
     time,
@@ -160,7 +159,7 @@ async fn start(args: Args) -> Result<(), AgentError> {
                                 .request(AgentEventOutBound::Request(
                                     0,
                                     AgentEventRequest::UpdateDynamicSysInfo(DynSystemInfo {
-                                        loadavg: s.load_average().one,
+                                        loadavg: sysinfo::System::load_average().one,
                                     }),
                                 ))
                                 .await;

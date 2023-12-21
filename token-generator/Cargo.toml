@@ -26,12 +26,12 @@ path = "src/main.rs"
 workspace = true
 
 [dependencies]
-jsonwebtoken = { version = "9.1.0", default-features = false }
-serde = { version = "1.0.192", features = ["derive"], default-features = false }
-serde_yaml = { version = "0.9.27", default-features = false }
+jsonwebtoken = { version = "9.2.0", default-features = false }
+serde = { version = "1.0.193", features = ["derive"], default-features = false }
+serde_yaml = { version = "0.9.28", default-features = false }
 dirs = { version = "5.0.1", default-features = false }
 clap_lex = { version = "0.6.0", default-features = false }
-uuid = { version = "1.6.0", features = ["serde", "v4"] }
-thiserror = { version = "1.0.50", default-features = false }
+uuid = { version = "1.6.1", features = ["serde", "v4"] }
+thiserror = { version = "1.0.51", default-features = false }
 
 narrowlink-types = { version = "0.2.2-git", default-features = false }
