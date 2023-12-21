@@ -68,6 +68,7 @@ pub async fn async_forward(
     loop {
         tokio::select! {
             res = tokio::io::copy(&mut left_rx, &mut right_tx) => {
+                // dbg!(&res);
                 if res? == 0 {
                     let _ = left_tx.shutdown().await;
                     let _ = right_tx.shutdown().await;
@@ -75,6 +76,8 @@ pub async fn async_forward(
                 }
             },
             res = tokio::io::copy(&mut right_rx, &mut left_tx) => {
+                // dbg!(&res);
+
                 if res? == 0 {
                     let _ = left_tx.shutdown().await;
                     let _ = right_tx.shutdown().await;

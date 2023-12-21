@@ -227,9 +227,12 @@ impl TunListener {
                 e
             })
             .ok();
-        let ip_stack = ipstack::IpStack::new(device, MTU as u16, cfg!(target_family = "unix"));
+        let mut ipstack_config = ipstack::IpStackConfig::default();
+        ipstack_config.mtu(MTU as u16);
+        ipstack_config.packet_info(cfg!(target_family = "unix"));
+        let ipstack = ipstack::IpStack::new(ipstack_config, device);
         Ok(Self {
-            ipstack: ip_stack,
+            ipstack,
             route,
             local_addr,
         })

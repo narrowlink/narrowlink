@@ -246,6 +246,7 @@ impl ControlFactory {
             Result<std::option::Option<std::string::String>, ClientError>,
         >,
     ) {
+        // dbg!(self.active_connections.len());
         self.active_connections.push_back(task);
     }
     // pub fn get_status_sender(&self) -> tokio::sync::mpsc::UnboundedSender<u8> {
