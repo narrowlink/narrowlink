@@ -1,6 +1,6 @@
 [package]
 name = "narrowlink-client"
-version = "0.2.2-git"
+version = "0.2.2"
 description = "Narrowlink Client"
 readme = "README.md"
 homepage = "https://narrowlink.com"
@@ -27,7 +27,7 @@ workspace = true
 
 [dependencies]
 clap_lex = { version = "0.6.0", default-features = false }
-thiserror = { version = "1.0.51", default-features = false }
+thiserror = { version = "1.0.56", default-features = false }
 tokio = { version = "1.35.1", features = [
     "macros",
     "rt",
@@ -36,16 +36,16 @@ tokio = { version = "1.35.1", features = [
     "time",
     "signal",
 ], default-features = false }
-futures-util = { version = "0.3.29", default-features = false }
-futures-sink = { version = "0.3.29", features = [
+futures-util = { version = "0.3.30", default-features = false }
+futures-sink = { version = "0.3.30", features = [
     "alloc",
 ], default-features = false }
 futures-timer = { version = "3.0.2", default-features = false }
 tokio-tungstenite = { version = "0.20.1", default-features = false }
 tungstenite = { version = "0.20.1", default-features = false }
-serde = { version = "1.0.193", features = ["derive"], default-features = false }
-serde_json = { version = "1.0.108", default-features = false }
-serde_yaml = { version = "0.9.28", default-features = false }
+serde = { version = "1.0.194", features = ["derive"], default-features = false }
+serde_json = { version = "1.0.110", default-features = false }
+serde_yaml = { version = "0.9.30", default-features = false }
 udp-stream = { version = "0.0.9", default-features = false }
 regex = { version = "1.10.2", features = ["std"], default-features = false }
 either = { version = "1.9.0", default-features = false }
@@ -66,8 +66,8 @@ dirs = { version = "5.0.1", default-features = false }
 uuid = { version = "1.6.1", features = ["v4"], default-features = false }
 chrono = { version = "0.4.31", default-features = false }
 
-narrowlink-types = { version = "0.2.2-git", default-features = false }
-narrowlink-network = { version = "0.2.2-git", default-features = false }
+narrowlink-types = { version = "0.2.2", default-features = false }
+narrowlink-network = { version = "0.2.2", default-features = false }
 
 [target.'cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))'.dependencies]
 ipstack = { version = "0.0.2", default-features = false }

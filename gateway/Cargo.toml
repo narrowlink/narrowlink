@@ -1,6 +1,6 @@
 [package]
 name = "narrowlink-gateway"
-version = "0.2.2-git"
+version = "0.2.2"
 edition = "2021"
 description = "Narrowlink Gateway"
 readme = "README.md"
@@ -35,11 +35,11 @@ tracing-subscriber = { version = "0.3.18", default-features = false, features = 
 ] }
 tracing-appender = { version = "0.2.3", default-features = false }
 dirs = { version = "5.0.1", default-features = false }
-serde_json = { version = "1.0.108", default-features = false }
-serde_yaml = { version = "0.9.28", default-features = false }
-serde = { version = "1.0.193", features = ["derive"], default-features = false }
-async-trait = { version = "0.1.75", default-features = false }
-futures-util = { version = "0.3.29", default-features = false }
+serde_json = { version = "1.0.110", default-features = false }
+serde_yaml = { version = "0.9.30", default-features = false }
+serde = { version = "1.0.194", features = ["derive"], default-features = false }
+async-trait = { version = "0.1.77", default-features = false }
+futures-util = { version = "0.3.30", default-features = false }
 askama = { version = "0.12.1", default-features = false }
 pem = { version = "3.0.3", default-features = false, features = ["std"] }
 uuid = { version = "1.6.1", default-features = false, features = [
@@ -63,7 +63,7 @@ rcgen = { version = "0.11.3", default-features = false, features = [
 x509-parser = { version = "0.15.1", default-features = false }
 clap_lex = { version = "0.6.0", default-features = false }
 sha3 = { version = "0.10.8", default-features = false }
-thiserror = { version = "1.0.51", default-features = false }
+thiserror = { version = "1.0.56", default-features = false }
 
-narrowlink-types = { version = "0.2.2-git" }
-narrowlink-network = { version = "0.2.2-git" }
+narrowlink-types = { version = "0.2.2" }
+narrowlink-network = { version = "0.2.2" }
