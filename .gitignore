@@ -1,4 +1,5 @@
 /target
+/new_gateway/target
 .DS_Store 
 .vscode
 .db
