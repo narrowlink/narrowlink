@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = { version = "1.35", features = [
+tokio = { version = "1.36", features = [
     "rt",
     "macros",
     "rt-multi-thread",
@@ -23,18 +23,18 @@ http-body-util = { version = "0.1", default-features = false }
 tower-service = { version = "0.3", default-features = false }
 tokio-rustls = { version = "0.25", default-features = false }
 rustls = { version = "0.22", features = ["ring"], default-features = false }
-serde_json = { version = "1.0.111", default-features = false, features = [
+serde_json = { version = "1.0.113", default-features = false, features = [
     "std",
 ] }
-serde = { version = "1.0.195", features = ["derive"] }
+serde = { version = "1.0.196", features = ["derive"] }
 futures = { version = "0.3", default-features = false }
-uuid = { version = "0.8", default-features = false, features = ["v4"] }
+uuid = { version = "1.7", default-features = false, features = ["v4"] }
 prost = "0.12"
 prost-types = "0.12"
 base64 = "0.21"
 tokio-tungstenite = "0.21.0"
 tungstenite = "0.21.0"
-instant-acme = { version = "0.4.1", default-features = false, features = [
+instant-acme = { version = "0.4.3", default-features = false, features = [
     "hyper-rustls",
 ] }
 thiserror = { version = "1.0.56", default-features = false }
@@ -44,5 +44,7 @@ lru = {version = "0.12.2", default-features = false}
 dashmap = "5.5.3"
 async-trait = "0.1.77"
 sha3 = { version = "0.10.8", default-features = false }
+quinn = {version = "0.10.2"}
+
 [build-dependencies]
 prost-build = "0.12"

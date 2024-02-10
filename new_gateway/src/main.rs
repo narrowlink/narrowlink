@@ -1,6 +1,13 @@
-use std::{io, net::SocketAddr};
+use std::{
+    io,
+    net::{Ipv4Addr, SocketAddr},
+    pin::Pin,
+};
 
-use futures::StreamExt;
+use futures::{
+    stream::{select_all, FuturesUnordered},
+    Stream, StreamExt, TryFutureExt, TryStreamExt,
+};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     net::{TcpListener, TcpStream},
@@ -11,8 +18,8 @@ use crate::transport_services::{CertificateFileStorage, TransportStream};
 
 mod error;
 mod negotiatation;
-mod transport_services;
 mod state;
+mod transport_services;
 // pub struct UpgradeAsync(Upgraded);
 
 // impl AsyncRead for UpgradeAsync {
@@ -59,32 +66,56 @@ async fn main() {
     //     "127.0.0.1:1080".parse().unwrap(),
     // ));
     // x.msg = Some(negotiatation::request::Msg::Client(negotiatation::Client::Publish(
+    let mut streams = Vec::new();
+    let https: Pin<Box<dyn Stream<Item = TransportStream>>> = Box::pin(
+        transport_services::Tcp::new(SocketAddr::new(
+            std::net::IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+            8080,
+        ))
+        .await
+        .map_err(|_| ())
+        .and_then(|s| transport_services::Tls::new(s).map_err(|_| ()))
+        .flat_map_unordered(None, |s| {
+            let x: Pin<Box<dyn Stream<Item = TransportStream>>> =
+                Box::pin(transport_services::Http::new(s.unwrap().inner()));
 
-    let listener = TcpListener::bind("127.0.0.1:1080").await.unwrap();
-    loop {
-        let (socket, _) = listener.accept().await.unwrap();
-        let tls = transport_services::TLS::new(socket)
-            .await
-            .unwrap();
-        let x = transport_services::HTTP::new(tls.inner());
+            x
+        }),
+    );
 
-        let q = x
-            .for_each(|xx| async move {
-                match xx {
-                    TransportStream::Command(_, _, _) => {}
-                    TransportStream::Data(_, _, _) => {}
-                    TransportStream::HttpProxy(req, si, res) => {
-                        res.send(hyper::Response::new(http_body_util::Full::new(
-                            hyper::body::Bytes::from("Hello World!"),
-                        )))
-                        .unwrap();
-                    }
-                    TransportStream::SniProxy(_) => {}
+    let http: Pin<Box<dyn Stream<Item = TransportStream>>> = Box::pin(
+        transport_services::Tcp::new(SocketAddr::new(
+            std::net::IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+            8081,
+        ))
+        .await
+        .map_err(|_| ())
+        .flat_map_unordered(None, |s| {
+            let x: Pin<Box<dyn Stream<Item = TransportStream>>> =
+                Box::pin(transport_services::Http::new(s.unwrap()));
+
+            x
+        }),
+    );
+
+    streams.push(https);
+    streams.push(http);
+
+    select_all(streams)
+        .for_each(|x| async move {
+            match x {
+                TransportStream::Command(_, _, _) => {}
+                TransportStream::Data(_, _, _) => {}
+                TransportStream::HttpProxy(req, si, res) => {
+                    res.send(hyper::Response::new(http_body_util::Full::new(
+                        hyper::body::Bytes::from("Hello World!"),
+                    )))
+                    .unwrap();
                 }
-            })
-            .await;
-        println!("Hello, world!");
-    }
+                TransportStream::SniProxy(_) => {}
+            }
+        })
+        .await;
 }
 
 pub enum ServiceType<T> {
@@ -164,8 +195,8 @@ struct SocketInfo {
 impl SocketInfoImpl for TcpStream {
     fn info(&self) -> io::Result<SocketInfo> {
         Ok(SocketInfo {
-            peer_addr: self.peer_addr()?,
-            local_addr: self.local_addr()?,
+            peer_addr: self.peer_addr().unwrap(),
+            local_addr: self.local_addr().unwrap(),
             tls_info: None,
         })
     }

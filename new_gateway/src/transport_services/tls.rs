@@ -13,12 +13,12 @@ use crate::{
 
 // use super::certificate::CertificateStorage;
 
-pub(crate) enum TLS {
+pub(crate) enum Tls {
     Unpacked(Box<dyn AsyncSocket>),
     Original(Box<dyn AsyncSocket>),
 }
 
-impl TLS {
+impl Tls {
     pub async fn new(
         socket: TcpStream,
         // certificate_storage: impl CertificateStorage,
@@ -38,7 +38,7 @@ impl TLS {
         // let config = certificate_storage.get_config("main", &sni).await.unwrap();
         let acceptor = TlsAcceptor::from(Arc::new(config));
         let mut stream = acceptor.accept(socket).await.unwrap();
-        Ok(TLS::Unpacked(Box::new(stream)))
+        Ok(Tls::Unpacked(Box::new(stream)))
         // Ok(TLS::Unpacked(Box::new(socket)))
     }
     pub fn peek_sni_and_alpns(buf: &[u8]) -> Option<(String, Vec<Vec<u8>>)> {
@@ -98,8 +98,8 @@ impl TLS {
     }
     pub fn inner(self) -> Box<dyn AsyncSocket> {
         match self {
-            TLS::Unpacked(s) => s,
-            TLS::Original(s) => s,
+            Tls::Unpacked(s) => s,
+            Tls::Original(s) => s,
         }
     }
 }

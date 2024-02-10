@@ -8,17 +8,14 @@ use tokio_tungstenite::WebSocketStream;
 
 use crate::{transport_services::TransportStream, AsyncSocket};
 
-use super::HTTP;
+use super::Http;
 
-pub struct H1<S>(S);
+pub struct H1(Box<dyn AsyncSocket>);
 
-impl<S> H1<S>
-where
-    S: AsyncSocket,
-{
-    pub fn new(socket: S) -> HTTP<S> {
+impl H1 {
+    pub fn new(socket: impl AsyncSocket) -> Http {
         let (stream_sender, stream_receiver) =
-            tokio::sync::mpsc::unbounded_channel::<TransportStream<S>>();
+            tokio::sync::mpsc::unbounded_channel::<TransportStream>();
         let socket_info = Arc::new(socket.info().unwrap());
 
         let task = tokio::spawn(async move {
@@ -75,11 +72,8 @@ where
                             let socket_info = socket_info.clone();
                             let (http_response_sender, http_response_receiver) =
                                 tokio::sync::oneshot::channel::<hyper::Response<Full<Bytes>>>();
-                            let msg = TransportStream::<S>::HttpProxy(
-                                req,
-                                socket_info,
-                                http_response_sender,
-                            );
+                            let msg =
+                                TransportStream::HttpProxy(req, socket_info, http_response_sender);
                             stream_sender.send(msg).unwrap();
                             Ok::<Response<Full<Bytes>>, Infallible>(
                                 http_response_receiver.await.unwrap(),
@@ -96,7 +90,7 @@ where
         //     }
         // }
         // todo!()
-        HTTP {
+        Http {
             receiver: stream_receiver,
             task,
         }
