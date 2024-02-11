@@ -1078,7 +1078,7 @@ dependencies = [
 
 [[package]]
 name = "narrowlink-agent"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "clap_lex",
  "daemonize",
@@ -1105,7 +1105,7 @@ dependencies = [
 
 [[package]]
 name = "narrowlink-client"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "chrono",
  "clap_lex",
@@ -1141,7 +1141,7 @@ dependencies = [
 
 [[package]]
 name = "narrowlink-gateway"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "askama",
  "async-trait",
@@ -1174,7 +1174,7 @@ dependencies = [
 
 [[package]]
 name = "narrowlink-network"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "async-recursion",
  "bytes",
@@ -1199,7 +1199,7 @@ dependencies = [
 
 [[package]]
 name = "narrowlink-token-generator"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "clap_lex",
  "dirs",
@@ -1213,7 +1213,7 @@ dependencies = [
 
 [[package]]
 name = "narrowlink-types"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "chrono",
  "hmac",

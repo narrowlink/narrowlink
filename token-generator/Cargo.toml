@@ -1,6 +1,6 @@
 [package]
 name = "narrowlink-token-generator"
-version = "0.2.2"
+version = "0.2.3"
 description = 'Token generator for narrowlink'
 readme = "README.md"
 homepage = "https://narrowlink.com"
@@ -34,4 +34,4 @@ clap_lex = { version = "0.6.0", default-features = false }
 uuid = { version = "1.6.1", features = ["serde", "v4"] }
 thiserror = { version = "1.0.56", default-features = false }
 
-narrowlink-types = { version = "0.2.2", default-features = false }
+narrowlink-types = { version = "0.2.3", default-features = false }
