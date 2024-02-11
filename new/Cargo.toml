@@ -1,14 +1,9 @@
 [workspace]
-members = ["gateway", "network", "client", "agent", "types","token-generator"]
+members = ["gateway", "client", "agent"]
 resolver = "2"
-exclude = ["new"]
 
 [workspace.lints.clippy]
 unwrap_used = "warn"
-
-[patch.crates-io]
-narrowlink-types = { path = "types" }
-narrowlink-network = { path = "network" }
 
 [profile.release]
 opt-level = "z"          # Optimize for size.
