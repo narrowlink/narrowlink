@@ -218,6 +218,7 @@ impl TunnelFactory {
                 let (stream, udp): (Box<dyn AsyncSocket>, bool) = match stream {
                     IpStackStream::Tcp(tcp) => (Box::new(tcp), false),
                     IpStackStream::Udp(udp) => (Box::new(udp), true),
+                    _ => return Err(ClientError::UnsupportedTunProtocol),
                 };
                 if let Some(m) = map {
                     if peer_addr.ip() == m.0 {

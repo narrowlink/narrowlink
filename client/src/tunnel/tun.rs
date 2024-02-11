@@ -231,7 +231,7 @@ impl TunListener {
 
         let mut ipstack_config = ipstack::IpStackConfig::default();
         ipstack_config.mtu(MTU as u16);
-        ipstack_config.packet_info(cfg!(target_family = "unix"));
+        ipstack_config.packet_information(cfg!(target_family = "unix"));
         ipstack_config.udp_timeout(Duration::from_secs(5));
         let ip_stack = ipstack::IpStack::new(ipstack_config, device);
 
