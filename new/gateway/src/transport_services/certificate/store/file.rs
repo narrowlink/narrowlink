@@ -134,7 +134,4 @@ impl CertificateStorage for CertificateFileStorage {
             .filter(|v| *v + 120 > ts) // 120 seconds
             .is_some()
     }
-    // fn cache(&self) -> &Box<dyn CertificateCache> {
-    //     &self.cache
-    // }
 }

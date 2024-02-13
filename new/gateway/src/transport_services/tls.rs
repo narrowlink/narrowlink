@@ -11,6 +11,8 @@ use crate::{
     error::GatewayError, transport_services::certificate::CertificateResolver, AsyncSocket,
 };
 
+use super::certificate::AcmeConfig;
+
 // use super::certificate::CertificateStorage;
 
 pub(crate) enum Tls {
@@ -28,6 +30,7 @@ impl Tls {
         // let (sni, alpns) = Self::peek_sni_and_alpns(&buf[..len]).unwrap();
         // dbg!(&sni, alpns);
         let resolver = CertificateResolver::default();
+        AcmeConfig::new(&resolver);
         resolver
             .load_and_cache("main", "home.gateway.computer")
             .await

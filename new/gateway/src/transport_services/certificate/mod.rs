@@ -11,9 +11,8 @@ use serde::de::DeserializeOwned;
 use sha3::{Digest, Sha3_256};
 mod issue;
 mod store;
+pub use issue::AcmeConfig;
 pub use store::CertificateFileStorage;
-
-pub const ACME_TLS_ALPN_NAME: &[u8] = b"acme-tls/1";
 
 #[async_trait::async_trait]
 pub trait CertificateStorage {
@@ -128,6 +127,9 @@ impl CertificateResolver {
     }
     fn get_certified_key(&self, account: &str, domain: &str) -> Option<Arc<CertifiedKey>> {
         self.cache.get(account, domain)
+    }
+    pub fn get_storage(&self) -> &dyn CertificateStorage {
+        &*self.storage
     }
 }
 
