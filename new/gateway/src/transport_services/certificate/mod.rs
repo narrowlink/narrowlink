@@ -1,10 +1,13 @@
-use std::{fmt::Debug, sync::Arc};
-
-use pem::Pem;
-use rustls::{crypto, server::ResolvesServerCert, sign::CertifiedKey, ServerConfig};
+use std::{
+    fmt::{Debug, Write},
+    sync::Arc,
+};
 
 use crate::error::GatewayError;
 use core::fmt::{self, Display, Formatter};
+use pem::Pem;
+use rustls::{crypto, server::ResolvesServerCert, sign::CertifiedKey, ServerConfig};
+use sha3::{Digest, Sha3_256};
 mod issue;
 mod store;
 pub use store::CertificateFileStorage;
@@ -13,14 +16,26 @@ pub const ACME_TLS_ALPN_NAME: &[u8] = b"acme-tls/1";
 
 #[async_trait::async_trait]
 pub trait CertificateStorage {
-    async fn load_pem(&self, account: &str, domain: &str) -> Result<Vec<Pem>, GatewayError>;
-    // fn cache(&self) -> &Box<dyn CertificateCache>;
-    // fn unload(&self, account: &str, domain: &str) {
-    //     self.cache().remove(account, domain);
-    // }
-    // fn get_certified_key(&self, account: &str, domain: &str) -> Option<CertifiedKey> {
-    //     self.cache().get(account, domain)
-    // }
+    async fn get_pem(&self, account: &str, domain: &str) -> Result<Vec<Pem>, GatewayError>;
+    async fn put_pem(
+        &self,
+        account: &str,
+        domain: &str,
+        account_credentials: Option<&str>,
+        pems: Vec<Pem>,
+    ) -> Result<(), GatewayError>;
+    async fn set_failed(&self, account: &str, domain: &str) -> Result<(), GatewayError>;
+    async fn is_failed(&self, account: &str, domain: &str) -> bool;
+    async fn set_pending(&self, account: &str, domain: &str) -> Result<(), GatewayError>;
+    async fn is_pending(&self, account: &str, domain: &str) -> bool;
+    fn domain_hash(&self, domain: &str) -> String {
+        Sha3_256::digest(domain.as_bytes())
+            .iter()
+            .fold(String::new(), |mut acc, x| {
+                let _ = write!(acc, "{:02x}", x);
+                acc
+            })
+    }
 }
 
 pub trait CertificateCache {
@@ -74,7 +89,7 @@ impl CertificateResolver {
         }
     }
     pub async fn load_and_cache(&self, account: &str, domain: &str) -> Result<(), GatewayError> {
-        let pem = self.storage.load_pem(account, domain).await.unwrap();
+        let pem = self.storage.get_pem(account, domain).await.unwrap();
         let mut certificate_chain = Vec::new();
         let mut private_key = None;
         for i in pem {

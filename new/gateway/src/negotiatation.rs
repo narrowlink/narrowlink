@@ -8,7 +8,7 @@ impl Publish {
             SocketAddr::V4(v4) => (v4.ip().octets().to_vec(), v4.port()),
             SocketAddr::V6(v6) => (v6.ip().octets().to_vec(), v6.port()),
         };
-        ip.extend_from_slice(&mut port.to_be_bytes());
+        ip.extend_from_slice(&port.to_be_bytes());
         Publish {
             uid: uid.as_bytes().to_vec(),
             socketaddr: ip,

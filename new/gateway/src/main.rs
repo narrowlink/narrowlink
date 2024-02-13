@@ -15,7 +15,7 @@ use tokio::{
 use tokio_rustls::server::TlsStream;
 
 use crate::transport_services::{CertificateFileStorage, TransportStream};
-
+mod config;
 mod error;
 mod negotiatation;
 mod state;
@@ -23,40 +23,31 @@ mod transport_services;
 
 #[tokio::main]
 async fn main() {
-    let mut streams = Vec::new();
-    let https: Pin<Box<dyn Stream<Item = TransportStream>>> = Box::pin(
+    let mut streams = Vec::<Pin<Box<dyn Stream<Item = TransportStream>>>>::new();
+    streams.push(Box::pin(
         transport_services::Tcp::new(SocketAddr::new(
             std::net::IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-            8080,
+            443,
         ))
         .await
-        .map_err(|_| ())
+        .map_err(|x| ())
         .and_then(|s| transport_services::Tls::new(s).map_err(|_| ()))
         .flat_map_unordered(None, |s| {
-            let x: Pin<Box<dyn Stream<Item = TransportStream>>> =
-                Box::pin(transport_services::Http::new(s.unwrap().inner()));
-
-            x
+            Box::pin(transport_services::Http::new(s.unwrap().inner()))
         }),
-    );
+    ));
 
-    let http: Pin<Box<dyn Stream<Item = TransportStream>>> = Box::pin(
+    streams.push(Box::pin(
         transport_services::Tcp::new(SocketAddr::new(
             std::net::IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-            8081,
+            80,
         ))
         .await
         .map_err(|_| ())
         .flat_map_unordered(None, |s| {
-            let x: Pin<Box<dyn Stream<Item = TransportStream>>> =
-                Box::pin(transport_services::Http::new(s.unwrap()));
-
-            x
+            Box::pin(transport_services::Http::new(s.unwrap()))
         }),
-    );
-
-    streams.push(https);
-    streams.push(http);
+    ));
 
     select_all(streams)
         .for_each(|x| async move {

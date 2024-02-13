@@ -1,8 +1,8 @@
 use pem::Pem;
 use rustls::sign::CertifiedKey;
 use sha3::{Digest, Sha3_256};
-use std::fmt::Write;
-use tokio::fs;
+use std::{fmt::Write, time::SystemTime};
+use tokio::{fs, io::AsyncWriteExt};
 
 use crate::{
     error::GatewayError,
@@ -29,22 +29,98 @@ impl Default for CertificateFileStorage {
 }
 #[async_trait::async_trait]
 impl CertificateStorage for CertificateFileStorage {
-    async fn load_pem(&self, account: &str, domain: &str) -> Result<Vec<Pem>, GatewayError> {
-        dbg!(domain);
-        let domain_hash =
-            Sha3_256::digest(domain.as_bytes())
-                .iter()
-                .fold(String::new(), |mut acc, x| {
-                    let _ = write!(acc, "{:02x}", x);
-                    acc
-                });
-
-        let pem_path = format!("{}/{}/{}.pem", self.path, account, domain_hash);
+    async fn get_pem(&self, account: &str, domain: &str) -> Result<Vec<Pem>, GatewayError> {
+        let pem_path = format!("{}/{}/{}.pem", self.path, account, self.domain_hash(domain));
         dbg!(&pem_path);
         let pem = pem::parse_many(fs::read_to_string(pem_path).await.unwrap()).unwrap();
         Ok(pem)
     }
+    async fn put_pem(
+        &self,
+        account: &str,
+        domain: &str,
+        account_credentials: Option<&str>,
+        pem: Vec<Pem>,
+    ) -> Result<(), GatewayError> {
+        let base_path = format!("{}/{}", self.path, account);
+        fs::create_dir_all(&base_path).await.unwrap();
+        let domain_hash: String = self.domain_hash(domain);
+        if let Some(account_credentials) = account_credentials {
+            fs::File::create(format!("{}/{}.account", base_path, domain_hash))
+                .await
+                .unwrap()
+                .write_all(account_credentials.as_bytes())
+                .await
+                .unwrap();
+        }
+        let pem_path = format!("{}/{}.pem", base_path, domain_hash);
 
+        fs::File::create(pem_path)
+            .await
+            .unwrap()
+            .write_all(pem::encode_many(&pem).as_bytes())
+            .await
+            .unwrap();
+
+        let failed_path = format!("{}/{}.failed", base_path, domain_hash);
+        let pending_path = format!("{}/{}.pending", base_path, domain_hash);
+
+        _ = fs::remove_file(failed_path).await.unwrap();
+        _ = fs::remove_file(pending_path).await.unwrap();
+
+        Ok(())
+    }
+    async fn set_failed(&self, account: &str, domain: &str) -> Result<(), GatewayError> {
+        let domain_hash = self.domain_hash(domain);
+        let base_path = format!("{}/{}", self.path, account);
+        fs::create_dir_all(&base_path).await.unwrap();
+        let failed_path = format!("{}/{}.failed", base_path, domain_hash);
+        let pending_path = format!("{}/{}.pending", base_path, domain_hash);
+        Ok(fs::rename(pending_path, failed_path)
+            .await
+            .map(|_| ())
+            .unwrap())
+    }
+    async fn is_failed(&self, account: &str, domain: &str) -> bool {
+        let domain_hash = self.domain_hash(domain);
+        let failed_path = format!("{}/{}/{}.failed", self.path, account, domain_hash);
+        let ts = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        std::fs::read_to_string(failed_path)
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .filter(|v| *v + 60 * 60 > ts) // 1 hour
+            .is_some()
+    }
+    async fn set_pending(&self, account: &str, domain: &str) -> Result<(), GatewayError> {
+        let domain_hash = self.domain_hash(domain);
+        let base_path = format!("{}/{}", self.path, account);
+        let pending_path = format!("{}/{}.pending", base_path, domain_hash);
+        let ts = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        fs::create_dir_all(&base_path).await.unwrap();
+        Ok(fs::write(pending_path, ts.to_string())
+            .await
+            .map(|_| ())
+            .unwrap())
+    }
+    async fn is_pending(&self, account: &str, domain: &str) -> bool {
+        let domain_hash = self.domain_hash(domain);
+        let pending_path = format!("{}/{}/{}.pending", self.path, account, domain_hash);
+        let ts = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        std::fs::read_to_string(pending_path)
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .filter(|v| *v + 120 > ts) // 120 seconds
+            .is_some()
+    }
     // fn cache(&self) -> &Box<dyn CertificateCache> {
     //     &self.cache
     // }

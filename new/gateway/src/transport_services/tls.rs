@@ -37,7 +37,9 @@ impl Tls {
         config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
         // let config = certificate_storage.get_config("main", &sni).await.unwrap();
         let acceptor = TlsAcceptor::from(Arc::new(config));
+        // dbg!("accepting");
         let mut stream = acceptor.accept(socket).await.unwrap();
+        // dbg!("accepted");
         Ok(Tls::Unpacked(Box::new(stream)))
         // Ok(TLS::Unpacked(Box::new(socket)))
     }

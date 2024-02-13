@@ -19,7 +19,7 @@ message Publish {
   }
 }
 message IpPolicy {
-  optional string agent = 1;
+  string agent = 1;
   bytes socketaddr = 2;
   uint32 netmask = 3;
   enum Protocol {
@@ -28,7 +28,7 @@ message IpPolicy {
   }
 }
 message DomainPolicy {
-  optional string agent = 1;
+  string agent = 1;
   string domain = 2;
   uint32 port = 3;
   enum Protocol {
