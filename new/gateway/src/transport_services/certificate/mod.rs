@@ -7,6 +7,7 @@ use crate::error::GatewayError;
 use core::fmt::{self, Display, Formatter};
 use pem::Pem;
 use rustls::{crypto, server::ResolvesServerCert, sign::CertifiedKey, ServerConfig};
+use serde::de::DeserializeOwned;
 use sha3::{Digest, Sha3_256};
 mod issue;
 mod store;
@@ -16,6 +17,8 @@ pub const ACME_TLS_ALPN_NAME: &[u8] = b"acme-tls/1";
 
 #[async_trait::async_trait]
 pub trait CertificateStorage {
+    async fn set_default_account_credentials(&self, account: &str) -> Result<(), GatewayError>;
+    async fn get_default_account_credentials(&self) -> Result<String, GatewayError>;
     async fn get_pem(&self, account: &str, domain: &str) -> Result<Vec<Pem>, GatewayError>;
     async fn put_pem(
         &self,

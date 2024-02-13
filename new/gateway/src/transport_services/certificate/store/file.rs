@@ -1,7 +1,5 @@
 use pem::Pem;
-use rustls::sign::CertifiedKey;
-use sha3::{Digest, Sha3_256};
-use std::{fmt::Write, time::SystemTime};
+use std::time::SystemTime;
 use tokio::{fs, io::AsyncWriteExt};
 
 use crate::{
@@ -29,6 +27,21 @@ impl Default for CertificateFileStorage {
 }
 #[async_trait::async_trait]
 impl CertificateStorage for CertificateFileStorage {
+    async fn get_default_account_credentials(&self) -> Result<String, GatewayError> {
+        let default_account_path = format!("{}/default.account", self.path);
+        Ok(fs::read_to_string(default_account_path).await.unwrap())
+    }
+    async fn set_default_account_credentials(&self, account: &str) -> Result<(), GatewayError> {
+        fs::create_dir_all(&self.path).await.unwrap();
+        let default_account_path = format!("{}/default.account", self.path);
+        fs::File::create(default_account_path)
+            .await
+            .unwrap()
+            .write_all(account.as_bytes())
+            .await
+            .unwrap();
+        Ok(())
+    }
     async fn get_pem(&self, account: &str, domain: &str) -> Result<Vec<Pem>, GatewayError> {
         let pem_path = format!("{}/{}/{}.pem", self.path, account, self.domain_hash(domain));
         dbg!(&pem_path);

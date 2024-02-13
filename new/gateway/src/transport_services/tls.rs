@@ -28,7 +28,10 @@ impl Tls {
         // let (sni, alpns) = Self::peek_sni_and_alpns(&buf[..len]).unwrap();
         // dbg!(&sni, alpns);
         let resolver = CertificateResolver::default();
-        resolver.load_and_cache("main", "home.gateway.computer").await.unwrap();
+        resolver
+            .load_and_cache("main", "home.gateway.computer")
+            .await
+            .unwrap();
 
         let resolver = Arc::new(resolver);
         let mut config = rustls::ServerConfig::builder()
