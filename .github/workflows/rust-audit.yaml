@@ -12,12 +12,10 @@ env:
 
 jobs:
   audit:
-    strategy:
-      matrix:
-        package: [client, agent, gateway, token-generator, types, network]
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
     - uses: EmbarkStudios/cargo-deny-action@v1
       with:
-        arguments: --manifest-path=${{ matrix.package }}/Cargo.toml
+       arguments: -c Deny.toml
+#        arguments: --manifest-path=${{ matrix.package }}/Cargo.toml

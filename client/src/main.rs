@@ -136,11 +136,11 @@ async fn start(mut args: Args) -> Result<(), ClientError> {
             }
             msg = tunnel.accept() => {
                 let t = transport.clone();
-                control.add_connection(tokio::spawn(async move{
-                    let (socket,connect) = msg?;
-                    t.connect(socket,connect).await
-                }));
-
+                if let Ok((socket,connect)) = msg {
+                    control.add_connection(tokio::spawn(async move{
+                        t.connect(socket,connect).await
+                    }));
+                }
             }
         }
     }

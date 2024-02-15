@@ -77,6 +77,9 @@ pub enum ClientError {
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     #[error("IpStack Error: {0}")]
     IpStackError(#[from] ipstack::IpStackError),
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+    #[error("Unsupported Tun Protocol")]
+    UnsupportedTunProtocol,
     #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
     #[error("Not Supported")]
     NotSupported,

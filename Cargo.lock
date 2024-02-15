@@ -822,7 +822,7 @@ dependencies = [
  "iana-time-zone-haiku",
  "js-sys",
  "wasm-bindgen",
- "windows-core 0.52.0",
+ "windows-core 0.51.1",
 ]
 
 [[package]]
@@ -912,14 +912,22 @@ dependencies = [
 
 [[package]]
 name = "ipstack"
-version = "0.0.2"
+version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "033f8f727c4128c2265dc36524a081928c0bec45ff247db0edaeb2cbe476e026"
+checksum = "15c1f04989df8a56ba138ccefcf23aee2c20c929b9c88afd1ef36d66e9dcf9da"
 dependencies = [
  "etherparse",
  "thiserror",
  "tokio",
- "tracing",
+]
+
+[[package]]
+name = "itertools"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
+dependencies = [
+ "either",
 ]
 
 [[package]]
@@ -1079,7 +1087,7 @@ dependencies = [
 
 [[package]]
 name = "narrowlink-agent"
-version = "0.2.2"
+version = "0.2.4"
 dependencies = [
  "clap_lex",
  "daemonize",
@@ -1106,7 +1114,7 @@ dependencies = [
 
 [[package]]
 name = "narrowlink-client"
-version = "0.2.2"
+version = "0.2.4"
 dependencies = [
  "chrono",
  "clap_lex",
@@ -1142,7 +1150,7 @@ dependencies = [
 
 [[package]]
 name = "narrowlink-gateway"
-version = "0.2.2"
+version = "0.2.4"
 dependencies = [
  "askama",
  "async-trait",
@@ -1175,7 +1183,7 @@ dependencies = [
 
 [[package]]
 name = "narrowlink-network"
-version = "0.2.2"
+version = "0.2.4"
 dependencies = [
  "async-recursion",
  "bytes",
@@ -1200,7 +1208,7 @@ dependencies = [
 
 [[package]]
 name = "narrowlink-token-generator"
-version = "0.2.2"
+version = "0.2.4"
 dependencies = [
  "clap_lex",
  "dirs",
@@ -1214,7 +1222,7 @@ dependencies = [
 
 [[package]]
 name = "narrowlink-types"
-version = "0.2.2"
+version = "0.2.4"
 dependencies = [
  "chrono",
  "hmac",
