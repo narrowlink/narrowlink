@@ -178,7 +178,7 @@ impl ConnectionData {
                 let original_version = request.version();
                 if let Some(host) = request
                     .uri()
-                    .host()
+                    .host().or(request.headers().get("Host").and_then(|h| h.to_str().ok()))
                     .and_then(|h| {
                         request
                             .uri()
@@ -193,9 +193,25 @@ impl ConnectionData {
                     parts.scheme = None;
                     if let Ok(uri) = hyper::http::uri::Uri::from_parts(parts) {
                         *request.version_mut() = hyper::Version::HTTP_11;
-                        if let Ok(peer_addr) = peer_addr.to_string().parse() {
+                        if let Ok(peer_addr) = peer_addr.ip().to_string().parse() {
                             request.headers_mut().insert("NL-Connecting-IP", peer_addr);
                         };
+                        if request.headers().contains_key("Cookie"){
+                            let cookies = request.headers().iter().fold(String::new(), |acc, (k, v)| {
+                                if k == "Cookie" {
+                                    if acc.is_empty() {
+                                        v.to_str().unwrap_or("").to_owned()
+                                    } else {
+                                        format!("{}; {}", acc, v.to_str().unwrap_or(""))
+                                    }
+                                } else {
+                                    acc
+                                }
+                            });
+                            if let Ok(cookies) = HeaderValue::from_str(&cookies) {
+                                request.headers_mut().insert("Cookie", cookies);
+                            }
+                        }
                         request.headers_mut().insert(
                             "X-Forwarded-Proto",
                             match service_protocol {
