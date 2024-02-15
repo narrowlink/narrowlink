@@ -19,5 +19,5 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: EmbarkStudios/cargo-deny-action@v1
-      with:
-        arguments: --manifest-path=${{ matrix.package }}/Cargo.toml
+#      with:
+#        arguments: --manifest-path=${{ matrix.package }}/Cargo.toml
