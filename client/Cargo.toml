@@ -1,6 +1,6 @@
 [package]
 name = "narrowlink-client"
-version = "0.2.3"
+version = "0.2.4"
 description = "Narrowlink Client"
 readme = "README.md"
 homepage = "https://narrowlink.com"
@@ -66,8 +66,8 @@ dirs = { version = "5.0.1", default-features = false }
 uuid = { version = "1.7.0", features = ["v4"], default-features = false }
 chrono = { version = "0.4.34", default-features = false }
 
-narrowlink-types = { version = "0.2.3", default-features = false }
-narrowlink-network = { version = "0.2.3", default-features = false }
+narrowlink-types = { version = "0.2.4", default-features = false }
+narrowlink-network = { version = "0.2.4", default-features = false }
 
 [target.'cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))'.dependencies]
 ipstack = { version = "0.0.3", default-features = false }
