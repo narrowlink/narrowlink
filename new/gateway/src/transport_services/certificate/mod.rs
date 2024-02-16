@@ -11,8 +11,10 @@ use serde::de::DeserializeOwned;
 use sha3::{Digest, Sha3_256};
 mod issue;
 mod store;
-pub use issue::AcmeConfig;
+pub use issue::AcmeService;
 pub use store::CertificateFileStorage;
+
+use self::issue::CertificateIssue;
 
 #[async_trait::async_trait]
 pub trait CertificateStorage {
@@ -72,6 +74,7 @@ impl Default for DashMapCache {
 pub struct CertificateResolver {
     storage: Box<dyn CertificateStorage + Send + Sync>,
     cache: Box<dyn CertificateCache + Send + Sync>,
+    issue: Option<Box<dyn CertificateIssue + Send + Sync>>,
 }
 
 impl Default for CertificateResolver {
@@ -88,8 +91,13 @@ impl CertificateResolver {
         Self {
             storage: Box::new(storage),
             cache: Box::new(cache),
+            issue: None,
         }
     }
+    // pub fn acme_mut(&mut self) {
+    //     // Box::new(AcmeConfig::new(self))
+    //     // self.issue.replace(None);
+    // }
     pub async fn load_and_cache(&self, account: &str, domain: &str) -> Result<(), GatewayError> {
         let pem = self.storage.get_pem(account, domain).await.unwrap();
         let mut certificate_chain = Vec::new();
