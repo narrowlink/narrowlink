@@ -72,32 +72,28 @@ impl Default for DashMapCache {
 }
 
 pub struct CertificateResolver {
-    storage: Box<dyn CertificateStorage + Send + Sync>,
+    storage: Arc<dyn CertificateStorage + Send + Sync>,
     cache: Box<dyn CertificateCache + Send + Sync>,
     issue: Option<Box<dyn CertificateIssue + Send + Sync>>,
 }
 
-impl Default for CertificateResolver {
-    fn default() -> Self {
-        Self::new(CertificateFileStorage::default(), DashMapCache::default())
-    }
-}
-
 impl CertificateResolver {
     pub fn new(
-        storage: impl CertificateStorage + 'static + Send + Sync,
+        storage: Arc<impl CertificateStorage + 'static + Send + Sync>,
         cache: impl CertificateCache + 'static + Send + Sync,
     ) -> Self {
         Self {
-            storage: Box::new(storage),
+            storage,
             cache: Box::new(cache),
             issue: None,
         }
     }
-    // pub fn acme_mut(&mut self) {
-    //     // Box::new(AcmeConfig::new(self))
-    //     // self.issue.replace(None);
-    // }
+    pub fn set_certificate_issuer(
+        &mut self,
+        issue: Option<impl CertificateIssue + Send + Sync + 'static>,
+    ) {
+        self.issue = issue.map(|x| Box::new(x) as _);
+    }
     pub async fn load_and_cache(&self, account: &str, domain: &str) -> Result<(), GatewayError> {
         let pem = self.storage.get_pem(account, domain).await.unwrap();
         let mut certificate_chain = Vec::new();
@@ -135,9 +131,6 @@ impl CertificateResolver {
     }
     fn get_certified_key(&self, account: &str, domain: &str) -> Option<Arc<CertifiedKey>> {
         self.cache.get(account, domain)
-    }
-    pub fn get_storage(&self) -> &dyn CertificateStorage {
-        &*self.storage
     }
 }
 

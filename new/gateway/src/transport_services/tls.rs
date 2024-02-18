@@ -11,7 +11,10 @@ use crate::{
     error::GatewayError, transport_services::certificate::CertificateResolver, AsyncSocket,
 };
 
-use super::certificate::AcmeService;
+use super::{
+    certificate::{AcmeService, DashMapCache},
+    CertificateFileStorage,
+};
 
 // use super::certificate::CertificateStorage;
 
@@ -29,8 +32,12 @@ impl Tls {
         // let len = socket.peek(&mut buf).await.unwrap();
         // let (sni, alpns) = Self::peek_sni_and_alpns(&buf[..len]).unwrap();
         // dbg!(&sni, alpns);
-        let resolver = CertificateResolver::default();
-        
+        let storage = Arc::new(CertificateFileStorage::default());
+        let mut resolver = CertificateResolver::new(storage.clone(), DashMapCache::default());
+        let acme = AcmeService::new(storage, "dev@narrowlink.com", None)
+            .await
+            .unwrap();
+        resolver.set_certificate_issuer(Some(acme));
         resolver
             .load_and_cache("main", "home.gateway.computer")
             .await

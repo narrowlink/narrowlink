@@ -1,29 +1,36 @@
+use std::sync::Arc;
+
 use instant_acme::{Account, AccountCredentials, Authorization, NewAccount, Order};
 
 use crate::{
     error::GatewayError,
-    transport_services::certificate::{CertificateCache, CertificateResolver, DashMapCache},
+    transport_services::certificate::{
+        CertificateCache, CertificateResolver, CertificateStorage, DashMapCache,
+    },
 };
+
+use super::{CertificateIssue, CertificateIssueStatus};
 
 pub const ACME_TLS_ALPN_NAME: &[u8] = b"acme-tls/1";
 
-pub struct AcmeService<'a> {
-    resolver: &'a CertificateResolver,
+pub struct AcmeService {
+    storage: Arc<dyn CertificateStorage + 'static + Send + Sync>,
     cache: Box<dyn CertificateCache + Send + Sync>,
     default_account: Account,
 }
 
-impl<'a> AcmeService<'a> {
+// impl !Send for AcmeService<'_> {}
+
+impl AcmeService {
     pub async fn new(
-        resolver: &'a CertificateResolver,
+        storage: Arc<impl CertificateStorage + 'static + Send + Sync>,
         email: &str,
-        server_url: &str,
+        server_url: impl Into<Option<&str>>,
     ) -> Result<Self, GatewayError> {
-        let default_account_credentials = resolver
-            .storage
-            .get_default_account_credentials()
-            .await
-            .unwrap();
+        let server_url = server_url
+            .into()
+            .unwrap_or("https://acme-staging-v02.api.letsencrypt.org/directory");
+        let default_account_credentials = storage.get_default_account_credentials().await.unwrap();
         serde_json::from_str::<AccountCredentials>(&default_account_credentials).unwrap();
         let (account, account_credentials) = Account::create(
             &NewAccount {
@@ -36,16 +43,27 @@ impl<'a> AcmeService<'a> {
         )
         .await
         .unwrap();
-        resolver
-            .storage
+        storage
             .set_default_account_credentials(&serde_json::to_string(&account_credentials).unwrap())
             .await
             .unwrap();
         Ok(Self {
-            resolver,
+            storage,
             cache: Box::<DashMapCache>::default(),
             default_account: account,
         })
+    }
+}
+
+impl CertificateIssue for AcmeService {
+    fn issue(&self, account: &str, domain: &str) -> Option<()> {
+        unimplemented!()
+    }
+    fn status(&self, account: &str, domain: &str) -> CertificateIssueStatus {
+        unimplemented!()
+    }
+    fn storage(&self) -> &dyn CertificateStorage {
+        unimplemented!()
     }
 }
 
