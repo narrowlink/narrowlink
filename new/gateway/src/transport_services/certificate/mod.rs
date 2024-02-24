@@ -13,7 +13,6 @@ mod issue;
 mod store;
 pub use issue::AcmeService;
 pub use store::CertificateFileStorage;
-
 use self::issue::CertificateIssue;
 
 #[async_trait::async_trait]
@@ -88,6 +87,7 @@ impl CertificateResolver {
             issue: None,
         }
     }
+    
     pub fn set_certificate_issuer(
         &mut self,
         issue: Option<impl CertificateIssue + Send + Sync + 'static>,

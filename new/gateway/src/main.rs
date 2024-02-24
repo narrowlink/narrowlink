@@ -2,6 +2,7 @@ use std::{
     io,
     net::{Ipv4Addr, SocketAddr},
     pin::Pin,
+    sync::Arc,
 };
 
 use futures::{
@@ -13,6 +14,7 @@ use tokio::{
     net::{TcpListener, TcpStream},
 };
 use tokio_rustls::server::TlsStream;
+use transport_services::{AcmeService, CertificateResolver, DashMapCache};
 
 use crate::transport_services::{CertificateFileStorage, TransportStream};
 mod config;
@@ -23,6 +25,19 @@ mod transport_services;
 
 #[tokio::main]
 async fn main() {
+    let storage = Arc::new(CertificateFileStorage::default());
+    let mut resolver = CertificateResolver::new(storage.clone(), DashMapCache::default());
+    let acme = AcmeService::new(storage, "dev@narrowlink.com", None)
+        .await
+        .unwrap();
+    resolver.set_certificate_issuer(Some(acme));
+    resolver
+        .load_and_cache("main", "home.gateway.computer")
+        .await
+        .unwrap();
+
+    let resolver = Arc::new(resolver);
+
     let mut streams = Vec::<Pin<Box<dyn Stream<Item = TransportStream>>>>::new();
     streams.push(Box::pin(
         transport_services::Tcp::new(SocketAddr::new(
@@ -31,7 +46,7 @@ async fn main() {
         ))
         .await
         .map_err(|x| ())
-        .and_then(|s| transport_services::Tls::new(s).map_err(|_| ()))
+        .and_then(|s| transport_services::Tls::new(s, resolver.clone()).map_err(|_| ()))
         .flat_map_unordered(None, |s| {
             Box::pin(transport_services::Http::new(s.unwrap().inner()))
         }),

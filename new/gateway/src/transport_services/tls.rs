@@ -18,6 +18,11 @@ use super::{
 
 // use super::certificate::CertificateStorage;
 
+pub mod alpn {
+    pub const H2: &[u8] = b"h2";
+    pub const HTTP1_1: &[u8] = b"http/1.1";
+}
+
 pub(crate) enum Tls {
     Unpacked(Box<dyn AsyncSocket>),
     Original(Box<dyn AsyncSocket>),
@@ -26,28 +31,12 @@ pub(crate) enum Tls {
 impl Tls {
     pub async fn new(
         socket: TcpStream,
-        // certificate_storage: impl CertificateStorage,
+        certificate_resolver: Arc<CertificateResolver>,
     ) -> Result<Self, GatewayError> {
-        // let mut buf = vec![0; 1024];
-        // let len = socket.peek(&mut buf).await.unwrap();
-        // let (sni, alpns) = Self::peek_sni_and_alpns(&buf[..len]).unwrap();
-        // dbg!(&sni, alpns);
-        let storage = Arc::new(CertificateFileStorage::default());
-        let mut resolver = CertificateResolver::new(storage.clone(), DashMapCache::default());
-        let acme = AcmeService::new(storage, "dev@narrowlink.com", None)
-            .await
-            .unwrap();
-        resolver.set_certificate_issuer(Some(acme));
-        resolver
-            .load_and_cache("main", "home.gateway.computer")
-            .await
-            .unwrap();
-
-        let resolver = Arc::new(resolver);
         let mut config = rustls::ServerConfig::builder()
             .with_no_client_auth()
-            .with_cert_resolver(resolver);
-        config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+            .with_cert_resolver(certificate_resolver);
+        config.alpn_protocols = vec![alpn::H2.to_owned(), alpn::HTTP1_1.to_owned()];
         // let config = certificate_storage.get_config("main", &sni).await.unwrap();
         let acceptor = TlsAcceptor::from(Arc::new(config));
         // dbg!("accepting");
