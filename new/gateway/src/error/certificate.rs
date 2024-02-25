@@ -1,9 +1,10 @@
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum GatewayError {
+pub enum CertificateError {
     #[error("Invalid {0}")]
     Invalid(&'static str),
-    #[error("ACME Error: {0}")]
-    ACMEError(#[from] instant_acme::Error),
+    #[error("Private key not found")]
+    PrivateKeyNotFound,
 }
+

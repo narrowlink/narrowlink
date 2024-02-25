@@ -13,7 +13,7 @@ tokio = { version = "1.36", features = [
     "net",
     "fs",
 ], default-features = false }
-hyper = { version = "1.1", features = [
+hyper = { version = "1.2", features = [
     "server",
     "http1",
     "http2",
@@ -23,10 +23,10 @@ http-body-util = { version = "0.1", default-features = false }
 tower-service = { version = "0.3", default-features = false }
 tokio-rustls = { version = "0.25", default-features = false }
 rustls = { version = "0.22", features = ["ring"], default-features = false }
-serde_json = { version = "1.0.113", default-features = false, features = [
+serde_json = { version = "1.0.114", default-features = false, features = [
     "std",
 ] }
-serde = { version = "1.0.196", features = ["derive"] }
+serde = { version = "1.0.197", features = ["derive"] }
 futures = { version = "0.3", default-features = false }
 uuid = { version = "1.7", default-features = false, features = ["v4"] }
 prost = "0.12"
@@ -40,7 +40,7 @@ instant-acme = { version = "0.4.3", default-features = false, features = [
 thiserror = { version = "1.0.57", default-features = false }
 pem = { version = "3.0.3", default-features = false, features = ["std"] }
 x509-parser = { version = "0.15.1", default-features = false }
-lru = {version = "0.12.2", default-features = false}
+lru = {version = "0.12.3", default-features = false}
 dashmap = "5.5.3"
 async-trait = "0.1.77"
 sha3 = { version = "0.10.8", default-features = false }

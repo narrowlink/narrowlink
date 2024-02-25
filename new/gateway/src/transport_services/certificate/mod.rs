@@ -3,7 +3,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::error::GatewayError;
+use crate::error::{CertificateError, GatewayError};
 use core::fmt::{self, Display, Formatter};
 use pem::Pem;
 use rustls::{crypto, server::ResolvesServerCert, sign::CertifiedKey, ServerConfig};
@@ -11,9 +11,9 @@ use serde::de::DeserializeOwned;
 use sha3::{Digest, Sha3_256};
 mod issue;
 mod store;
+use self::issue::CertificateIssue;
 pub use issue::AcmeService;
 pub use store::CertificateFileStorage;
-use self::issue::CertificateIssue;
 
 #[async_trait::async_trait]
 pub trait CertificateStorage {
@@ -87,7 +87,7 @@ impl CertificateResolver {
             issue: None,
         }
     }
-    
+
     pub fn set_certificate_issuer(
         &mut self,
         issue: Option<impl CertificateIssue + Send + Sync + 'static>,
@@ -113,12 +113,12 @@ impl CertificateResolver {
                 _ => continue,
             }
         }
-        let Some(private_key) = private_key else {
-            return Err(GatewayError::Invalid(
-                "Unable to find private key from pem file",
-            ));
-        };
-        let signer = crypto::ring::sign::any_supported_type(&private_key).unwrap();
+
+        let signer = crypto::ring::sign::any_supported_type(
+            &private_key.ok_or(CertificateError::PrivateKeyNotFound)?,
+        )
+        .unwrap();
+    
         if certificate_chain.is_empty() {
             return Err(GatewayError::Invalid("Invalid Pem FIle"));
         }
