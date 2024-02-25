@@ -5,6 +5,7 @@ use std::{
     sync::Arc,
 };
 
+use error::CertificateError;
 use futures::{
     stream::{select_all, FuturesUnordered},
     Stream, StreamExt, TryFutureExt, TryStreamExt,
@@ -29,8 +30,9 @@ async fn main() {
     let mut resolver = CertificateResolver::new(storage.clone(), DashMapCache::default());
     let acme = AcmeService::new(storage, "dev@narrowlink.com", None)
         .await
-        .unwrap();
-    resolver.set_certificate_issuer(Some(acme));
+        .unwrap()
+        .into();
+    resolver.set_certificate_issuer(acme);
     resolver
         .load_and_cache("main", "home.gateway.computer")
         .await

@@ -1,9 +1,10 @@
 use pem::Pem;
+use rustls::CertificateError;
 use std::time::SystemTime;
 use tokio::{fs, io::AsyncWriteExt};
 
 use crate::{
-    error::GatewayError,
+    error::{CertificateError as GWCertificateError, GatewayError},
     transport_services::certificate::{CertificateCache, CertificateStorage, DashMapCache},
 };
 pub struct CertificateFileStorage {
@@ -45,8 +46,8 @@ impl CertificateStorage for CertificateFileStorage {
     async fn get_pem(&self, account: &str, domain: &str) -> Result<Vec<Pem>, GatewayError> {
         let pem_path = format!("{}/{}/{}.pem", self.path, account, self.domain_hash(domain));
         dbg!(&pem_path);
-        let pem = pem::parse_many(fs::read_to_string(pem_path).await.unwrap()).unwrap();
-        Ok(pem)
+        pem::parse_many(fs::read_to_string(pem_path).await.unwrap())
+            .map_err(|e| GWCertificateError::InvalidPem(e).into())
     }
     async fn put_pem(
         &self,

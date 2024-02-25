@@ -1,6 +1,6 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
-use instant_acme::{Account, AccountCredentials, Authorization, NewAccount, Order};
+use instant_acme::{Account, AccountCredentials, Authorization, ChallengeType, NewAccount, Order};
 
 use crate::{
     error::GatewayError,
@@ -15,7 +15,7 @@ pub const ACME_TLS_ALPN_NAME: &[u8] = b"acme-tls/1";
 
 pub struct AcmeService {
     storage: Arc<dyn CertificateStorage + 'static + Send + Sync>,
-    cache: Box<dyn CertificateCache + Send + Sync>,
+    challenges: HashMap<(String, ChallengeType), String>, // (domain, challenge_type) -> token
     default_account: Account,
 }
 
@@ -38,7 +38,7 @@ impl AcmeService {
                 terms_of_service_agreed: true,
                 only_return_existing: false,
             },
-            server_url, //"https://acme-staging-v02.api.letsencrypt.org/directory",
+            server_url,
             None,
         )
         .await
@@ -49,7 +49,7 @@ impl AcmeService {
             .unwrap();
         Ok(Self {
             storage,
-            cache: Box::<DashMapCache>::default(),
+            challenges: HashMap::new(),
             default_account: account,
         })
     }
@@ -57,6 +57,10 @@ impl AcmeService {
 
 impl CertificateIssue for AcmeService {
     fn issue(&self, account: &str, domain: &str) -> Option<()> {
+        async{
+            let account = self.storage().get_default_account_credentials().await.unwrap();
+            
+        };
         unimplemented!()
     }
     fn status(&self, account: &str, domain: &str) -> CertificateIssueStatus {
@@ -67,13 +71,13 @@ impl CertificateIssue for AcmeService {
     }
 }
 
-pub struct Acme {
+pub struct AcmeChallenge {
     pub account: Account,
     authorizations: Vec<Authorization>,
     order: Option<Order>,
 }
 
-impl Acme {
+impl AcmeChallenge {
     pub async fn new(
         email: &str,
         directory: &str,

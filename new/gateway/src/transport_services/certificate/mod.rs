@@ -11,7 +11,8 @@ use serde::de::DeserializeOwned;
 use sha3::{Digest, Sha3_256};
 mod issue;
 mod store;
-use self::issue::CertificateIssue;
+mod validation;
+use self::{issue::CertificateIssue, validation::CertificateValidation};
 pub use issue::AcmeService;
 pub use store::CertificateFileStorage;
 
@@ -69,6 +70,10 @@ impl Default for DashMapCache {
         Self(Arc::new(dashmap::DashMap::new()))
     }
 }
+pub enum CertificateResolveStatus {
+    Success,
+    PendingIssue,
+}
 
 pub struct CertificateResolver {
     storage: Arc<dyn CertificateStorage + Send + Sync>,
@@ -94,7 +99,11 @@ impl CertificateResolver {
     ) {
         self.issue = issue.map(|x| Box::new(x) as _);
     }
-    pub async fn load_and_cache(&self, account: &str, domain: &str) -> Result<(), GatewayError> {
+    pub async fn load_and_cache(
+        &self,
+        account: &str,
+        domain: &str,
+    ) -> Result<CertificateResolveStatus, GatewayError> {
         let pem = self.storage.get_pem(account, domain).await.unwrap();
         let mut certificate_chain = Vec::new();
         let mut private_key = None;
@@ -118,14 +127,26 @@ impl CertificateResolver {
             &private_key.ok_or(CertificateError::PrivateKeyNotFound)?,
         )
         .unwrap();
-    
+
         if certificate_chain.is_empty() {
-            return Err(GatewayError::Invalid("Invalid Pem FIle"));
+            return Err(CertificateError::CertificateNotFound.into());
         }
+
         let certificate_key = CertifiedKey::new(certificate_chain, signer);
-        self.cache.put(account, domain, certificate_key);
-        Ok(())
+        let days_until_expiration = certificate_key.days_until_expiration();
+        if let Some(issue) = self.issue.as_ref().filter(|_| days_until_expiration == 0) {
+            issue.issue(account, domain);
+            todo!("renew certificate");
+            Ok(CertificateResolveStatus::PendingIssue)
+        } else {
+            self.cache.put(account, domain, certificate_key);
+            if let Some(issue) = self.issue.as_ref().filter(|_| days_until_expiration < 7) {
+                todo!("renew certificate");
+            }
+            Ok(CertificateResolveStatus::Success)
+        }
     }
+
     fn unload(&self, account: &str, domain: &str) {
         self.cache.remove(account, domain);
     }

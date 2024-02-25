@@ -12,3 +12,11 @@ pub enum GatewayError {
     CertificateError(#[from] certificate::CertificateError),
 }
 
+impl std::cmp::PartialEq<CertificateError> for GatewayError {
+    fn eq(&self, other: &CertificateError) -> bool {
+        match self {
+            GatewayError::CertificateError(e) => e == other,
+            _ => false,
+        }
+    }
+}
