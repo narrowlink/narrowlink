@@ -1,7 +1,7 @@
 use pem::Pem;
 use rustls::CertificateError;
 use std::time::SystemTime;
-use tokio::{fs, io::AsyncWriteExt};
+use tokio::{fs, io::AsyncWriteExt, sync::RwLock};
 
 use crate::{
     error::{CertificateError as GWCertificateError, GatewayError},
@@ -9,6 +9,7 @@ use crate::{
 };
 pub struct CertificateFileStorage {
     path: String,
+    default_account: RwLock<Option<String>>,
     // cache: Box<dyn CertificateCache>,
 }
 
@@ -16,6 +17,7 @@ impl CertificateFileStorage {
     pub fn new(path: String) -> Self {
         Self {
             path,
+            default_account: RwLock::new(None),
             // cache: Box::new(cache),
         }
     }
@@ -29,8 +31,18 @@ impl Default for CertificateFileStorage {
 #[async_trait::async_trait]
 impl CertificateStorage for CertificateFileStorage {
     async fn get_default_account_credentials(&self) -> Result<String, GatewayError> {
-        let default_account_path = format!("{}/default.account", self.path);
-        Ok(fs::read_to_string(default_account_path).await.unwrap())
+        if let Some(account) = self.default_account.read().await.as_ref() {
+            return Ok(account.clone());
+        } else {
+            let default_account = fs::read_to_string(format!("{}/default.account", self.path))
+                .await
+                .unwrap();
+            self.default_account
+                .write()
+                .await
+                .replace(default_account.clone());
+            return Ok(default_account);
+        }
     }
     async fn set_default_account_credentials(&self, account: &str) -> Result<(), GatewayError> {
         fs::create_dir_all(&self.path).await.unwrap();
@@ -41,6 +53,10 @@ impl CertificateStorage for CertificateFileStorage {
             .write_all(account.as_bytes())
             .await
             .unwrap();
+        self.default_account
+            .write()
+            .await
+            .replace(account.to_string());
         Ok(())
     }
     async fn get_pem(&self, account: &str, domain: &str) -> Result<Vec<Pem>, GatewayError> {
