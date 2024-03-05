@@ -40,6 +40,42 @@ pub trait CertificateStorage {
                 acc
             })
     }
+    async fn get_certificate_key(
+        &self,
+        account: &str,
+        domain: &str,
+    ) -> Result<CertifiedKey, GatewayError> {
+        let pems = self.get_pem(account, domain).await?;
+        let mut certificate_chain = Vec::new();
+        let mut private_key = None;
+
+        for i in pems {
+            match i.tag() {
+                "CERTIFICATE" => {
+                    certificate_chain.push(rustls::pki_types::CertificateDer::from(
+                        i.contents().to_vec(),
+                    ));
+                }
+                "PRIVATE KEY" => {
+                    private_key.replace(rustls::pki_types::PrivateKeyDer::from(
+                        rustls::pki_types::PrivatePkcs8KeyDer::from(i.contents().to_vec()),
+                    ));
+                }
+                _ => continue,
+            }
+        }
+
+        let signer = crypto::ring::sign::any_supported_type(
+            &private_key.ok_or(CertificateError::PrivateKeyNotFound)?,
+        )
+        .unwrap();
+
+        if certificate_chain.is_empty() {
+            return Err(CertificateError::CertificateNotFound.into());
+        }
+
+        Ok(CertifiedKey::new(certificate_chain, signer))
+    }
 }
 
 pub trait CertificateCache {
@@ -104,47 +140,31 @@ impl CertificateResolver {
         account: &str,
         domain: &str,
     ) -> Result<CertificateResolveStatus, GatewayError> {
-        let pem = self.storage.get_pem(account, domain).await.unwrap();
-        let mut certificate_chain = Vec::new();
-        let mut private_key = None;
-        for i in pem {
-            match i.tag() {
-                "CERTIFICATE" => {
-                    certificate_chain.push(rustls::pki_types::CertificateDer::from(
-                        i.contents().to_vec(),
-                    ));
+        match self.storage.get_certificate_key(account, domain).await {
+            Ok(certificate_key) => {
+                let days_until_expiration = certificate_key.days_until_expiration();
+                dbg!("ss");
+                if let Some(issue) = self.issue.as_ref().filter(|_| days_until_expiration == 0) {
+                    issue.issue(account, domain);
+                    todo!("renew certificate");
+                    Ok(CertificateResolveStatus::PendingIssue)
+                } else {
+                    self.cache.put(account, domain, certificate_key);
+                    if let Some(issue) = self.issue.as_ref().filter(|_| days_until_expiration < 7) {
+                        todo!("renew certificate");
+                    }
+                    Ok(CertificateResolveStatus::Success)
                 }
-                "PRIVATE KEY" => {
-                    private_key.replace(rustls::pki_types::PrivateKeyDer::from(
-                        rustls::pki_types::PrivatePkcs8KeyDer::from(i.contents().to_vec()),
-                    ));
+            }
+            Err(e) => {
+                if let Some(issue) = self.issue.as_ref() {
+                    issue.issue(account, domain);
+                    todo!("renew certificate");
+                    Ok(CertificateResolveStatus::PendingIssue)
+                } else {
+                    Err(e)
                 }
-                _ => continue,
             }
-        }
-
-        let signer = crypto::ring::sign::any_supported_type(
-            &private_key.ok_or(CertificateError::PrivateKeyNotFound)?,
-        )
-        .unwrap();
-
-        if certificate_chain.is_empty() {
-            return Err(CertificateError::CertificateNotFound.into());
-        }
-
-        let certificate_key = CertifiedKey::new(certificate_chain, signer);
-        let days_until_expiration = certificate_key.days_until_expiration();
-        dbg!("ss");
-        if let Some(issue) = self.issue.as_ref().filter(|_| days_until_expiration == 0) {
-            issue.issue(account, domain);
-            todo!("renew certificate");
-            Ok(CertificateResolveStatus::PendingIssue)
-        } else {
-            self.cache.put(account, domain, certificate_key);
-            if let Some(issue) = self.issue.as_ref().filter(|_| days_until_expiration < 7) {
-                todo!("renew certificate");
-            }
-            Ok(CertificateResolveStatus::Success)
         }
     }
 

@@ -37,7 +37,7 @@ impl CertificateStorage for CertificateFileStorage {
         } else {
             let default_account = fs::read_to_string(format!("{}/default.account", self.path))
                 .await
-                .map_err(|e| GWCertificateError::AccountNotFound(e))?;
+                .map_err(GWCertificateError::AccountNotFound)?;
             self.default_account
                 .write()
                 .await
@@ -61,10 +61,17 @@ impl CertificateStorage for CertificateFileStorage {
         Ok(())
     }
     async fn get_pem(&self, account: &str, domain: &str) -> Result<Vec<Pem>, GatewayError> {
-        let pem_path = format!("{}/{}/{}.pem", self.path, account, self.domain_hash(domain));
-        dbg!(&pem_path);
-        pem::parse_many(fs::read_to_string(pem_path).await.unwrap())
-            .map_err(|e| GWCertificateError::InvalidPem(e).into())
+        pem::parse_many(
+            fs::read_to_string(format!(
+                "{}/{}/{}.pem",
+                self.path,
+                account,
+                self.domain_hash(domain)
+            ))
+            .await
+            .map_err(|_| GWCertificateError::CertificateNotFound)?,
+        )
+        .map_err(|e| GWCertificateError::InvalidPem(e).into())
     }
     async fn put_pem(
         &self,

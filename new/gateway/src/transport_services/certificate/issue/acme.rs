@@ -26,12 +26,10 @@ impl AcmeService {
     pub async fn new(
         storage: Arc<impl CertificateStorage + 'static + Send + Sync>,
         email: &str,
-        server_url: impl Into<Option<&str>>,
+        server_url: Option<&str>,
     ) -> Result<Self, GatewayError> {
-        let server_url = server_url
-            .into()
-            .unwrap_or("https://acme-staging-v02.api.letsencrypt.org/directory");
-        dbg!("sx0x");
+        let server_url =
+            server_url.unwrap_or("https://acme-staging-v02.api.letsencrypt.org/directory");
         let account = match storage
             .get_default_account_credentials()
             .await
