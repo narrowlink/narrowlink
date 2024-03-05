@@ -6,3 +6,4 @@
 *.yaml
 !sample_*.yaml
 /certificates
+/new/certificates
