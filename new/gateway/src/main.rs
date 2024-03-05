@@ -26,13 +26,16 @@ mod transport_services;
 
 #[tokio::main]
 async fn main() {
+    
     let storage = Arc::new(CertificateFileStorage::default());
     let mut resolver = CertificateResolver::new(storage.clone(), DashMapCache::default());
     let acme = AcmeService::new(storage, "dev@narrowlink.com", None)
         .await
         .unwrap()
         .into();
+    dbg!("s2");
     resolver.set_certificate_issuer(acme);
+    dbg!("s");
     resolver
         .load_and_cache("main", "home.gateway.computer")
         .await
@@ -53,7 +56,7 @@ async fn main() {
             Box::pin(transport_services::Http::new(s.unwrap().inner()))
         }),
     ));
-
+    dbg!("s");
     streams.push(Box::pin(
         transport_services::Tcp::new(SocketAddr::new(
             std::net::IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),

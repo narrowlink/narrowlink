@@ -134,6 +134,7 @@ impl CertificateResolver {
 
         let certificate_key = CertifiedKey::new(certificate_chain, signer);
         let days_until_expiration = certificate_key.days_until_expiration();
+        dbg!("ss");
         if let Some(issue) = self.issue.as_ref().filter(|_| days_until_expiration == 0) {
             issue.issue(account, domain);
             todo!("renew certificate");

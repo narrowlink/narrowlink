@@ -1,9 +1,10 @@
 use std::{collections::HashMap, sync::Arc};
 
 use instant_acme::{Account, AccountCredentials, Authorization, ChallengeType, NewAccount, Order};
+use rustls::CertificateError;
 
 use crate::{
-    error::GatewayError,
+    error::{CertificateError as GWCertificateError, GatewayError},
     transport_services::certificate::{
         CertificateCache, CertificateResolver, CertificateStorage, DashMapCache,
     },
@@ -30,23 +31,40 @@ impl AcmeService {
         let server_url = server_url
             .into()
             .unwrap_or("https://acme-staging-v02.api.letsencrypt.org/directory");
-        let default_account_credentials = storage.get_default_account_credentials().await.unwrap();
-        serde_json::from_str::<AccountCredentials>(&default_account_credentials).unwrap();
-        let (account, account_credentials) = Account::create(
-            &NewAccount {
-                contact: &[&format!("mailto:{}", email)],
-                terms_of_service_agreed: true,
-                only_return_existing: false,
-            },
-            server_url,
-            None,
-        )
-        .await
-        .unwrap();
-        storage
-            .set_default_account_credentials(&serde_json::to_string(&account_credentials).unwrap())
+        dbg!("sx0x");
+        let account = match storage
+            .get_default_account_credentials()
             .await
-            .unwrap();
+            .and_then(|s| {
+                serde_json::from_str::<AccountCredentials>(&s)
+                    .map_err(|_| GWCertificateError::InvalidAccount.into())
+            }) {
+            Ok(account_credentials) => Account::from_credentials(account_credentials)
+                .await
+                .unwrap(),
+            Err(_) => {
+                let (account, account_credentials) = Account::create(
+                    &NewAccount {
+                        contact: &[&format!("mailto:{}", email)],
+                        terms_of_service_agreed: true,
+                        only_return_existing: false,
+                    },
+                    server_url,
+                    None,
+                )
+                .await
+                .unwrap();
+
+                storage
+                    .set_default_account_credentials(
+                        &serde_json::to_string(&account_credentials).unwrap(),
+                    )
+                    .await
+                    .unwrap();
+                account
+            }
+        };
+
         Ok(Self {
             storage,
             challenges: HashMap::new(),
@@ -57,9 +75,12 @@ impl AcmeService {
 
 impl CertificateIssue for AcmeService {
     fn issue(&self, account: &str, domain: &str) -> Option<()> {
-        async{
-            let account = self.storage().get_default_account_credentials().await.unwrap();
-            
+        async {
+            let account = self
+                .storage()
+                .get_default_account_credentials()
+                .await
+                .unwrap();
         };
         unimplemented!()
     }

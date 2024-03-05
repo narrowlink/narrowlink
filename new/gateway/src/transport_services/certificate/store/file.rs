@@ -25,18 +25,19 @@ impl CertificateFileStorage {
 
 impl Default for CertificateFileStorage {
     fn default() -> Self {
-        Self::new("../certificates".to_string())
+        Self::new("./certificates".to_string())
     }
 }
 #[async_trait::async_trait]
 impl CertificateStorage for CertificateFileStorage {
     async fn get_default_account_credentials(&self) -> Result<String, GatewayError> {
-        if let Some(account) = self.default_account.read().await.as_ref() {
-            return Ok(account.clone());
+        let default_account = self.default_account.read().await.clone();
+        if let Some(account) = default_account {
+            return Ok(account);
         } else {
             let default_account = fs::read_to_string(format!("{}/default.account", self.path))
                 .await
-                .unwrap();
+                .map_err(|e| GWCertificateError::AccountNotFound(e))?;
             self.default_account
                 .write()
                 .await

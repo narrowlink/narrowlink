@@ -1,6 +1,8 @@
 use thiserror::Error;
 
-#[derive(Error, Debug, PartialEq)]
+use super::GatewayError;
+
+#[derive(Error, Debug)]
 pub enum CertificateError {
     #[error("Invalid {0}")]
     Invalid(&'static str),
@@ -12,4 +14,8 @@ pub enum CertificateError {
     InvalidPem(#[from] pem::PemError),
     #[error("Certificate expired")]
     CertificateExpired,
+    #[error("Account not found: {0}")]
+    AccountNotFound(#[from] std::io::Error),
+    #[error("Invalid account")]
+    InvalidAccount,
 }
