@@ -10,8 +10,8 @@ use instant_acme::{
     Account, AccountCredentials, Authorization, Challenge, ChallengeType, Identifier,
     KeyAuthorization, NewAccount, NewOrder, Order, OrderStatus,
 };
-use rcgen::{Certificate, CertificateParams, DistinguishedName};
-use rustls::CertificateError;
+use rcgen::{Certificate, CertificateParams, DistinguishedName, DnType};
+use rustls::{crypto, sign::CertifiedKey, CertificateError};
 use tokio::{
     sync::{
         mpsc::{UnboundedReceiver, UnboundedSender},
@@ -213,14 +213,38 @@ impl AcmeKeyAuthorization {
             receiver,
         )
     }
-    // fn get_tls_key_authorization(&self) -> Option<Vec<u8>> {
-    //     for (key_authorization, challenge_type) in &self.key_authorization {
-    //         if *challenge_type == ChallengeType::TlsAlpn01 {
-    //             return Some(key_authorization.digest().as_ref().into());
-    //         }
-    //     }
-    //     None
-    // }
+    fn get_tls_challenge(&self, domain: &str) -> Option<CertifiedKey> {
+        for (key_authorization, token, challenge_type) in &self.key_authorization {
+            if *challenge_type == ChallengeType::TlsAlpn01 {
+                let mut params = rcgen::CertificateParams::new(vec![domain.to_owned()]);
+                let mut dn = DistinguishedName::new();
+                dn.push(DnType::OrganizationName, "narrowlink");
+                params.distinguished_name = dn;
+                params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
+                params.custom_extensions = vec![rcgen::CustomExtension::new_acme_identifier(
+                    key_authorization.digest().as_ref(),
+                )];
+                let cert = rcgen::Certificate::from_params(params).unwrap();
+                let signer = crypto::ring::sign::any_supported_type(
+                    &rustls::pki_types::PrivateKeyDer::from(
+                        rustls::pki_types::PrivatePkcs8KeyDer::from(
+                            cert.serialize_private_key_der(),
+                        ),
+                    ),
+                )
+                .unwrap();
+                let certified_key = CertifiedKey::new(
+                    vec![rustls::pki_types::CertificateDer::from(
+                        cert.serialize_der().unwrap(),
+                    )],
+                    signer,
+                );
+                // return Some(certified_key);
+                return Some(certified_key);
+            }
+        }
+        None
+    }
     // fn get_http_key_authorization(&self) -> Option<HashMap<String, String>> {
     //     let mut map = HashMap::new();
     //     for (key_authorization, challenge_type) in &self.key_authorization {

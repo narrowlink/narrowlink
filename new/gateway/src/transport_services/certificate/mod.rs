@@ -3,7 +3,10 @@ use std::{
     sync::Arc,
 };
 
-use crate::error::{CertificateError, GatewayError};
+use crate::{
+    error::{CertificateError, GatewayError},
+    transport_services::certificate::issue::ACME_TLS_ALPN_NAME,
+};
 use core::fmt::{self, Display, Formatter};
 use pem::Pem;
 use rustls::{crypto, server::ResolvesServerCert, sign::CertifiedKey, ServerConfig};
@@ -183,6 +186,12 @@ impl ResolvesServerCert for CertificateResolver {
         &self,
         client_hello: rustls::server::ClientHello,
     ) -> Option<Arc<rustls::sign::CertifiedKey>> {
+        if let (Some(alpn), Some(acme)) = (client_hello.alpn(), &self.issue) {
+            if alpn.collect::<Vec<_>>().contains(&ACME_TLS_ALPN_NAME) {
+                
+            }
+        }
+
         dbg!(client_hello.server_name());
 
         client_hello
