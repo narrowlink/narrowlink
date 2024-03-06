@@ -23,6 +23,7 @@ http-body-util = { version = "0.1", default-features = false }
 tower-service = { version = "0.3", default-features = false }
 tokio-rustls = { version = "0.25", default-features = false }
 rustls = { version = "0.22", features = ["ring"], default-features = false }
+rcgen = "0.12.1"
 serde_json = { version = "1.0.114", default-features = false, features = [
     "std",
 ] }

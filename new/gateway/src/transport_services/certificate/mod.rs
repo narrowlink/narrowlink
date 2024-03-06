@@ -17,7 +17,7 @@ pub use issue::AcmeService;
 pub use store::CertificateFileStorage;
 
 #[async_trait::async_trait]
-pub trait CertificateStorage {
+pub trait CertificateStorage: Send + Sync {
     async fn set_default_account_credentials(&self, account: &str) -> Result<(), GatewayError>;
     async fn get_default_account_credentials(&self) -> Result<String, GatewayError>;
     async fn get_pem(&self, account: &str, domain: &str) -> Result<Vec<Pem>, GatewayError>;
@@ -32,6 +32,8 @@ pub trait CertificateStorage {
     async fn is_failed(&self, account: &str, domain: &str) -> bool;
     async fn set_pending(&self, account: &str, domain: &str) -> Result<(), GatewayError>;
     async fn is_pending(&self, account: &str, domain: &str) -> bool;
+    // async fn set_success(&self, account: &str, domain: &str) -> Result<(), GatewayError>;
+    // async fn is_success(&self, account: &str, domain: &str) -> bool;
     fn domain_hash(&self, domain: &str) -> String {
         Sha3_256::digest(domain.as_bytes())
             .iter()
@@ -159,7 +161,7 @@ impl CertificateResolver {
             Err(e) => {
                 if let Some(issue) = self.issue.as_ref() {
                     issue.issue(account, domain);
-                    todo!("renew certificate");
+                    // todo!("renew certificate");
                     Ok(CertificateResolveStatus::PendingIssue)
                 } else {
                     Err(e)
@@ -181,6 +183,8 @@ impl ResolvesServerCert for CertificateResolver {
         &self,
         client_hello: rustls::server::ClientHello,
     ) -> Option<Arc<rustls::sign::CertifiedKey>> {
+        dbg!(client_hello.server_name());
+
         client_hello
             .server_name()
             .and_then(|sni| self.get_certified_key("main", sni))

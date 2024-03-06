@@ -1,7 +1,24 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{mpsc::Receiver, Arc},
+    time::Duration,
+};
 
-use instant_acme::{Account, AccountCredentials, Authorization, ChallengeType, NewAccount, Order};
+use dashmap::DashMap;
+use futures::{future::select, stream::futures_unordered, StreamExt};
+use instant_acme::{
+    Account, AccountCredentials, Authorization, Challenge, ChallengeType, Identifier,
+    KeyAuthorization, NewAccount, NewOrder, Order, OrderStatus,
+};
+use rcgen::{Certificate, CertificateParams, DistinguishedName};
 use rustls::CertificateError;
+use tokio::{
+    sync::{
+        mpsc::{UnboundedReceiver, UnboundedSender},
+        oneshot,
+    },
+    time::sleep,
+};
 
 use crate::{
     error::{CertificateError as GWCertificateError, GatewayError},
@@ -16,7 +33,7 @@ pub const ACME_TLS_ALPN_NAME: &[u8] = b"acme-tls/1";
 
 pub struct AcmeService {
     storage: Arc<dyn CertificateStorage + 'static + Send + Sync>,
-    challenges: HashMap<(String, ChallengeType), String>, // (domain, challenge_type) -> token
+    challenges: Arc<DashMap<(String, String), AcmeKeyAuthorization>>, // (user, domain) -> challenges
     default_account: Account,
 }
 
@@ -65,7 +82,7 @@ impl AcmeService {
 
         Ok(Self {
             storage,
-            challenges: HashMap::new(),
+            challenges: Default::default(),
             default_account: account,
         })
     }
@@ -73,58 +90,147 @@ impl AcmeService {
 
 impl CertificateIssue for AcmeService {
     fn issue(&self, account: &str, domain: &str) -> Option<()> {
-        async {
-            let account = self
-                .storage()
-                .get_default_account_credentials()
+        if self
+            .challenges
+            .contains_key(&(domain.to_owned(), account.to_owned()))
+        {
+            return None;
+        }
+        let default_account = self.default_account.clone();
+        let domain = domain.to_owned();
+        let account = account.to_owned();
+        let challenges = self.challenges.clone();
+        let storage = self.storage.clone();
+        let task = tokio::spawn(async move {
+            let identifier = Identifier::Dns(domain.clone());
+            let mut order = default_account
+                .new_order(&NewOrder {
+                    identifiers: &[identifier],
+                })
                 .await
                 .unwrap();
-        };
-        unimplemented!()
+            dbg!(order.state());
+            // let x = order.key_authorization(challenge);
+            if matches!(order.state().status, OrderStatus::Pending) {
+                storage.set_pending(&account, &domain).await.unwrap();
+            }
+
+            // let Some((key_authorization, receiver)) = AcmeKeyAuthorization::new(&order, &domain).await else{
+            //     storage.set_failed(&account, &domain).await.unwrap();
+            //     return ;
+            // };
+            let mut status_receiver = futures_unordered::FuturesUnordered::new();
+            let authorizations = order.authorizations().await.unwrap();
+            for authorization in authorizations {
+                let Identifier::Dns(dns_identifier) = authorization.identifier;
+                if dns_identifier != domain {
+                    storage.set_failed(&account, &domain).await.unwrap();
+                    return;
+                }
+                let (acme_key_authorization, receiver) = AcmeKeyAuthorization::new(
+                    authorization
+                        .challenges
+                        .iter()
+                        .map(|c| (order.key_authorization(c), c.token.clone(), c.r#type))
+                        .collect::<Vec<_>>(),
+                );
+                status_receiver.push(receiver);
+                challenges.insert((domain.clone(), account.clone()), acme_key_authorization);
+                for c in &authorization.challenges {
+                    order.set_challenge_ready(&c.url).await.unwrap();
+                }
+            }
+            let mut tries = 1u8;
+            let mut delay = Duration::from_millis(250);
+            loop {
+                if matches!(
+                    select(status_receiver.select_next_some(), Box::pin(sleep(delay))).await,
+                    futures::future::Either::Right(_)
+                ) {
+                    delay *= 2;
+                    tries += 1;
+                }
+                let state = order.refresh().await.unwrap();
+                if let OrderStatus::Ready | OrderStatus::Invalid = state.status {
+                    break;
+                }
+                if tries < 5 {
+                    {
+                        todo!();
+                        return;
+                    }
+                }
+            }
+
+            if order.state().status != OrderStatus::Ready {
+                storage.set_failed(&account, &domain).await.unwrap();
+                return;
+            }
+            let mut params = CertificateParams::new(vec![domain]);
+            params.distinguished_name = DistinguishedName::new();
+            let cert = Certificate::from_params(params).unwrap();
+            let csr = cert.serialize_request_der().unwrap();
+            order.finalize(&csr).await.unwrap();
+            let cert_chain_pem = loop {
+                match order.certificate().await.unwrap() {
+                    Some(cert_chain_pem) => break cert_chain_pem,
+                    None => sleep(Duration::from_secs(1)).await,
+                }
+            };
+
+            let x = pem::parse_many(cert_chain_pem)
+                .and_then(|mut c| {
+                    pem::parse(cert.get_key_pair().serialize_pem()).map(|p| {
+                        c.push(p);
+                        c
+                    })
+                })
+                .unwrap();
+            dbg!(x);
+        });
+        None
     }
-    fn status(&self, account: &str, domain: &str) -> CertificateIssueStatus {
-        unimplemented!()
-    }
-    fn storage(&self) -> &dyn CertificateStorage {
-        unimplemented!()
+    fn storage(&self) -> Arc<dyn CertificateStorage> {
+        self.storage.clone()
     }
 }
 
-pub struct AcmeChallenge {
-    pub account: Account,
-    authorizations: Vec<Authorization>,
-    order: Option<Order>,
+struct AcmeKeyAuthorization {
+    key_authorization: Vec<(KeyAuthorization, String, ChallengeType)>,
+    sender: oneshot::Sender<()>,
 }
 
-impl AcmeChallenge {
-    pub async fn new(
-        email: &str,
-        directory: &str,
-    ) -> Result<(Self, AccountCredentials), GatewayError> {
-        let (account, account_credentials) = Account::create(
-            &NewAccount {
-                contact: &[&format!("mailto:{}", email)],
-                terms_of_service_agreed: true,
-                only_return_existing: false,
-            },
-            directory,
-            None,
-        )
-        .await?;
-        Ok((
+impl AcmeKeyAuthorization {
+    fn new(
+        key_authorization: Vec<(KeyAuthorization, String, ChallengeType)>,
+    ) -> (Self, oneshot::Receiver<()>) {
+        let (sender, receiver) = oneshot::channel();
+        (
             Self {
-                account,
-                authorizations: Vec::new(),
-                order: None,
+                key_authorization,
+                sender,
             },
-            account_credentials,
-        ))
+            receiver,
+        )
     }
-    pub fn from_account(account: Account) -> Result<Self, GatewayError> {
-        Ok(Self {
-            account,
-            authorizations: Vec::new(),
-            order: None,
-        })
-    }
+    // fn get_tls_key_authorization(&self) -> Option<Vec<u8>> {
+    //     for (key_authorization, challenge_type) in &self.key_authorization {
+    //         if *challenge_type == ChallengeType::TlsAlpn01 {
+    //             return Some(key_authorization.digest().as_ref().into());
+    //         }
+    //     }
+    //     None
+    // }
+    // fn get_http_key_authorization(&self) -> Option<HashMap<String, String>> {
+    //     let mut map = HashMap::new();
+    //     for (key_authorization, challenge_type) in &self.key_authorization {
+    //         if *challenge_type == ChallengeType::Http01 {
+    //             map.insert(
+    //                 key_authorization.digest().to_string(),
+    //                 key_authorization.to_string(),
+    //             );
+    //         }
+    //     }
+    //     Some(map)
+    // }
 }

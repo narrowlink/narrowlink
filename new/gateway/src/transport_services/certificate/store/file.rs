@@ -126,7 +126,8 @@ impl CertificateStorage for CertificateFileStorage {
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
-        std::fs::read_to_string(failed_path)
+        fs::read_to_string(failed_path)
+            .await
             .ok()
             .and_then(|v| v.parse::<u64>().ok())
             .filter(|v| *v + 60 * 60 > ts) // 1 hour
@@ -153,7 +154,8 @@ impl CertificateStorage for CertificateFileStorage {
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
-        std::fs::read_to_string(pending_path)
+        fs::read_to_string(pending_path)
+            .await
             .ok()
             .and_then(|v| v.parse::<u64>().ok())
             .filter(|v| *v + 120 > ts) // 120 seconds
