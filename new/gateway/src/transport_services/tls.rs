@@ -46,9 +46,9 @@ impl Tls {
         // Ok(TLS::Unpacked(Box::new(socket)))
     }
     pub fn peek_sni_and_alpns(buf: &[u8]) -> Option<(String, Vec<Vec<u8>>)> {
-        let message = message::OpaqueMessage::read(&mut codec::Reader::init(buf)).ok()?;
+        let message = message::OutboundOpaqueMessage::read(&mut codec::Reader::init(buf)).ok()?;
 
-        let mut r = codec::Reader::init(message.payload());
+        let mut r = codec::Reader::init(message.payload.as_ref());
         let _typ = rustls::HandshakeType::read(&mut r).ok()?;
 
         let len = r.take(3).and_then(|v| {
