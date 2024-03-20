@@ -1032,7 +1032,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c2a198fb6b0eada2a8df47933734e6d35d350665a33a3593d7164fa52c75c19"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.4",
 ]
 
 [[package]]
@@ -1118,7 +1118,7 @@ dependencies = [
 
 [[package]]
 name = "narrowlink-agent"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "clap_lex",
  "daemonize",
@@ -1145,7 +1145,7 @@ dependencies = [
 
 [[package]]
 name = "narrowlink-client"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "chrono",
  "clap_lex",
@@ -1181,7 +1181,7 @@ dependencies = [
 
 [[package]]
 name = "narrowlink-gateway"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "askama",
  "async-trait",
@@ -1214,7 +1214,7 @@ dependencies = [
 
 [[package]]
 name = "narrowlink-network"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "async-recursion",
  "bytes",
@@ -1239,7 +1239,7 @@ dependencies = [
 
 [[package]]
 name = "narrowlink-token-generator"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "clap_lex",
  "dirs",
