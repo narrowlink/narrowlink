@@ -331,15 +331,15 @@ impl ControlFactory {
                         if !agent.publish_info.is_empty() {
                             println!("\tPublish Info:");
                             for agent_publish_info in &agent.publish_info {
-                                println!("\t\t{}", agent_publish_info.to_string());
+                                println!("\t\t{}", agent_publish_info);
                             }
                         }
                         if let Some(since) =
-                            &chrono::NaiveDateTime::from_timestamp_opt(agent.since as i64, 0)
+                            &chrono::DateTime::from_timestamp(agent.since as i64, 0)
                         {
                             let datetime: chrono::DateTime<chrono::Local> =
                                 chrono::DateTime::from_naive_utc_and_offset(
-                                    *since,
+                                    since.naive_utc(),
                                     *chrono::Local::now().offset(),
                                 );
                             println!("\tConnection Time: {}", datetime);

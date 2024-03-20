@@ -1,3 +1,4 @@
+use core::fmt::Display;
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
     sync::Arc,
@@ -204,14 +205,14 @@ pub enum Response {
     Failed = 0xFF,
 }
 
-impl ToString for Response {
-    fn to_string(&self) -> String {
+impl Display for Response {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Success => "Success".to_owned(),
-            Self::InvalidRequest => "InvalidRequest".to_owned(),
-            Self::AccessDenied => "AccessDenied".to_owned(),
-            Self::UnableToResolve => "UnableToResolve".to_owned(),
-            Self::Failed => "Failed".to_owned(),
+            Self::Success => write!(f, "Success"),
+            Self::InvalidRequest => write!(f, "InvalidRequest"),
+            Self::AccessDenied => write!(f, "AccessDenied"),
+            Self::UnableToResolve => write!(f, "UnableToResolve"),
+            Self::Failed => write!(f, "Failed"),
         }
     }
 }
