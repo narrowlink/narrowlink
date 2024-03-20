@@ -7,8 +7,8 @@ on:
   push:
     paths:
       - '**/Cargo.toml'
-env:
-  CARGO_TERM_COLOR: always
+# env:
+#   CARGO_TERM_COLOR: always
 
 jobs:
   audit:
