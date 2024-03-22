@@ -1,5 +1,6 @@
 use std::{collections::VecDeque, io, sync::Arc};
 
+use log::debug;
 use rustls::internal::msgs::{
     codec::{self, Codec},
     handshake, message,
@@ -40,7 +41,10 @@ impl Tls {
         // let config = certificate_storage.get_config("main", &sni).await.unwrap();
         let acceptor = TlsAcceptor::from(Arc::new(config));
         // dbg!("accepting");
-        let mut stream = acceptor.accept(socket).await.unwrap();
+        let Ok(mut stream) = acceptor.accept(socket).await else {
+            debug!("tls acceptor failed");
+            return Err(GatewayError::Invalid("tls acceptor failed"));
+        };
         // dbg!("accepted");
         Ok(Tls::Unpacked(Box::new(stream)))
         // Ok(TLS::Unpacked(Box::new(socket)))

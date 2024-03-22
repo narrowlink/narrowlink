@@ -26,7 +26,7 @@ impl CertificateValidation for CertifiedKey {
     fn expiration(&self) -> u64 {
         let mut expiration = u64::MAX;
         for cert in &self.cert {
-            if let Ok((_, parsed_cert)) = X509Certificate::from_der(&cert) {
+            if let Ok((_, parsed_cert)) = X509Certificate::from_der(cert) {
                 let not_after = parsed_cert.validity().not_after.timestamp().unsigned_abs();
                 if not_after < expiration {
                     expiration = not_after;

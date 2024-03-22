@@ -10,6 +10,7 @@ use instant_acme::{
     Account, AccountCredentials, Authorization, Challenge, ChallengeType, Identifier,
     KeyAuthorization, NewAccount, NewOrder, Order, OrderStatus,
 };
+use log::debug;
 use rcgen::{Certificate, CertificateParams, DistinguishedName, DnType};
 use rustls::{crypto, sign::CertifiedKey, CertificateError};
 use tokio::{
@@ -90,6 +91,7 @@ impl AcmeService {
 
 impl CertificateIssue for AcmeService {
     fn issue(&self, account: &str, domain: &str) -> Option<()> {
+        debug!("issue certificate for {}@{}", account, domain);
         if self
             .challenges
             .contains_key(&(domain.to_owned(), account.to_owned()))
@@ -101,6 +103,7 @@ impl CertificateIssue for AcmeService {
         let account = account.to_owned();
         let challenges = self.challenges.clone();
         let storage = self.storage.clone();
+        // task to issue certificate
         let task = tokio::spawn(async move {
             let identifier = Identifier::Dns(domain.clone());
             let mut order = default_account

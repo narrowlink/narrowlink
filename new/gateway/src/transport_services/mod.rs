@@ -4,6 +4,7 @@ use http_body_util::Full;
 use hyper::body::Bytes;
 use tokio::sync::oneshot;
 mod tcp;
+use crate::error::GatewayError;
 use crate::{negotiatation, AsyncSocket, SocketInfo};
 pub use tcp::Tcp;
 mod tls;
@@ -28,4 +29,5 @@ pub(crate) enum TransportStream {
         oneshot::Sender<hyper::Response<Full<Bytes>>>,
     ),
     SniProxy(Box<dyn AsyncSocket>),
+    Error(GatewayError),
 }

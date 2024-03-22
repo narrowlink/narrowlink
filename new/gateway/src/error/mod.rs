@@ -10,6 +10,8 @@ pub enum GatewayError {
     ACMEError(#[from] instant_acme::Error),
     #[error("Certificate Error: {0}")]
     CertificateError(#[from] certificate::CertificateError),
+    #[error("IO Error: {0}")]
+    IOError(#[from] std::io::Error),
 }
 
 // impl std::cmp::PartialEq<CertificateError> for GatewayError {

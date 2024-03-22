@@ -26,7 +26,7 @@ mod transport_services;
 
 #[tokio::main]
 async fn main() {
-    
+    env_logger::init();
     let storage = Arc::new(CertificateFileStorage::default());
     let mut resolver = CertificateResolver::new(storage.clone(), DashMapCache::default());
     let acme = AcmeService::new(storage, "dev@narrowlink.com", None)
@@ -50,10 +50,14 @@ async fn main() {
             443,
         ))
         .await
-        .map_err(|x| ())
-        .and_then(|s| transport_services::Tls::new(s, resolver.clone()).map_err(|_| ()))
-        .flat_map_unordered(None, |s| {
-            Box::pin(transport_services::Http::new(s.unwrap().inner()))
+        .map_err(error::GatewayError::IOError)
+        .and_then(|s| transport_services::Tls::new(s, resolver.clone()))
+        .flat_map_unordered(None, |s| match s {
+            Ok(s) => Box::pin(transport_services::Http::new(s.inner()))
+                as Pin<Box<dyn Stream<Item = TransportStream>>>,
+            Err(e) => Box::pin(futures::stream::once(futures::future::ready(
+                TransportStream::Error(e),
+            ))),
         }),
     ));
     dbg!("s");
@@ -63,9 +67,13 @@ async fn main() {
             80,
         ))
         .await
-        .map_err(|_| ())
-        .flat_map_unordered(None, |s| {
-            Box::pin(transport_services::Http::new(s.unwrap()))
+        .map_err(error::GatewayError::IOError)
+        .flat_map_unordered(None, |s| match s {
+            Ok(s) => Box::pin(transport_services::Http::new(s))
+                as Pin<Box<dyn Stream<Item = TransportStream>>>,
+            Err(e) => Box::pin(futures::stream::once(futures::future::ready(
+                TransportStream::Error(e),
+            ))),
         }),
     ));
 
@@ -81,6 +89,9 @@ async fn main() {
                     .unwrap();
                 }
                 TransportStream::SniProxy(_) => {}
+                TransportStream::Error(e) => {
+                    dbg!(e);
+                }
             }
         })
         .await;

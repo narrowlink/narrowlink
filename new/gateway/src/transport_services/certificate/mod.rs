@@ -10,7 +10,6 @@ use crate::{
 use core::fmt::{self, Display, Formatter};
 use pem::Pem;
 use rustls::{crypto, server::ResolvesServerCert, sign::CertifiedKey, ServerConfig};
-use serde::de::DeserializeOwned;
 use sha3::{Digest, Sha3_256};
 mod issue;
 mod store;
@@ -188,7 +187,7 @@ impl ResolvesServerCert for CertificateResolver {
     ) -> Option<Arc<rustls::sign::CertifiedKey>> {
         if let (Some(alpn), Some(acme)) = (client_hello.alpn(), &self.issue) {
             if alpn.collect::<Vec<_>>().contains(&ACME_TLS_ALPN_NAME) {
-                
+                dbg!("acme");
             }
         }
 
