@@ -21,6 +21,7 @@ pub struct AcmeService {
     storage: Arc<dyn CertificateStorage + 'static + Send + Sync>,
     challenges: Arc<DashMap<(String, String), Arc<AcmeChallenges>>>, // (user, domain) -> challenges
     cache: Arc<dyn CertificateCache + Send + Sync>,
+    supported_challenges: Vec<ChallengeType>,
     default_account: Account,
 }
 
@@ -32,7 +33,7 @@ impl AcmeService {
     ) -> Result<Self, GatewayError> {
         let server_url =
             server_url.unwrap_or("https://acme-staging-v02.api.letsencrypt.org/directory");
-        let account = match storage
+        let default_account = match storage
             .get_default_account_credentials()
             .await
             .and_then(|s| {
@@ -68,8 +69,9 @@ impl AcmeService {
         Ok(Self {
             storage,
             challenges: Default::default(),
-            cache: Arc::new(DashMapCache::default()),
-            default_account: account,
+            cache: Arc::<DashMapCache>::default(),
+            default_account,
+            supported_challenges: vec![ChallengeType::Http01, ChallengeType::TlsAlpn01],
         })
     }
 }
@@ -83,8 +85,9 @@ impl CertificateIssue for AcmeService {
         {
             return None;
         }
-        let default_acme_account = self.default_account.clone();
 
+        let default_acme_account = self.default_account.clone();
+        let supported_challenges = self.supported_challenges.clone();
         let domain = domain.to_owned();
         let uid = uid.to_owned();
         let challenges = self.challenges.clone();
@@ -112,19 +115,21 @@ impl CertificateIssue for AcmeService {
                     storage.set_failed(&uid, &domain).await.unwrap();
                     return;
                 }
+                let authorization_challenges = authorization
+                    .challenges
+                    .into_iter()
+                    .filter(|c| supported_challenges.contains(&c.r#type))
+                    .collect::<Vec<_>>();
+
                 let acme_key_authorization =
-                    AcmeChallenges::new(&domain, &order, &authorization.challenges);
+                    AcmeChallenges::new(&domain, &order, &authorization_challenges);
 
                 challenges.insert(
                     (uid.clone(), domain.clone()),
                     Arc::new(acme_key_authorization),
                 );
 
-                for c in &authorization.challenges {
-                    if c.r#type == ChallengeType::Dns01 {
-                        continue;
-                    }
-                    dbg!(&c);
+                for c in authorization_challenges {
                     order.set_challenge_ready(&c.url).await;
                 }
             }
@@ -256,5 +261,9 @@ impl AcmeChallenges {
     }
     pub fn get_http_challenge(&self) -> Option<(String, String)> {
         self.http_challenge.clone()
+    }
+    #[allow(dead_code)]
+    pub fn get_dns_challenge(&self) -> Option<String> {
+        self.dns_challenge.clone()
     }
 }
