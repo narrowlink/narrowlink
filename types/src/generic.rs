@@ -1,4 +1,4 @@
-use chrono;
+use core::fmt::Display;
 use hmac::Hmac;
 use serde::{Deserialize, Serialize};
 use sha3::Sha3_256;
@@ -87,17 +87,21 @@ pub enum Protocol {
     QUIC,
 }
 
-impl ToString for Protocol {
-    fn to_string(&self) -> String {
-        match self {
-            Protocol::TCP => "tcp".to_owned(),
-            Protocol::UDP => "udp".to_owned(),
-            Protocol::HTTP => "http".to_owned(),
-            Protocol::HTTPS => "https".to_owned(),
-            Protocol::TLS => "tls".to_owned(),
-            Protocol::DTLS => "dtls".to_owned(),
-            Protocol::QUIC => "quic".to_owned(),
-        }
+impl Display for Protocol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Protocol::TCP => "tcp",
+                Protocol::UDP => "udp",
+                Protocol::HTTP => "http",
+                Protocol::HTTPS => "https",
+                Protocol::TLS => "tls",
+                Protocol::DTLS => "dtls",
+                Protocol::QUIC => "quic",
+            }
+        )
     }
 }
 
@@ -143,9 +147,12 @@ impl std::fmt::Debug for AgentInfo {
         if let Some(system_info) = &self.system_info.as_ref() {
             debug.field("system_info", system_info);
         }
-        if let Some(since) = &chrono::NaiveDateTime::from_timestamp_opt(self.since as i64, 0) {
+        if let Some(since) = &chrono::DateTime::from_timestamp(self.since as i64, 0) {
             let datetime: chrono::DateTime<chrono::Local> =
-                chrono::DateTime::from_naive_utc_and_offset(*since, *chrono::Local::now().offset());
+                chrono::DateTime::from_naive_utc_and_offset(
+                    since.naive_utc(),
+                    *chrono::Local::now().offset(),
+                );
             debug.field("since", &datetime);
         }
         debug.field("ping", &self.ping);

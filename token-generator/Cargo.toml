@@ -1,6 +1,6 @@
 [package]
 name = "narrowlink-token-generator"
-version = "0.2.4"
+version = "0.2.5"
 description = 'Token generator for narrowlink'
 readme = "README.md"
 homepage = "https://narrowlink.com"
@@ -27,11 +27,11 @@ workspace = true
 
 [dependencies]
 jsonwebtoken = { version = "9.2.0", default-features = false }
-serde = { version = "1.0.196", features = ["derive"], default-features = false }
-serde_yaml = { version = "0.9.31", default-features = false }
+serde = { version = "1.0.197", features = ["derive"], default-features = false }
+serde_yaml = { version = "0.9.33", default-features = false }
 dirs = { version = "5.0.1", default-features = false }
-clap_lex = { version = "0.6.0", default-features = false }
-uuid = { version = "1.7.0", features = ["serde", "v4"] }
-thiserror = { version = "1.0.57", default-features = false }
+clap_lex = { version = "0.7.0", default-features = false }
+uuid = { version = "1.8.0", features = ["serde", "v4"] }
+thiserror = { version = "1.0.58", default-features = false }
 
-narrowlink-types = { version = "0.2.4", default-features = false }
+narrowlink-types = { version = "0.2.5", default-features = false }

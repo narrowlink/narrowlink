@@ -3,6 +3,7 @@
 Narrowlink is a self-hosted platform that allows you to establish secure remote connections between devices within a network that may be hindered by network address translation (NAT) or firewalls. Whether you need to access a home computer from your laptop, share internet access with remote devices, or publish a local web server on the internet, Narrowlink provides the solution.
 
 
+
 ## Example of Narrowlink Use Cases and Scenarios
 
 - **[Sharing Network Access](https://narrowlink.com/docs/extended-tutorial/share-network-access-socks5)** - If you need to work from home and access your company's internal network, which only allows access from within the network, you can install the Narrowlink agent on a computer located within your company's premises. This will enable you to utilize its internet access[^1] without depending on the company's remote access tools.
@@ -43,6 +44,11 @@ Narrowlink's architecture consists of three main components: the Gateway, Agents
 <p align="center"><img src="https://raw.githubusercontent.com/narrowlink/homepage/main/static/img/Diagram.svg" alt="Narrowlink Logo" width="80%"></p>
 
 ## Getting Started
+
+<a href="https://repology.org/project/narrowlink/versions">
+    <img src="https://repology.org/badge/vertical-allrepos/narrowlink.svg" alt="Packaging status" align="right">
+</a>
+
 
 To get started with Narrowlink, please refer to the [documentation](https://narrowlink.com/docs/intro)  page. This page provides two guides: Basic and Extended, which will help you learn more about the platform and walk you through the process of setting up a Narrowlink network and configuring your agents and clients.
 

@@ -1,4 +1,5 @@
 mod event;
+use core::fmt::Display;
 use std::net::SocketAddr;
 
 pub use event::InBound as EventInBound;
@@ -44,9 +45,10 @@ pub struct AgentPublishInfo {
     protocol: Protocol,
 }
 
-impl ToString for AgentPublishInfo {
-    fn to_string(&self) -> String {
-        format!(
+impl Display for AgentPublishInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
             "{}:{}->{}://{}:{}",
             self.src_host,
             if self.src_port == 0 {
@@ -54,7 +56,7 @@ impl ToString for AgentPublishInfo {
             } else {
                 self.src_port.to_string()
             },
-            self.protocol.to_string(),
+            self.protocol,
             self.dst_host,
             self.dst_port
         )

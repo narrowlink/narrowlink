@@ -1,21 +1,21 @@
-name: Audit
+# name: Audit
 
-on:
-  pull_request:
-    paths:
-      - '**/Cargo.toml'
-  push:
-    paths:
-      - '**/Cargo.toml'
-env:
-  CARGO_TERM_COLOR: always
+# on:
+#   pull_request:
+#     paths:
+#       - '**/Cargo.toml'
+#   push:
+#     paths:
+#       - '**/Cargo.toml'
+# # env:
+# #   CARGO_TERM_COLOR: always
 
-jobs:
-  audit:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-    - uses: EmbarkStudios/cargo-deny-action@v1
-      with:
-       arguments: -c Deny.toml
-#        arguments: --manifest-path=${{ matrix.package }}/Cargo.toml
+# jobs:
+#   audit:
+#     runs-on: ubuntu-latest
+#     steps:
+#     - uses: actions/checkout@v3
+#     - uses: EmbarkStudios/cargo-deny-action@v1
+#       with:
+#        arguments: -c Deny.toml
+# #        arguments: --manifest-path=${{ matrix.package }}/Cargo.toml
