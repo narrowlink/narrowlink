@@ -60,14 +60,14 @@ impl CertificateStorage for CertificateFileStorage {
     }
     async fn get_pem(
         &self,
-        account: &str,
+        uid: &str,
         domain: &str,
     ) -> Result<Vec<Pem>, GatewayCertificateError> {
         pem::parse_many(
             fs::read_to_string(format!(
                 "{}/{}/{}.pem",
                 self.path,
-                account,
+                uid,
                 self.domain_hash(domain)
             ))
             .await
@@ -77,16 +77,16 @@ impl CertificateStorage for CertificateFileStorage {
     }
     async fn put_pem(
         &self,
-        account: &str,
+        uid: &str,
         domain: &str,
         account_credentials: Option<&str>,
         pem: Vec<Pem>,
     ) -> Result<(), GatewayCertificateError> {
-        let base_path = format!("{}/{}", self.path, account);
+        let base_path = format!("{}/{}", self.path, uid);
         fs::create_dir_all(&base_path).await?;
         let domain_hash: String = self.domain_hash(domain);
         if let Some(account_credentials) = account_credentials {
-            fs::File::create(format!("{}/{}.account", base_path, domain_hash))
+            fs::File::create(format!("{}/account.json", base_path))
                 .await?
                 .write_all(account_credentials.as_bytes())
                 .await?;
@@ -106,17 +106,17 @@ impl CertificateStorage for CertificateFileStorage {
 
         Ok(())
     }
-    async fn set_failed(&self, account: &str, domain: &str) -> Result<(), GatewayCertificateError> {
+    async fn set_failed(&self, uid: &str, domain: &str) -> Result<(), GatewayCertificateError> {
         let domain_hash = self.domain_hash(domain);
-        let base_path = format!("{}/{}", self.path, account);
+        let base_path = format!("{}/{}", self.path, uid);
         fs::create_dir_all(&base_path).await?;
         let failed_path = format!("{}/{}.failed", base_path, domain_hash);
         let pending_path = format!("{}/{}.pending", base_path, domain_hash);
         Ok(fs::rename(pending_path, failed_path).await?)
     }
-    async fn is_failed(&self, account: &str, domain: &str) -> bool {
+    async fn is_failed(&self, uid: &str, domain: &str) -> bool {
         let domain_hash = self.domain_hash(domain);
-        let failed_path = format!("{}/{}/{}.failed", self.path, account, domain_hash);
+        let failed_path = format!("{}/{}/{}.failed", self.path, uid, domain_hash);
         let ts = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
@@ -130,11 +130,11 @@ impl CertificateStorage for CertificateFileStorage {
     }
     async fn set_pending(
         &self,
-        account: &str,
+        uid: &str,
         domain: &str,
     ) -> Result<(), GatewayCertificateError> {
         let domain_hash = self.domain_hash(domain);
-        let base_path = format!("{}/{}", self.path, account);
+        let base_path = format!("{}/{}", self.path, uid);
         let pending_path = format!("{}/{}.pending", base_path, domain_hash);
         let ts = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
@@ -143,9 +143,9 @@ impl CertificateStorage for CertificateFileStorage {
         fs::create_dir_all(&base_path).await?;
         Ok(fs::write(pending_path, ts.to_string()).await?)
     }
-    async fn is_pending(&self, account: &str, domain: &str) -> bool {
+    async fn is_pending(&self, uid: &str, domain: &str) -> bool {
         let domain_hash = self.domain_hash(domain);
-        let pending_path = format!("{}/{}/{}.pending", self.path, account, domain_hash);
+        let pending_path = format!("{}/{}/{}.pending", self.path, uid, domain_hash);
         let ts = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap_or_default()

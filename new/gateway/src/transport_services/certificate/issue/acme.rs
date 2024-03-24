@@ -37,7 +37,7 @@ impl AcmeService {
             .await
             .and_then(|s| {
                 serde_json::from_str::<AccountCredentials>(&s)
-                    .map_err(|_| GatewayCertificateError::InvalidAccount.into())
+                    .or(Err(GatewayCertificateError::InvalidAccount))
             }) {
             Ok(account_credentials) => Account::from_credentials(account_credentials)
                 .await
@@ -121,7 +121,7 @@ impl CertificateIssue for AcmeService {
                 );
 
                 for c in &authorization.challenges {
-                    if c.r#type != ChallengeType::Dns01 {
+                    if c.r#type == ChallengeType::Dns01 {
                         continue;
                     }
                     dbg!(&c);
