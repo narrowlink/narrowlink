@@ -32,7 +32,6 @@ pub trait CertificateStorage: Send + Sync {
         &self,
         uid: &str,
         domain: &str,
-        account_credentials: Option<&str>,
         pems: Vec<Pem>,
     ) -> Result<(), GatewayCertificateError>;
     async fn set_failed(&self, uid: &str, domain: &str) -> Result<(), GatewayCertificateError>;

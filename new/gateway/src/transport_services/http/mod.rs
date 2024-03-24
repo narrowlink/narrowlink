@@ -8,6 +8,7 @@ use crate::error::GatewayError;
 use futures::Stream;
 mod h1;
 mod h2;
+mod error;
 use super::{AsyncSocket, CertificateIssue, TransportStream};
 
 pub(crate) struct Http {

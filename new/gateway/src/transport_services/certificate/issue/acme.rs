@@ -180,7 +180,7 @@ impl CertificateIssue for AcmeService {
                     })
                 })
                 .unwrap();
-            storage.put_pem(&uid, &domain, None, pem).await.unwrap();
+            storage.put_pem(&uid, &domain, pem).await.unwrap();
             let certificate_key = storage.get_certificate_key(&uid, &domain).await.unwrap();
             cache.put(&uid, &domain, certificate_key);
         });

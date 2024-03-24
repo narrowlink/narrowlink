@@ -52,6 +52,6 @@ dashmap = "5.5.3"
 async-trait = "0.1.79"
 sha3 = { version = "0.10.8", default-features = false }
 quinn = { version = "0.10.2" }
-
+askama = { version = "0.12.1" }
 [build-dependencies]
 prost-build = "0.12"

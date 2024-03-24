@@ -79,18 +79,11 @@ impl CertificateStorage for CertificateFileStorage {
         &self,
         uid: &str,
         domain: &str,
-        account_credentials: Option<&str>,
         pem: Vec<Pem>,
     ) -> Result<(), GatewayCertificateError> {
         let base_path = format!("{}/{}", self.path, uid);
         fs::create_dir_all(&base_path).await?;
         let domain_hash: String = self.domain_hash(domain);
-        if let Some(account_credentials) = account_credentials {
-            fs::File::create(format!("{}/account.json", base_path))
-                .await?
-                .write_all(account_credentials.as_bytes())
-                .await?;
-        }
         let pem_path = format!("{}/{}.pem", base_path, domain_hash);
 
         fs::File::create(pem_path)

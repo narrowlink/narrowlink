@@ -11,7 +11,12 @@ use crate::{
     transport_services::{AsyncSocket, CertificateIssue, TransportStream},
 };
 
-use super::Http;
+use super::{
+    error::{response_error, ErrorFormat, HttpErrors},
+    Http,
+};
+
+static ACME_CHALLENGE_PATH: &str = "/.well-known/acme-challenge/";
 
 impl Http {
     pub fn h1(
@@ -32,28 +37,32 @@ impl Http {
                 service_fn(|req| {
                     let stream_sender = stream_sender.clone();
                     let socket_info = socket_info.clone();
-                    let issue = issue
-                        .clone()
-                        .filter(|_| req.uri().path().starts_with("/.well-known/acme-challenge"));
-
+                    let issue = issue.clone();
                     async move {
-                        let host = req
+                        let Some(host) = req
                             .headers()
                             .get(header::HOST)
-                            .and_then(|h| h.to_str().ok());
-                        if let Some(issue) = &issue {
+                            .and_then(|h| h.to_str().ok())
+                        else {
+                            return Ok(response_error(ErrorFormat::Html, HttpErrors::BadRequest));
+                        };
+
+                        if let Some(issue) =
+                            &issue.filter(|_| req.uri().path().starts_with(ACME_CHALLENGE_PATH))
+                        {
                             if let Some((token, key_authorization)) = issue
-                                .challenge("main", host.unwrap())
+                                .challenge("main", host)
                                 .and_then(|c| c.get_http_challenge())
                             {
-                                if req.uri().path()
-                                    == format!("/.well-known/acme-challenge/{}", token)
-                                {
-                                    return Ok(Response::builder()
-                                        .status(StatusCode::OK)
-                                        .header(header::CONTENT_TYPE, "text/plain")
-                                        .body(Full::new(Bytes::from(key_authorization)))
-                                        .unwrap());
+                                if req.uri().path() == format!("{ACME_CHALLENGE_PATH}{}", token) {
+                                    let response = hyper::Response::new(key_authorization);
+                                    let (mut parts, body) = response.into_parts();
+                                    parts.status = StatusCode::OK;
+                                    parts.headers.insert(
+                                        header::CONTENT_TYPE,
+                                        header::HeaderValue::from_static("text/plain"),
+                                    );
+                                    return Ok(hyper::Response::from_parts(parts, body.into()));
                                 }
                             }
                         }
