@@ -34,12 +34,28 @@ impl H1 {
                     let issue = issue
                         .clone()
                         .filter(|_| req.uri().path().starts_with("/.well-known/acme-challenge"));
-                    
-                    async move {
-                        let host = req.headers().get(header::HOST).and_then(|h| h.to_str().ok());
-                        if let Some(issue) = &issue {
-                            let x =issue.challenge("main", host.unwrap());
 
+                    async move {
+                        let host = req
+                            .headers()
+                            .get(header::HOST)
+                            .and_then(|h| h.to_str().ok());
+                        if let Some(issue) = &issue {
+                            if let Some((token, key_authorization)) = issue
+                                .challenge("main", host.unwrap())
+                                .and_then(|c| c.get_http_challenge())
+                            {
+                                dbg!(req.uri().path());
+                                if req.uri().path()
+                                    == format!("/.well-known/acme-challenge/{}", token)
+                                {
+                                    return Ok(Response::builder()
+                                        .status(StatusCode::OK)
+                                        .header(header::CONTENT_TYPE, "text/plain")
+                                        .body(Full::new(Bytes::from(key_authorization)))
+                                        .unwrap());
+                                }
+                            }
                         }
 
                         if let Some(_token) = req

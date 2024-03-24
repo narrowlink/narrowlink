@@ -147,7 +147,7 @@ impl CertificateIssue for AcmeService {
                 );
 
                 for c in &authorization.challenges {
-                    if c.r#type != ChallengeType::TlsAlpn01 {
+                    if c.r#type != ChallengeType::Http01 {
                         continue;
                     }
                     dbg!(&c);
@@ -162,7 +162,7 @@ impl CertificateIssue for AcmeService {
                     select(status_receiver.select_next_some(), Box::pin(sleep(delay))).await,
                     futures::future::Either::Right(_)
                 ) {
-                    // delay *= 2;
+                    delay *= 2;
                     tries += 1;
                 }
                 dbg!("refreshing");
@@ -218,7 +218,7 @@ impl CertificateIssue for AcmeService {
             .get(&(account.to_owned(), domain.to_owned()))
             .map(|c| c.clone())
     }
-    fn remove_from_cache(&self,account: &str,domain: &str) -> Option<CertifiedKey> {
+    fn remove_from_cache(&self, account: &str, domain: &str) -> Option<CertifiedKey> {
         self.cache.remove(account, domain)
     }
     fn storage(&self) -> Arc<dyn CertificateStorage> {
@@ -227,7 +227,7 @@ impl CertificateIssue for AcmeService {
 }
 
 pub struct AcmeKeyAuthorization {
-    key_authorization: Vec<(KeyAuthorization, String, ChallengeType)>,
+    key_authorization: Vec<(KeyAuthorization, String, ChallengeType)>, // key_authorization, token, challenge_type
     sender: mpsc::UnboundedSender<()>,
 }
 
@@ -276,16 +276,13 @@ impl AcmeKeyAuthorization {
         }
         None
     }
-    // fn get_http_key_authorization(&self) -> Option<HashMap<String, String>> {
-    //     let mut map = HashMap::new();
-    //     for (key_authorization, challenge_type) in &self.key_authorization {
-    //         if *challenge_type == ChallengeType::Http01 {
-    //             map.insert(
-    //                 key_authorization.digest().to_string(),
-    //                 key_authorization.to_string(),
-    //             );
-    //         }
-    //     }
-    //     Some(map)
-    // }
+    pub fn get_http_challenge(&self) -> Option<(String, String)> {
+        // token ,key_authorization
+        for (key_authorization, token, challenge_type) in &self.key_authorization {
+            if *challenge_type == ChallengeType::Http01 {
+                return Some((token.clone(), key_authorization.as_str().to_owned()));
+            }
+        }
+        None
+    }
 }
