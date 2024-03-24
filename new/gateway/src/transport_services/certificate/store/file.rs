@@ -1,11 +1,11 @@
 use pem::Pem;
-use rustls::CertificateError;
+
 use std::time::SystemTime;
 use tokio::{fs, io::AsyncWriteExt, sync::RwLock};
 
 use crate::{
     error::{CertificateError as GWCertificateError, GatewayError},
-    transport_services::certificate::{CertificateCache, CertificateStorage, DashMapCache},
+    transport_services::certificate::CertificateStorage,
 };
 pub struct CertificateFileStorage {
     path: String,

@@ -4,7 +4,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use crate::AsyncSocket;
+use crate::{error::GatewayError, AsyncSocket};
 use futures::Stream;
 mod h1;
 mod h2;
@@ -19,7 +19,7 @@ impl Http {
     pub fn new(
         socket: impl AsyncSocket,
         issue: Option<Arc<impl CertificateIssue + Send + Sync + 'static>>,
-    ) -> Http {
+    ) -> Result<Http, GatewayError> {
         if socket
             .info()
             .unwrap()
@@ -27,9 +27,9 @@ impl Http {
             .filter(|v| v.alpn == [104, 50])
             .is_some()
         {
-            h2::H2::new(socket)
+            Self::h2(socket)
         } else {
-            h1::H1::new(socket, issue)
+            Self::h1(socket, issue)
         }
     }
 }

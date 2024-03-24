@@ -7,23 +7,25 @@ use hyper_util::rt::TokioIo;
 use tokio_tungstenite::WebSocketStream;
 
 use crate::{
+    error::{GatewayError, NetworkError},
     transport_services::{CertificateIssue, TransportStream},
     AsyncSocket,
 };
 
 use super::Http;
 
-pub struct H1(Box<dyn AsyncSocket>);
-
-impl H1 {
-    pub fn new(
+impl Http {
+    pub fn h1(
         socket: impl AsyncSocket,
         issue: Option<Arc<impl CertificateIssue + Send + Sync + 'static>>,
-    ) -> Http {
+    ) -> Result<Http, GatewayError> {
+        let socket_info = socket
+            .info()
+            .map(Arc::new)
+            .map_err(NetworkError::InvalidSocket)?;
+
         let (stream_sender, stream_receiver) =
             tokio::sync::mpsc::unbounded_channel::<TransportStream>();
-        let socket_info = Arc::new(socket.info().unwrap());
-
         let task = tokio::spawn(async move {
             let http = hyper::server::conn::http1::Builder::new();
             http.serve_connection(
@@ -45,7 +47,6 @@ impl H1 {
                                 .challenge("main", host.unwrap())
                                 .and_then(|c| c.get_http_challenge())
                             {
-                                dbg!(req.uri().path());
                                 if req.uri().path()
                                     == format!("/.well-known/acme-challenge/{}", token)
                                 {
@@ -122,9 +123,9 @@ impl H1 {
         //     }
         // }
         // todo!()
-        Http {
+        Ok(Http {
             receiver: stream_receiver,
             task,
-        }
+        })
     }
 }

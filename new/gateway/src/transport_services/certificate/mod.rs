@@ -9,7 +9,7 @@ use crate::{
 };
 use core::fmt::{self, Display, Formatter};
 use pem::Pem;
-use rustls::{crypto, server::ResolvesServerCert, sign::CertifiedKey, ServerConfig};
+use rustls::{crypto, server::ResolvesServerCert, sign::CertifiedKey};
 use sha3::{Digest, Sha3_256};
 mod issue;
 mod store;
@@ -156,7 +156,8 @@ impl CertificateResolver {
                     Ok(CertificateResolveStatus::PendingIssue)
                 } else {
                     self.cache.put(account, domain, certificate_key);
-                    if let Some(issue) = self.issue.as_ref().filter(|_| days_until_expiration < 7) {
+                    if let Some(_issue) = self.issue.as_ref().filter(|_| days_until_expiration < 7)
+                    {
                         todo!("renew certificate");
                     }
                     dbg!("success");
@@ -188,7 +189,6 @@ impl ResolvesServerCert for CertificateResolver {
         &self,
         client_hello: rustls::server::ClientHello,
     ) -> Option<Arc<rustls::sign::CertifiedKey>> {
-        dbg!("resolve");
         let sni = client_hello.server_name()?;
         let alpn = client_hello.alpn()?;
         let account = "main";
@@ -196,15 +196,12 @@ impl ResolvesServerCert for CertificateResolver {
             if alpn.collect::<Vec<_>>().contains(&ACME_TLS_ALPN_NAME) {
                 return acme
                     .challenge(account, sni)
-                    .and_then(|c| c.get_tls_challenge(sni).map(Arc::new));
+                    .and_then(|c| c.get_tls_challenge().map(Arc::new));
             } else {
-                dbg!("ss");
                 acme.remove_from_cache(account, sni)
                     .map(|certified_key| self.cache.put(account, sni, certified_key));
-                dbg!("aa");
             }
         }
-        dbg!("Done resolve");
         self.get_certified_key(account, sni)
     }
 }

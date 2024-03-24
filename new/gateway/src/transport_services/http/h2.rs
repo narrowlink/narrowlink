@@ -4,17 +4,18 @@ use http_body_util::Full;
 use hyper::{body::Bytes, service::service_fn, Response};
 use hyper_util::rt::TokioExecutor;
 
-use crate::{transport_services::TransportStream, AsyncSocket};
+use crate::{error::{GatewayError, NetworkError}, transport_services::TransportStream, AsyncSocket};
 
 use super::Http;
 
-pub struct H2(Box<dyn AsyncSocket>);
-
-impl H2 {
-    pub fn new(socket: impl AsyncSocket) -> Http {
+impl Http {
+    pub fn h2(socket: impl AsyncSocket) -> Result<Http, GatewayError> {
+        let socket_info = socket
+            .info()
+            .map(Arc::new)
+            .map_err(NetworkError::InvalidSocket)?;
         let (stream_sender, stream_receiver) =
             tokio::sync::mpsc::unbounded_channel::<TransportStream>();
-        let socket_info = Arc::new(socket.info().unwrap());
 
         let task = tokio::spawn(async move {
             let http = hyper::server::conn::http2::Builder::new(TokioExecutor::new());
@@ -37,12 +38,11 @@ impl H2 {
                 }),
             )
             // .with_upgrades()
-            .await
-            ;
+            .await;
         });
-        Http {
+        Ok(Http {
             receiver: stream_receiver,
             task,
-        }
+        })
     }
 }

@@ -1,7 +1,5 @@
 use thiserror::Error;
 
-use super::GatewayError;
-
 #[derive(Error, Debug)]
 pub enum CertificateError {
     #[error("Invalid {0}")]

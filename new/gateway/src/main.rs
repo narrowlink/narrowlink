@@ -5,14 +5,10 @@ use std::{
     sync::Arc,
 };
 
-use error::CertificateError;
-use futures::{
-    stream::{select_all, FuturesUnordered},
-    Stream, StreamExt, TryFutureExt, TryStreamExt,
-};
+use futures::{stream::select_all, Stream, StreamExt, TryStreamExt};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
-    net::{TcpListener, TcpStream},
+    net::TcpStream,
 };
 use tokio_rustls::server::TlsStream;
 use transport_services::{AcmeService, CertificateResolver, DashMapCache};
@@ -44,7 +40,7 @@ async fn main() {
         .unwrap();
 
     let resolver = Arc::new(resolver);
-
+    let tls = transport_services::Tls::new(resolver.clone());
     let mut streams = Vec::<Pin<Box<dyn Stream<Item = TransportStream>>>>::new();
 
     streams.push(Box::pin(
@@ -54,12 +50,13 @@ async fn main() {
         ))
         .await
         .map_err(error::GatewayError::IOError)
-        .flat_map_unordered(None, |s| match s {
-            Ok(s) => Box::pin(transport_services::Http::new(s, acme.clone()))
-                as Pin<Box<dyn Stream<Item = TransportStream>>>,
-            Err(e) => Box::pin(futures::stream::once(futures::future::ready(
-                TransportStream::Error(e),
-            ))),
+        .flat_map_unordered(None, |s| {
+            match s.and_then(|s| transport_services::Http::new(s, acme.clone())) {
+                Ok(s) => Box::pin(s) as Pin<Box<dyn Stream<Item = TransportStream>>>,
+                Err(e) => Box::pin(futures::stream::once(futures::future::ready(
+                    TransportStream::Error(e),
+                ))),
+            }
         }),
     ));
     dbg!("sss");
@@ -71,25 +68,25 @@ async fn main() {
         ))
         .await
         .map_err(error::GatewayError::IOError)
-        .and_then(|s| transport_services::Tls::new(s, resolver.clone()))
-        .flat_map_unordered(None, |s| match s {
-            Ok(s) => Box::pin(transport_services::Http::new(
-                s.inner(),
-                None::<Arc<AcmeService>>,
-            )) as Pin<Box<dyn Stream<Item = TransportStream>>>,
-            Err(e) => Box::pin(futures::stream::once(futures::future::ready(
-                TransportStream::Error(e),
-            ))),
+        .and_then(|s| tls.accept(s))
+        .flat_map_unordered(None, |s| {
+            match s.and_then(|s| transport_services::Http::new(s.inner(), None::<Arc<AcmeService>>))
+            {
+                Ok(s) => Box::pin(s) as Pin<Box<dyn Stream<Item = TransportStream>>>,
+                Err(e) => Box::pin(futures::stream::once(futures::future::ready(
+                    TransportStream::Error(e),
+                ))),
+            }
         }),
     ));
     dbg!("s");
 
     select_all(streams)
-        .for_each(|x| async move {
+        .for_each_concurrent(None, |x| async move {
             match x {
                 TransportStream::Command(_, _, _) => {}
                 TransportStream::Data(_, _, _) => {}
-                TransportStream::HttpProxy(req, si, res) => {
+                TransportStream::HttpProxy(_req, _si, res) => {
                     res.send(hyper::Response::new(http_body_util::Full::new(
                         hyper::body::Bytes::from("Hello World!"),
                     )))
@@ -134,7 +131,6 @@ impl SocketInfoImpl for TcpStream {
 
 impl SocketInfoImpl for TlsStream<TcpStream> {
     fn info(&self) -> io::Result<SocketInfo> {
-        dbg!(self.get_ref().1.alpn_protocol());
         Ok(SocketInfo {
             peer_addr: self.get_ref().0.peer_addr()?,
             local_addr: self.get_ref().0.local_addr()?,

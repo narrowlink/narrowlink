@@ -1,47 +1,28 @@
-use std::{
-    collections::HashMap,
-    sync::{mpsc::Receiver, Arc},
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use dashmap::DashMap;
-use futures::{
-    future::{select, SelectAll},
-    stream::futures_unordered,
-    StreamExt,
-};
 use instant_acme::{
-    Account, AccountCredentials, Authorization, Challenge, ChallengeType, Identifier,
-    KeyAuthorization, NewAccount, NewOrder, Order, OrderStatus,
+    Account, AccountCredentials, Challenge, ChallengeType, Identifier, NewAccount, NewOrder, Order,
+    OrderStatus,
 };
 use log::debug;
 use rcgen::{Certificate, CertificateParams, DistinguishedName, DnType};
-use rustls::{crypto, sign::CertifiedKey, CertificateError};
-use tokio::{
-    sync::{
-        mpsc::{self, UnboundedReceiver, UnboundedSender},
-        oneshot,
-    },
-    time::sleep,
-};
+use rustls::{crypto, sign::CertifiedKey};
+use tokio::time::sleep;
 
 use crate::{
     error::{CertificateError as GWCertificateError, GatewayError},
-    transport_services::certificate::{
-        CertificateCache, CertificateResolver, CertificateStorage, DashMapCache,
-    },
+    transport_services::certificate::{CertificateCache, CertificateStorage, DashMapCache},
 };
 
-use super::{CertificateIssue, CertificateIssueStatus};
+use super::CertificateIssue;
 
 pub struct AcmeService {
     storage: Arc<dyn CertificateStorage + 'static + Send + Sync>,
-    challenges: Arc<DashMap<(String, String), Arc<AcmeKeyAuthorization>>>, // (user, domain) -> challenges
+    challenges: Arc<DashMap<(String, String), Arc<AcmeChallenges>>>, // (user, domain) -> challenges
     cache: Arc<dyn CertificateCache + Send + Sync>,
     default_account: Account,
 }
-
-// impl !Send for AcmeService<'_> {}
 
 impl AcmeService {
     pub async fn new(
@@ -109,7 +90,7 @@ impl CertificateIssue for AcmeService {
         let storage = self.storage.clone();
         let cache = self.cache.clone();
         // task to issue certificate
-        let task = tokio::spawn(async move {
+        let _task = tokio::spawn(async move {
             let identifier = Identifier::Dns(domain.clone());
             let mut order = default_account
                 .new_order(&NewOrder {
@@ -123,7 +104,6 @@ impl CertificateIssue for AcmeService {
                 storage.set_pending(&account, &domain).await.unwrap();
             }
             // tokio_stream::wrappers::ReceiverStream::new();
-            let mut status_receiver = futures::stream::SelectAll::new();
             let authorizations = order.authorizations().await.unwrap();
             for authorization in authorizations {
                 let Identifier::Dns(dns_identifier) = authorization.identifier;
@@ -131,23 +111,16 @@ impl CertificateIssue for AcmeService {
                     storage.set_failed(&account, &domain).await.unwrap();
                     return;
                 }
-                let (acme_key_authorization, receiver) = AcmeKeyAuthorization::new(
-                    authorization
-                        .challenges
-                        .iter()
-                        .map(|c| (order.key_authorization(c), c.token.clone(), c.r#type))
-                        .collect::<Vec<_>>(),
-                );
-                status_receiver.push(tokio_stream::wrappers::UnboundedReceiverStream::new(
-                    receiver,
-                ));
+                let acme_key_authorization =
+                    AcmeChallenges::new(&domain, &order, &authorization.challenges);
+
                 challenges.insert(
                     (account.clone(), domain.clone()),
                     Arc::new(acme_key_authorization),
                 );
 
                 for c in &authorization.challenges {
-                    if c.r#type != ChallengeType::Http01 {
+                    if c.r#type == ChallengeType::Dns01 {
                         continue;
                     }
                     dbg!(&c);
@@ -158,13 +131,10 @@ impl CertificateIssue for AcmeService {
             let mut delay = Duration::from_millis(250);
             loop {
                 dbg!("looping");
-                if matches!(
-                    select(status_receiver.select_next_some(), Box::pin(sleep(delay))).await,
-                    futures::future::Either::Right(_)
-                ) {
-                    delay *= 2;
-                    tries += 1;
-                }
+                Box::pin(sleep(delay)).await;
+                delay *= 2;
+                tries += 1;
+
                 dbg!("refreshing");
                 let state = order.refresh().await.unwrap();
                 dbg!(state);
@@ -213,7 +183,7 @@ impl CertificateIssue for AcmeService {
         });
         None
     }
-    fn challenge(&self, account: &str, domain: &str) -> Option<Arc<AcmeKeyAuthorization>> {
+    fn challenge(&self, account: &str, domain: &str) -> Option<Arc<AcmeChallenges>> {
         self.challenges
             .get(&(account.to_owned(), domain.to_owned()))
             .map(|c| c.clone())
@@ -226,63 +196,67 @@ impl CertificateIssue for AcmeService {
     }
 }
 
-pub struct AcmeKeyAuthorization {
-    key_authorization: Vec<(KeyAuthorization, String, ChallengeType)>, // key_authorization, token, challenge_type
-    sender: mpsc::UnboundedSender<()>,
+pub struct AcmeChallenges {
+    http_challenge: Option<(String, String)>,
+    tls_challenge: Option<CertifiedKey>,
+    dns_challenge: Option<String>,
 }
 
-impl AcmeKeyAuthorization {
-    fn new(
-        key_authorization: Vec<(KeyAuthorization, String, ChallengeType)>,
-    ) -> (Self, mpsc::UnboundedReceiver<()>) {
-        let (sender, receiver) = mpsc::unbounded_channel();
-        (
-            Self {
-                key_authorization,
-                sender,
-            },
-            receiver,
-        )
-    }
-    pub fn get_tls_challenge(&self, domain: &str) -> Option<CertifiedKey> {
-        for (key_authorization, token, challenge_type) in &self.key_authorization {
-            if *challenge_type == ChallengeType::TlsAlpn01 {
-                let mut params = rcgen::CertificateParams::new(vec![domain.to_owned()]);
-                let mut dn = DistinguishedName::new();
-                dn.push(DnType::OrganizationName, "narrowlink");
-                params.distinguished_name = dn;
-                params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
-                params.custom_extensions = vec![rcgen::CustomExtension::new_acme_identifier(
-                    key_authorization.digest().as_ref(),
-                )];
-                let cert = rcgen::Certificate::from_params(params).unwrap();
-                let signer = crypto::ring::sign::any_supported_type(
-                    &rustls::pki_types::PrivateKeyDer::from(
-                        rustls::pki_types::PrivatePkcs8KeyDer::from(
-                            cert.serialize_private_key_der(),
+impl AcmeChallenges {
+    fn new(domain: &str, order: &Order, challenges: &Vec<Challenge>) -> Self {
+        let mut ret = Self {
+            http_challenge: None,
+            tls_challenge: None,
+            dns_challenge: None,
+        };
+
+        for challenge in challenges {
+            match challenge.r#type {
+                ChallengeType::Http01 => {
+                    let token = challenge.token.clone();
+                    let key_authorization = order.key_authorization(&challenge);
+                    ret.http_challenge = Some((token, key_authorization.as_str().to_owned()));
+                }
+                ChallengeType::Dns01 => {
+                    ret.dns_challenge =
+                        Some(order.key_authorization(&challenge).as_str().to_owned());
+                }
+                ChallengeType::TlsAlpn01 => {
+                    let key_authorization = order.key_authorization(&challenge);
+                    let mut params = rcgen::CertificateParams::new(vec![domain.to_owned()]);
+                    let mut dn = DistinguishedName::new();
+                    dn.push(DnType::OrganizationName, "narrowlink");
+                    params.distinguished_name = dn;
+                    params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
+                    params.custom_extensions = vec![rcgen::CustomExtension::new_acme_identifier(
+                        key_authorization.digest().as_ref(),
+                    )];
+                    let cert = rcgen::Certificate::from_params(params).unwrap();
+                    let signer = crypto::ring::sign::any_supported_type(
+                        &rustls::pki_types::PrivateKeyDer::from(
+                            rustls::pki_types::PrivatePkcs8KeyDer::from(
+                                cert.serialize_private_key_der(),
+                            ),
                         ),
-                    ),
-                )
-                .unwrap();
-                let certified_key = CertifiedKey::new(
-                    vec![rustls::pki_types::CertificateDer::from(
-                        cert.serialize_der().unwrap(),
-                    )],
-                    signer,
-                );
-                self.sender.send(());
-                return Some(certified_key);
+                    )
+                    .unwrap();
+
+                    let certified_key = CertifiedKey::new(
+                        vec![rustls::pki_types::CertificateDer::from(
+                            cert.serialize_der().unwrap(),
+                        )],
+                        signer,
+                    );
+                    ret.tls_challenge = Some(certified_key);
+                }
             }
         }
-        None
+        ret
+    }
+    pub fn get_tls_challenge(&self) -> Option<CertifiedKey> {
+        self.tls_challenge.clone()
     }
     pub fn get_http_challenge(&self) -> Option<(String, String)> {
-        // token ,key_authorization
-        for (key_authorization, token, challenge_type) in &self.key_authorization {
-            if *challenge_type == ChallengeType::Http01 {
-                return Some((token.clone(), key_authorization.as_str().to_owned()));
-            }
-        }
-        None
+        self.http_challenge.clone()
     }
 }

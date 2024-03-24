@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use self::acme::AcmeKeyAuthorization;
+use self::acme::AcmeChallenges;
 
-use super::{CertificateResolver, CertificateStorage};
+use super::CertificateStorage;
 mod acme;
 pub use acme::AcmeService;
 use rustls::sign::CertifiedKey;
@@ -17,7 +17,7 @@ enum CertificateIssueStatus {
 pub trait CertificateIssue {
     fn issue(&self, account: &str, domain: &str) -> Option<()>;
     fn storage(&self) -> Arc<dyn CertificateStorage>;
-    fn challenge(&self, account: &str, domain: &str) -> Option<Arc<AcmeKeyAuthorization>>;
+    fn challenge(&self, account: &str, domain: &str) -> Option<Arc<AcmeChallenges>>;
     fn remove_from_cache(&self, account: &str, domain: &str) -> Option<CertifiedKey>;
     async fn status(&self, account: &str, domain: &str) -> CertificateIssueStatus {
         if self.storage().is_failed(account, domain).await {

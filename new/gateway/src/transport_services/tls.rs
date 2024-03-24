@@ -1,6 +1,6 @@
-use std::{collections::VecDeque, io, sync::Arc};
+use std::{collections::VecDeque, sync::Arc};
 
-use log::debug;
+
 use rustls::internal::msgs::{
     codec::{self, Codec},
     handshake, message,
@@ -9,15 +9,10 @@ use tokio::net::TcpStream;
 use tokio_rustls::TlsAcceptor;
 
 use crate::{
-    error::GatewayError, transport_services::certificate::CertificateResolver, AsyncSocket,
+    error::{GatewayError, NetworkError},
+    transport_services::certificate::CertificateResolver,
+    AsyncSocket,
 };
-
-use super::{
-    certificate::{AcmeService, DashMapCache},
-    CertificateFileStorage,
-};
-
-// use super::certificate::CertificateStorage;
 
 pub mod alpn {
     pub const H2: &[u8] = b"h2";
@@ -25,16 +20,17 @@ pub mod alpn {
     pub const ACME_TLS_ALPN_NAME: &[u8] = b"acme-tls/1";
 }
 
-pub(crate) enum Tls {
+pub struct Tls {
+    acceptor: Arc<TlsAcceptor>,
+}
+
+pub(crate) enum TlsConnection {
     Unpacked(Box<dyn AsyncSocket>),
     Original(Box<dyn AsyncSocket>),
 }
 
 impl Tls {
-    pub async fn new(
-        socket: TcpStream,
-        certificate_resolver: Arc<CertificateResolver>,
-    ) -> Result<Self, GatewayError> {
+    pub fn new(certificate_resolver: Arc<CertificateResolver>) -> Self {
         let mut config = rustls::ServerConfig::builder()
             .with_no_client_auth()
             .with_cert_resolver(certificate_resolver);
@@ -43,19 +39,18 @@ impl Tls {
             alpn::HTTP1_1.to_owned(),
             alpn::ACME_TLS_ALPN_NAME.to_owned(),
         ];
-        dbg!("tls");
-        // let config = certificate_storage.get_config("main", &sni).await.unwrap();
         let acceptor = TlsAcceptor::from(Arc::new(config));
-        // dbg!("accepting");
-        dbg!("tls1");
-        let Ok(mut stream) = acceptor.accept(socket).await else {
-            debug!("tls acceptor failed");
-            return Err(GatewayError::Invalid("tls acceptor failed"));
-        };
-        dbg!("tls2");
-        // dbg!("accepted");
-        Ok(Tls::Unpacked(Box::new(stream)))
-        // Ok(TLS::Unpacked(Box::new(socket)))
+        Self {
+            acceptor: Arc::new(acceptor),
+        }
+    }
+    pub async fn accept(&self, socket: TcpStream) -> Result<TlsConnection, GatewayError> {
+        let stream = self
+            .acceptor
+            .accept(socket)
+            .await
+            .map_err(NetworkError::TlsError)?;
+        Ok(TlsConnection::Unpacked(Box::new(stream)))
     }
     pub fn peek_sni_and_alpns(buf: &[u8]) -> Option<(String, Vec<Vec<u8>>)> {
         let message = message::OutboundOpaqueMessage::read(&mut codec::Reader::init(buf)).ok()?;
@@ -112,10 +107,13 @@ impl Tls {
         });
         Some((sni, available_alpns.unwrap_or_default()))
     }
+}
+
+impl TlsConnection {
     pub fn inner(self) -> Box<dyn AsyncSocket> {
         match self {
-            Tls::Unpacked(s) => s,
-            Tls::Original(s) => s,
+            TlsConnection::Unpacked(s) => s,
+            TlsConnection::Original(s) => s,
         }
     }
 }

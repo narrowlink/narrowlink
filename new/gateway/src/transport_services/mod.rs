@@ -12,8 +12,8 @@ pub(super) use tls::Tls;
 mod http;
 pub(super) use http::Http;
 mod certificate;
-pub use certificate::{CertificateFileStorage,CertificateResolver,DashMapCache};
 pub use certificate::AcmeService;
+pub use certificate::{CertificateFileStorage, CertificateResolver, DashMapCache};
 
 pub use self::certificate::CertificateIssue;
 
