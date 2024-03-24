@@ -13,6 +13,7 @@ pub use store::CertificateFileStorage;
 
 pub enum CertificateResolveStatus {
     Success,
+    Renew,
     PendingIssue,
 }
 
@@ -48,29 +49,21 @@ impl CertificateResolver {
         match self.storage.get_certificate_key(uid, domain).await {
             Ok(certificate_key) => {
                 let days_until_expiration = certificate_key.days_until_expiration();
-                dbg!("ss");
                 if let Some(issue) = self.issue.as_ref().filter(|_| days_until_expiration == 0) {
                     issue.issue(uid, domain);
-                    todo!("renew certificate");
                     Ok(CertificateResolveStatus::PendingIssue)
                 } else {
                     self.cache.put(uid, domain, certificate_key);
-                    if let Some(_issue) = self.issue.as_ref().filter(|_| days_until_expiration < 7)
-                    {
-                        todo!("renew certificate");
+                    if let Some(issue) = self.issue.as_ref().filter(|_| days_until_expiration < 7) {
+                        issue.issue(uid, domain);
                     }
-                    dbg!("success");
-                    Ok(CertificateResolveStatus::Success)
+                    Ok(CertificateResolveStatus::Renew)
                 }
             }
             Err(e) => {
-                if let Some(issue) = self.issue.as_ref() {
-                    issue.issue(uid, domain);
-                    // todo!("renew certificate");
-                    Ok(CertificateResolveStatus::PendingIssue)
-                } else {
-                    Err(e.into())
-                }
+                let issue = self.issue.as_ref().ok_or(e)?;
+                issue.issue(uid, domain);
+                Ok(CertificateResolveStatus::PendingIssue)
             }
         }
     }
