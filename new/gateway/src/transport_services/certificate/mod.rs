@@ -56,8 +56,10 @@ impl CertificateResolver {
                     self.cache.put(uid, domain, certificate_key);
                     if let Some(issue) = self.issue.as_ref().filter(|_| days_until_expiration < 7) {
                         issue.issue(uid, domain);
+                        Ok(CertificateResolveStatus::Renew)
+                    } else {
+                        Ok(CertificateResolveStatus::Success)
                     }
-                    Ok(CertificateResolveStatus::Renew)
                 }
             }
             Err(e) => {
