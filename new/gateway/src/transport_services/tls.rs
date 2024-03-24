@@ -22,6 +22,7 @@ use super::{
 pub mod alpn {
     pub const H2: &[u8] = b"h2";
     pub const HTTP1_1: &[u8] = b"http/1.1";
+    pub const ACME_TLS_ALPN_NAME: &[u8] = b"acme-tls/1";
 }
 
 pub(crate) enum Tls {
@@ -37,7 +38,11 @@ impl Tls {
         let mut config = rustls::ServerConfig::builder()
             .with_no_client_auth()
             .with_cert_resolver(certificate_resolver);
-        config.alpn_protocols = vec![alpn::H2.to_owned(), alpn::HTTP1_1.to_owned()];
+        config.alpn_protocols = vec![
+            alpn::H2.to_owned(),
+            alpn::HTTP1_1.to_owned(),
+            alpn::ACME_TLS_ALPN_NAME.to_owned(),
+        ];
         // let config = certificate_storage.get_config("main", &sni).await.unwrap();
         let acceptor = TlsAcceptor::from(Arc::new(config));
         // dbg!("accepting");

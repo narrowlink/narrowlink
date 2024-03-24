@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
     error::{CertificateError, GatewayError},
-    transport_services::certificate::issue::ACME_TLS_ALPN_NAME,
+    transport_services::tls::alpn::ACME_TLS_ALPN_NAME,
 };
 use core::fmt::{self, Display, Formatter};
 use pem::Pem;
@@ -85,7 +85,7 @@ pub trait CertificateStorage: Send + Sync {
 pub trait CertificateCache {
     fn get(&self, account: &str, domain: &str) -> Option<Arc<CertifiedKey>>;
     fn put(&self, account: &str, domain: &str, config: CertifiedKey);
-    fn remove(&self, account: &str, domain: &str);
+    fn remove(&self, account: &str, domain: &str) -> Option<CertifiedKey>;
 }
 
 pub struct DashMapCache(Arc<dashmap::DashMap<String, Arc<CertifiedKey>>>);
@@ -100,8 +100,10 @@ impl CertificateCache for DashMapCache {
         self.0
             .insert(format!("{}:{}", account, domain), Arc::new(config));
     }
-    fn remove(&self, account: &str, domain: &str) {
-        self.0.remove(&format!("{}:{}", account, domain));
+    fn remove(&self, account: &str, domain: &str) -> Option<CertifiedKey> {
+        self.0
+            .remove(&format!("{}:{}", account, domain))
+            .map(|c| Arc::<CertifiedKey>::unwrap_or_clone(c.1))
     }
 }
 
@@ -154,6 +156,11 @@ impl CertificateResolver {
                     Ok(CertificateResolveStatus::PendingIssue)
                 } else {
                     self.cache.put(account, domain, certificate_key);
+
+                    let x = |ck: CertifiedKey| {
+                        self.cache.put(account, domain, ck);
+                    };
+
                     if let Some(issue) = self.issue.as_ref().filter(|_| days_until_expiration < 7) {
                         todo!("renew certificate");
                     }
@@ -185,17 +192,22 @@ impl ResolvesServerCert for CertificateResolver {
         &self,
         client_hello: rustls::server::ClientHello,
     ) -> Option<Arc<rustls::sign::CertifiedKey>> {
-        if let (Some(alpn), Some(acme)) = (client_hello.alpn(), &self.issue) {
+        let sni = client_hello.server_name()?;
+        let alpn = client_hello.alpn()?;
+        let account = "main";
+        if let Some(acme) = &self.issue {
             if alpn.collect::<Vec<_>>().contains(&ACME_TLS_ALPN_NAME) {
-                dbg!("acme");
+                return acme
+                    .challenge(account, sni)
+                    .and_then(|c| c.get_tls_challenge(sni).map(Arc::new));
+            } else {
+                dbg!("ss");
+                acme.remove_from_cache(account, sni)
+                    .map(|certified_key| self.cache.put(account, sni, certified_key));
+                dbg!("aa");
             }
         }
-
-        dbg!(client_hello.server_name());
-
-        client_hello
-            .server_name()
-            .and_then(|sni| self.get_certified_key("main", sni))
+        self.get_certified_key(account, sni)
     }
 }
 

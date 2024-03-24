@@ -103,8 +103,8 @@ impl CertificateStorage for CertificateFileStorage {
         let failed_path = format!("{}/{}.failed", base_path, domain_hash);
         let pending_path = format!("{}/{}.pending", base_path, domain_hash);
 
-        _ = fs::remove_file(failed_path).await.unwrap();
-        _ = fs::remove_file(pending_path).await.unwrap();
+        _ = fs::remove_file(failed_path).await;
+        _ = fs::remove_file(pending_path).await;
 
         Ok(())
     }

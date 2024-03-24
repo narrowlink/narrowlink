@@ -1,8 +1,11 @@
 use std::sync::Arc;
 
+use self::acme::AcmeKeyAuthorization;
+
 use super::{CertificateResolver, CertificateStorage};
 mod acme;
-pub use acme::{AcmeService, ACME_TLS_ALPN_NAME};
+pub use acme::AcmeService;
+use rustls::sign::CertifiedKey;
 enum CertificateIssueStatus {
     Success,
     Failure,
@@ -14,6 +17,8 @@ enum CertificateIssueStatus {
 pub trait CertificateIssue {
     fn issue(&self, account: &str, domain: &str) -> Option<()>;
     fn storage(&self) -> Arc<dyn CertificateStorage>;
+    fn challenge(&self, account: &str, domain: &str) -> Option<Arc<AcmeKeyAuthorization>>;
+    fn remove_from_cache(&self, account: &str, domain: &str) -> Option<CertifiedKey>;
     async fn status(&self, account: &str, domain: &str) -> CertificateIssueStatus {
         if self.storage().is_failed(account, domain).await {
             CertificateIssueStatus::Failure
@@ -26,5 +31,3 @@ pub trait CertificateIssue {
         }
     }
 }
-
-
