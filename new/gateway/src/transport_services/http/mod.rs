@@ -4,11 +4,11 @@ use std::{
     task::{Context, Poll},
 };
 
-use crate::{error::GatewayError, AsyncSocket};
+use crate::error::GatewayError;
 use futures::Stream;
 mod h1;
 mod h2;
-use super::{CertificateIssue, TransportStream};
+use super::{AsyncSocket, CertificateIssue, TransportStream};
 
 pub(crate) struct Http {
     receiver: tokio::sync::mpsc::UnboundedReceiver<TransportStream>,
@@ -24,7 +24,7 @@ impl Http {
             .info()
             .unwrap()
             .tls_info
-            .filter(|v| v.alpn == [104, 50])
+            .filter(|v| v.alpn() == [104, 50])
             .is_some()
         {
             Self::h2(socket)

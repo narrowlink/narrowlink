@@ -7,9 +7,8 @@ use hyper_util::rt::TokioIo;
 use tokio_tungstenite::WebSocketStream;
 
 use crate::{
-    error::{GatewayError, NetworkError},
-    transport_services::{CertificateIssue, TransportStream},
-    AsyncSocket,
+    error::{GatewayError, GatewayNetworkError},
+    transport_services::{AsyncSocket, CertificateIssue, TransportStream},
 };
 
 use super::Http;
@@ -22,7 +21,7 @@ impl Http {
         let socket_info = socket
             .info()
             .map(Arc::new)
-            .map_err(NetworkError::InvalidSocket)?;
+            .map_err(GatewayNetworkError::InvalidSocket)?;
 
         let (stream_sender, stream_receiver) =
             tokio::sync::mpsc::unbounded_channel::<TransportStream>();
@@ -119,10 +118,6 @@ impl Http {
             .await
             .unwrap();
         });
-        //         println!("Hello, world!");
-        //     }
-        // }
-        // todo!()
         Ok(Http {
             receiver: stream_receiver,
             task,

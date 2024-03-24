@@ -1,19 +1,15 @@
 use std::{
-    io,
     net::{Ipv4Addr, SocketAddr},
     pin::Pin,
     sync::Arc,
 };
 
 use futures::{stream::select_all, Stream, StreamExt, TryStreamExt};
-use tokio::{
-    io::{AsyncRead, AsyncWrite},
-    net::TcpStream,
-};
-use tokio_rustls::server::TlsStream;
-use transport_services::{AcmeService, CertificateResolver, DashMapCache};
 
-use crate::transport_services::{CertificateFileStorage, TransportStream};
+
+use transport_services::{AcmeService, CertificateResolver};
+
+use crate::transport_services::{CertificateFileStorage, DashMapCache, TransportStream};
 mod config;
 mod error;
 mod negotiatation;
@@ -106,56 +102,3 @@ pub enum ServiceType<T> {
     Regular(T),
 }
 
-pub(crate) trait AsyncSocket:
-    AsyncRead + AsyncWrite + Unpin + Send + SocketInfoImpl + 'static
-{
-}
-impl<T> AsyncSocket for T where T: AsyncRead + AsyncWrite + Unpin + Send + SocketInfoImpl + 'static {}
-
-#[derive(Clone)]
-struct SocketInfo {
-    peer_addr: SocketAddr,
-    local_addr: SocketAddr,
-    tls_info: Option<TlsInfo>,
-}
-
-impl SocketInfoImpl for TcpStream {
-    fn info(&self) -> io::Result<SocketInfo> {
-        Ok(SocketInfo {
-            peer_addr: self.peer_addr().unwrap(),
-            local_addr: self.local_addr().unwrap(),
-            tls_info: None,
-        })
-    }
-}
-
-impl SocketInfoImpl for TlsStream<TcpStream> {
-    fn info(&self) -> io::Result<SocketInfo> {
-        Ok(SocketInfo {
-            peer_addr: self.get_ref().0.peer_addr()?,
-            local_addr: self.get_ref().0.local_addr()?,
-            tls_info: self.get_ref().1.server_name().and_then(|sni| {
-                self.get_ref().1.alpn_protocol().map(|alpn| TlsInfo {
-                    server_name: sni.to_owned(),
-                    alpn: alpn.to_owned(),
-                })
-            }),
-        })
-    }
-}
-
-impl SocketInfoImpl for Box<dyn AsyncSocket> {
-    fn info(&self) -> io::Result<SocketInfo> {
-        (**self).info()
-    }
-}
-
-pub(crate) trait SocketInfoImpl {
-    fn info(&self) -> io::Result<SocketInfo>;
-}
-
-#[derive(Clone)]
-struct TlsInfo {
-    server_name: String,
-    alpn: Vec<u8>,
-}

@@ -1,18 +1,18 @@
-use std::{collections::VecDeque, sync::Arc};
-
+use std::{collections::VecDeque, io, sync::Arc};
 
 use rustls::internal::msgs::{
     codec::{self, Codec},
     handshake, message,
 };
 use tokio::net::TcpStream;
-use tokio_rustls::TlsAcceptor;
+use tokio_rustls::{server::TlsStream, TlsAcceptor};
 
 use crate::{
-    error::{GatewayError, NetworkError},
+    error::{GatewayError, GatewayNetworkError},
     transport_services::certificate::CertificateResolver,
-    AsyncSocket,
 };
+
+use super::{AsyncSocket, SocketInfo, SocketInfoImpl};
 
 pub mod alpn {
     pub const H2: &[u8] = b"h2";
@@ -49,7 +49,7 @@ impl Tls {
             .acceptor
             .accept(socket)
             .await
-            .map_err(NetworkError::TlsError)?;
+            .map_err(GatewayNetworkError::TlsError)?;
         Ok(TlsConnection::Unpacked(Box::new(stream)))
     }
     pub fn peek_sni_and_alpns(buf: &[u8]) -> Option<(String, Vec<Vec<u8>>)> {
@@ -115,5 +115,43 @@ impl TlsConnection {
             TlsConnection::Unpacked(s) => s,
             TlsConnection::Original(s) => s,
         }
+    }
+}
+
+impl SocketInfoImpl for TcpStream {
+    fn info(&self) -> io::Result<SocketInfo> {
+        Ok(SocketInfo {
+            peer_addr: self.peer_addr().unwrap(),
+            local_addr: self.local_addr().unwrap(),
+            tls_info: None,
+        })
+    }
+}
+
+impl SocketInfoImpl for TlsStream<TcpStream> {
+    fn info(&self) -> io::Result<SocketInfo> {
+        Ok(SocketInfo {
+            peer_addr: self.get_ref().0.peer_addr()?,
+            local_addr: self.get_ref().0.local_addr()?,
+            tls_info: self.get_ref().1.server_name().and_then(|sni| {
+                self.get_ref().1.alpn_protocol().map(|alpn| TlsInfo {
+                    server_name: sni.to_owned(),
+                    alpn: alpn.to_owned(),
+                })
+            }),
+        })
+    }
+}
+#[derive(Clone)]
+pub struct TlsInfo {
+    server_name: String,
+    alpn: Vec<u8>,
+}
+impl TlsInfo {
+    pub fn server_name(&self) -> &str {
+        &self.server_name
+    }
+    pub fn alpn(&self) -> &[u8] {
+        &self.alpn
     }
 }

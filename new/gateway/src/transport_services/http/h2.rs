@@ -4,7 +4,10 @@ use http_body_util::Full;
 use hyper::{body::Bytes, service::service_fn, Response};
 use hyper_util::rt::TokioExecutor;
 
-use crate::{error::{GatewayError, NetworkError}, transport_services::TransportStream, AsyncSocket};
+use crate::{
+    error::{GatewayError, GatewayNetworkError},
+    transport_services::{AsyncSocket, TransportStream},
+};
 
 use super::Http;
 
@@ -13,7 +16,7 @@ impl Http {
         let socket_info = socket
             .info()
             .map(Arc::new)
-            .map_err(NetworkError::InvalidSocket)?;
+            .map_err(GatewayNetworkError::InvalidSocket)?;
         let (stream_sender, stream_receiver) =
             tokio::sync::mpsc::unbounded_channel::<TransportStream>();
 

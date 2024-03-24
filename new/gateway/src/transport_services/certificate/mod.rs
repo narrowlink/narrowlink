@@ -1,117 +1,16 @@
-use std::{
-    fmt::{Debug, Write},
-    sync::Arc,
-};
+use std::{fmt::Debug, sync::Arc};
 
-use crate::{
-    error::{CertificateError, GatewayError},
-    transport_services::tls::alpn::ACME_TLS_ALPN_NAME,
-};
+use crate::{error::GatewayError, transport_services::tls::alpn::ACME_TLS_ALPN_NAME};
 use core::fmt::{self, Display, Formatter};
-use pem::Pem;
-use rustls::{crypto, server::ResolvesServerCert, sign::CertifiedKey};
-use sha3::{Digest, Sha3_256};
+use rustls::{server::ResolvesServerCert, sign::CertifiedKey};
+pub mod cache;
 mod issue;
 mod store;
 mod validation;
-use self::validation::CertificateValidation;
+use self::{cache::CertificateCache, store::CertificateStorage, validation::CertificateValidation};
 pub use issue::{AcmeService, CertificateIssue};
 pub use store::CertificateFileStorage;
 
-#[async_trait::async_trait]
-pub trait CertificateStorage: Send + Sync {
-    async fn set_default_account_credentials(&self, account: &str) -> Result<(), GatewayError>;
-    async fn get_default_account_credentials(&self) -> Result<String, GatewayError>;
-    async fn get_pem(&self, account: &str, domain: &str) -> Result<Vec<Pem>, GatewayError>;
-    async fn put_pem(
-        &self,
-        account: &str,
-        domain: &str,
-        account_credentials: Option<&str>,
-        pems: Vec<Pem>,
-    ) -> Result<(), GatewayError>;
-    async fn set_failed(&self, account: &str, domain: &str) -> Result<(), GatewayError>;
-    async fn is_failed(&self, account: &str, domain: &str) -> bool;
-    async fn set_pending(&self, account: &str, domain: &str) -> Result<(), GatewayError>;
-    async fn is_pending(&self, account: &str, domain: &str) -> bool;
-    // async fn set_success(&self, account: &str, domain: &str) -> Result<(), GatewayError>;
-    // async fn is_success(&self, account: &str, domain: &str) -> bool;
-    fn domain_hash(&self, domain: &str) -> String {
-        Sha3_256::digest(domain.as_bytes())
-            .iter()
-            .fold(String::new(), |mut acc, x| {
-                let _ = write!(acc, "{:02x}", x);
-                acc
-            })
-    }
-    async fn get_certificate_key(
-        &self,
-        account: &str,
-        domain: &str,
-    ) -> Result<CertifiedKey, GatewayError> {
-        let pems = self.get_pem(account, domain).await?;
-        let mut certificate_chain = Vec::new();
-        let mut private_key = None;
-
-        for i in pems {
-            match i.tag() {
-                "CERTIFICATE" => {
-                    certificate_chain.push(rustls::pki_types::CertificateDer::from(
-                        i.contents().to_vec(),
-                    ));
-                }
-                "PRIVATE KEY" => {
-                    private_key.replace(rustls::pki_types::PrivateKeyDer::from(
-                        rustls::pki_types::PrivatePkcs8KeyDer::from(i.contents().to_vec()),
-                    ));
-                }
-                _ => continue,
-            }
-        }
-
-        let signer = crypto::ring::sign::any_supported_type(
-            &private_key.ok_or(CertificateError::PrivateKeyNotFound)?,
-        )
-        .unwrap();
-
-        if certificate_chain.is_empty() {
-            return Err(CertificateError::CertificateNotFound.into());
-        }
-
-        Ok(CertifiedKey::new(certificate_chain, signer))
-    }
-}
-
-pub trait CertificateCache {
-    fn get(&self, account: &str, domain: &str) -> Option<Arc<CertifiedKey>>;
-    fn put(&self, account: &str, domain: &str, config: CertifiedKey);
-    fn remove(&self, account: &str, domain: &str) -> Option<CertifiedKey>;
-}
-
-pub struct DashMapCache(Arc<dashmap::DashMap<String, Arc<CertifiedKey>>>);
-
-impl CertificateCache for DashMapCache {
-    fn get(&self, account: &str, domain: &str) -> Option<Arc<CertifiedKey>> {
-        self.0
-            .get(&format!("{}:{}", account, domain))
-            .map(|x| x.value().clone())
-    }
-    fn put(&self, account: &str, domain: &str, config: CertifiedKey) {
-        self.0
-            .insert(format!("{}:{}", account, domain), Arc::new(config));
-    }
-    fn remove(&self, account: &str, domain: &str) -> Option<CertifiedKey> {
-        self.0
-            .remove(&format!("{}:{}", account, domain))
-            .map(|c| Arc::<CertifiedKey>::unwrap_or_clone(c.1))
-    }
-}
-
-impl Default for DashMapCache {
-    fn default() -> Self {
-        Self(Arc::new(dashmap::DashMap::new()))
-    }
-}
 pub enum CertificateResolveStatus {
     Success,
     PendingIssue,
@@ -143,19 +42,19 @@ impl CertificateResolver {
     }
     pub async fn load_and_cache(
         &self,
-        account: &str,
+        uid: &str,
         domain: &str,
     ) -> Result<CertificateResolveStatus, GatewayError> {
-        match self.storage.get_certificate_key(account, domain).await {
+        match self.storage.get_certificate_key(uid, domain).await {
             Ok(certificate_key) => {
                 let days_until_expiration = certificate_key.days_until_expiration();
                 dbg!("ss");
                 if let Some(issue) = self.issue.as_ref().filter(|_| days_until_expiration == 0) {
-                    issue.issue(account, domain);
+                    issue.issue(uid, domain);
                     todo!("renew certificate");
                     Ok(CertificateResolveStatus::PendingIssue)
                 } else {
-                    self.cache.put(account, domain, certificate_key);
+                    self.cache.put(uid, domain, certificate_key);
                     if let Some(_issue) = self.issue.as_ref().filter(|_| days_until_expiration < 7)
                     {
                         todo!("renew certificate");
@@ -166,21 +65,21 @@ impl CertificateResolver {
             }
             Err(e) => {
                 if let Some(issue) = self.issue.as_ref() {
-                    issue.issue(account, domain);
+                    issue.issue(uid, domain);
                     // todo!("renew certificate");
                     Ok(CertificateResolveStatus::PendingIssue)
                 } else {
-                    Err(e)
+                    Err(e.into())
                 }
             }
         }
     }
 
-    fn unload(&self, account: &str, domain: &str) {
-        self.cache.remove(account, domain);
+    fn unload(&self, uid: &str, domain: &str) {
+        self.cache.remove(uid, domain);
     }
-    fn get_certified_key(&self, account: &str, domain: &str) -> Option<Arc<CertifiedKey>> {
-        self.cache.get(account, domain)
+    fn get_certified_key(&self, uid: &str, domain: &str) -> Option<Arc<CertifiedKey>> {
+        self.cache.get(uid, domain)
     }
 }
 

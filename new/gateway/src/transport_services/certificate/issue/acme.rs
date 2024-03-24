@@ -11,8 +11,8 @@ use rustls::{crypto, sign::CertifiedKey};
 use tokio::time::sleep;
 
 use crate::{
-    error::{CertificateError as GWCertificateError, GatewayError},
-    transport_services::certificate::{CertificateCache, CertificateStorage, DashMapCache},
+    error::{GatewayCertificateError, GatewayError},
+    transport_services::certificate::{cache::DashMapCache, CertificateCache, CertificateStorage},
 };
 
 use super::CertificateIssue;
@@ -37,7 +37,7 @@ impl AcmeService {
             .await
             .and_then(|s| {
                 serde_json::from_str::<AccountCredentials>(&s)
-                    .map_err(|_| GWCertificateError::InvalidAccount.into())
+                    .map_err(|_| GatewayCertificateError::InvalidAccount.into())
             }) {
             Ok(account_credentials) => Account::from_credentials(account_credentials)
                 .await
@@ -75,24 +75,25 @@ impl AcmeService {
 }
 
 impl CertificateIssue for AcmeService {
-    fn issue(&self, account: &str, domain: &str) -> Option<()> {
-        debug!("issue certificate for {}@{}", account, domain);
+    fn issue(&self, uid: &str, domain: &str) -> Option<()> {
+        debug!("issue certificate for {}@{}", uid, domain);
         if self
             .challenges
-            .contains_key(&(domain.to_owned(), account.to_owned()))
+            .contains_key(&(domain.to_owned(), uid.to_owned()))
         {
             return None;
         }
-        let default_account = self.default_account.clone();
+        let default_acme_account = self.default_account.clone();
+
         let domain = domain.to_owned();
-        let account = account.to_owned();
+        let uid = uid.to_owned();
         let challenges = self.challenges.clone();
         let storage = self.storage.clone();
         let cache = self.cache.clone();
         // task to issue certificate
         let _task = tokio::spawn(async move {
             let identifier = Identifier::Dns(domain.clone());
-            let mut order = default_account
+            let mut order = default_acme_account
                 .new_order(&NewOrder {
                     identifiers: &[identifier],
                 })
@@ -101,26 +102,26 @@ impl CertificateIssue for AcmeService {
             dbg!(order.state());
             // let x = order.key_authorization(challenge);
             if matches!(order.state().status, OrderStatus::Pending) {
-                storage.set_pending(&account, &domain).await.unwrap();
+                storage.set_pending(&uid, &domain).await.unwrap();
             }
             // tokio_stream::wrappers::ReceiverStream::new();
             let authorizations = order.authorizations().await.unwrap();
             for authorization in authorizations {
                 let Identifier::Dns(dns_identifier) = authorization.identifier;
                 if dns_identifier != domain {
-                    storage.set_failed(&account, &domain).await.unwrap();
+                    storage.set_failed(&uid, &domain).await.unwrap();
                     return;
                 }
                 let acme_key_authorization =
                     AcmeChallenges::new(&domain, &order, &authorization.challenges);
 
                 challenges.insert(
-                    (account.clone(), domain.clone()),
+                    (uid.clone(), domain.clone()),
                     Arc::new(acme_key_authorization),
                 );
 
                 for c in &authorization.challenges {
-                    if c.r#type == ChallengeType::Dns01 {
+                    if c.r#type != ChallengeType::Dns01 {
                         continue;
                     }
                     dbg!(&c);
@@ -149,9 +150,9 @@ impl CertificateIssue for AcmeService {
                     }
                 }
             }
-            challenges.remove(&(account.clone(), domain.clone()));
+            challenges.remove(&(uid.clone(), domain.clone()));
             if order.state().status != OrderStatus::Ready {
-                storage.set_failed(&account, &domain).await.unwrap();
+                storage.set_failed(&uid, &domain).await.unwrap();
                 return;
             }
             let mut params = CertificateParams::new(vec![domain.clone()]);
@@ -174,12 +175,9 @@ impl CertificateIssue for AcmeService {
                     })
                 })
                 .unwrap();
-            storage.put_pem(&account, &domain, None, pem).await.unwrap();
-            let certificate_key = storage
-                .get_certificate_key(&account, &domain)
-                .await
-                .unwrap();
-            cache.put(&account, &domain, certificate_key);
+            storage.put_pem(&uid, &domain, None, pem).await.unwrap();
+            let certificate_key = storage.get_certificate_key(&uid, &domain).await.unwrap();
+            cache.put(&uid, &domain, certificate_key);
         });
         None
     }

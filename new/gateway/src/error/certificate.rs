@@ -13,7 +13,9 @@ pub enum CertificateError {
     #[error("Certificate expired")]
     CertificateExpired,
     #[error("Account not found: {0}")]
-    AccountNotFound(#[from] std::io::Error),
+    AccountNotFound(std::io::Error),
+    #[error("IO Error: {0}")]
+    IOError(#[from] std::io::Error),
     #[error("Invalid account")]
     InvalidAccount,
 }
