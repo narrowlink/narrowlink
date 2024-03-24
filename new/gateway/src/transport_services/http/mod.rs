@@ -1,5 +1,6 @@
 use std::{
     pin::Pin,
+    sync::Arc,
     task::{Context, Poll},
 };
 
@@ -7,7 +8,7 @@ use crate::AsyncSocket;
 use futures::Stream;
 mod h1;
 mod h2;
-use super::TransportStream;
+use super::{CertificateIssue, TransportStream};
 
 pub(crate) struct Http {
     receiver: tokio::sync::mpsc::UnboundedReceiver<TransportStream>,
@@ -15,7 +16,10 @@ pub(crate) struct Http {
 }
 
 impl Http {
-    pub fn new(socket: impl AsyncSocket) -> Http {
+    pub fn new(
+        socket: impl AsyncSocket,
+        issue: Option<Arc<impl CertificateIssue + Send + Sync + 'static>>,
+    ) -> Http {
         if socket
             .info()
             .unwrap()
@@ -25,7 +29,7 @@ impl Http {
         {
             h2::H2::new(socket)
         } else {
-            h1::H1::new(socket)
+            h1::H1::new(socket, issue)
         }
     }
 }

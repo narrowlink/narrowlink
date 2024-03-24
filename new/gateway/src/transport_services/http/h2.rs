@@ -38,7 +38,7 @@ impl H2 {
             )
             // .with_upgrades()
             .await
-            .unwrap();
+            ;
         });
         Http {
             receiver: stream_receiver,

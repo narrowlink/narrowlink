@@ -31,10 +31,12 @@ async fn main() {
     let mut resolver = CertificateResolver::new(storage.clone(), DashMapCache::default());
     let acme = AcmeService::new(storage, "dev@narrowlink.com", None)
         .await
-        .unwrap()
-        .into();
+        .map(Arc::new)
+        .ok();
     dbg!("s2");
-    resolver.set_certificate_issuer(acme);
+
+    resolver.set_certificate_issuer(acme.clone());
+
     dbg!("s");
     resolver
         .load_and_cache("main", "home.gateway.computer")
@@ -44,6 +46,24 @@ async fn main() {
     let resolver = Arc::new(resolver);
 
     let mut streams = Vec::<Pin<Box<dyn Stream<Item = TransportStream>>>>::new();
+
+    streams.push(Box::pin(
+        transport_services::Tcp::new(SocketAddr::new(
+            std::net::IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+            80,
+        ))
+        .await
+        .map_err(error::GatewayError::IOError)
+        .flat_map_unordered(None, |s| match s {
+            Ok(s) => Box::pin(transport_services::Http::new(s, acme.clone()))
+                as Pin<Box<dyn Stream<Item = TransportStream>>>,
+            Err(e) => Box::pin(futures::stream::once(futures::future::ready(
+                TransportStream::Error(e),
+            ))),
+        }),
+    ));
+    dbg!("sss");
+
     streams.push(Box::pin(
         transport_services::Tcp::new(SocketAddr::new(
             std::net::IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
@@ -53,29 +73,16 @@ async fn main() {
         .map_err(error::GatewayError::IOError)
         .and_then(|s| transport_services::Tls::new(s, resolver.clone()))
         .flat_map_unordered(None, |s| match s {
-            Ok(s) => Box::pin(transport_services::Http::new(s.inner()))
-                as Pin<Box<dyn Stream<Item = TransportStream>>>,
+            Ok(s) => Box::pin(transport_services::Http::new(
+                s.inner(),
+                None::<Arc<AcmeService>>,
+            )) as Pin<Box<dyn Stream<Item = TransportStream>>>,
             Err(e) => Box::pin(futures::stream::once(futures::future::ready(
                 TransportStream::Error(e),
             ))),
         }),
     ));
     dbg!("s");
-    streams.push(Box::pin(
-        transport_services::Tcp::new(SocketAddr::new(
-            std::net::IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-            80,
-        ))
-        .await
-        .map_err(error::GatewayError::IOError)
-        .flat_map_unordered(None, |s| match s {
-            Ok(s) => Box::pin(transport_services::Http::new(s))
-                as Pin<Box<dyn Stream<Item = TransportStream>>>,
-            Err(e) => Box::pin(futures::stream::once(futures::future::ready(
-                TransportStream::Error(e),
-            ))),
-        }),
-    ));
 
     select_all(streams)
         .for_each(|x| async move {

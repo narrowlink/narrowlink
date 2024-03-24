@@ -14,8 +14,8 @@ use sha3::{Digest, Sha3_256};
 mod issue;
 mod store;
 mod validation;
-use self::{issue::CertificateIssue, validation::CertificateValidation};
-pub use issue::AcmeService;
+use self::validation::CertificateValidation;
+pub use issue::{AcmeService, CertificateIssue};
 pub use store::CertificateFileStorage;
 
 #[async_trait::async_trait]
@@ -120,7 +120,7 @@ pub enum CertificateResolveStatus {
 pub struct CertificateResolver {
     storage: Arc<dyn CertificateStorage + Send + Sync>,
     cache: Box<dyn CertificateCache + Send + Sync>,
-    issue: Option<Box<dyn CertificateIssue + Send + Sync>>,
+    issue: Option<Arc<dyn CertificateIssue + Send + Sync>>,
 }
 
 impl CertificateResolver {
@@ -137,9 +137,9 @@ impl CertificateResolver {
 
     pub fn set_certificate_issuer(
         &mut self,
-        issue: Option<impl CertificateIssue + Send + Sync + 'static>,
+        issue: Option<Arc<impl CertificateIssue + Send + Sync + 'static>>,
     ) {
-        self.issue = issue.map(|x| Box::new(x) as _);
+        self.issue = issue.map(|x| x as _);
     }
     pub async fn load_and_cache(
         &self,
@@ -156,14 +156,10 @@ impl CertificateResolver {
                     Ok(CertificateResolveStatus::PendingIssue)
                 } else {
                     self.cache.put(account, domain, certificate_key);
-
-                    let x = |ck: CertifiedKey| {
-                        self.cache.put(account, domain, ck);
-                    };
-
                     if let Some(issue) = self.issue.as_ref().filter(|_| days_until_expiration < 7) {
                         todo!("renew certificate");
                     }
+                    dbg!("success");
                     Ok(CertificateResolveStatus::Success)
                 }
             }
@@ -192,6 +188,7 @@ impl ResolvesServerCert for CertificateResolver {
         &self,
         client_hello: rustls::server::ClientHello,
     ) -> Option<Arc<rustls::sign::CertifiedKey>> {
+        dbg!("resolve");
         let sni = client_hello.server_name()?;
         let alpn = client_hello.alpn()?;
         let account = "main";
@@ -207,6 +204,7 @@ impl ResolvesServerCert for CertificateResolver {
                 dbg!("aa");
             }
         }
+        dbg!("Done resolve");
         self.get_certified_key(account, sni)
     }
 }

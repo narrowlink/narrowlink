@@ -6,14 +6,20 @@ use hyper::{body::Bytes, header, service::service_fn, upgrade, Response, StatusC
 use hyper_util::rt::TokioIo;
 use tokio_tungstenite::WebSocketStream;
 
-use crate::{transport_services::TransportStream, AsyncSocket};
+use crate::{
+    transport_services::{CertificateIssue, TransportStream},
+    AsyncSocket,
+};
 
 use super::Http;
 
 pub struct H1(Box<dyn AsyncSocket>);
 
 impl H1 {
-    pub fn new(socket: impl AsyncSocket) -> Http {
+    pub fn new(
+        socket: impl AsyncSocket,
+        issue: Option<Arc<impl CertificateIssue + Send + Sync + 'static>>,
+    ) -> Http {
         let (stream_sender, stream_receiver) =
             tokio::sync::mpsc::unbounded_channel::<TransportStream>();
         let socket_info = Arc::new(socket.info().unwrap());
@@ -25,7 +31,17 @@ impl H1 {
                 service_fn(|req| {
                     let stream_sender = stream_sender.clone();
                     let socket_info = socket_info.clone();
+                    let issue = issue
+                        .clone()
+                        .filter(|_| req.uri().path().starts_with("/.well-known/acme-challenge"));
+                    
                     async move {
+                        let host = req.headers().get(header::HOST).and_then(|h| h.to_str().ok());
+                        if let Some(issue) = &issue {
+                            let x =issue.challenge("main", host.unwrap());
+
+                        }
+
                         if let Some(_token) = req
                             .headers()
                             .get("NL-TOKEN")

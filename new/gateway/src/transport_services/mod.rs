@@ -9,12 +9,13 @@ use crate::{negotiatation, AsyncSocket, SocketInfo};
 pub use tcp::Tcp;
 mod tls;
 pub(super) use tls::Tls;
-
 mod http;
 pub(super) use http::Http;
 mod certificate;
 pub use certificate::{CertificateFileStorage,CertificateResolver,DashMapCache};
 pub use certificate::AcmeService;
+
+pub use self::certificate::CertificateIssue;
 
 pub(crate) enum TransportStream {
     Command(
