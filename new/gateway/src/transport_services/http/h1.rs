@@ -39,6 +39,7 @@ impl Http {
                     let socket_info = socket_info.clone();
                     let issue = issue.clone();
                     async move {
+                        // Obtain the host from the request headers
                         let Some(host) = req
                             .headers()
                             .get(header::HOST)
@@ -46,7 +47,7 @@ impl Http {
                         else {
                             return Ok(response_error(ErrorFormat::Html, HttpErrors::BadRequest));
                         };
-
+                        // ACME Challenge
                         if let Some(issue) =
                             &issue.filter(|_| req.uri().path().starts_with(ACME_CHALLENGE_PATH))
                         {
@@ -66,7 +67,7 @@ impl Http {
                                 }
                             }
                         }
-
+                        // WebSocket
                         if let Some(_token) = req
                             .headers()
                             .get("NL-TOKEN")
@@ -95,12 +96,7 @@ impl Http {
                                 let (tx, rx) = ws_stream.split();
                                 rx.forward(tx).await.unwrap();
                             });
-                            // let ws_stream = WebSocketStream::from_raw_socket(
-                            //     Box::new(server_stream) as Box<dyn AsyncSocket>,
-                            //     tungstenite::protocol::Role::Server,
-                            //     None,
-                            // )
-                            // .await;
+
                             Ok(Response::builder()
                                 .version(req_version)
                                 .status(StatusCode::SWITCHING_PROTOCOLS)
@@ -110,6 +106,7 @@ impl Http {
                                 .body(Full::new(Bytes::new()))
                                 .unwrap())
                         } else {
+                            // HTTP - WebSocket Not Found
                             let socket_info = socket_info.clone();
                             let (http_response_sender, http_response_receiver) =
                                 tokio::sync::oneshot::channel::<hyper::Response<Full<Bytes>>>();

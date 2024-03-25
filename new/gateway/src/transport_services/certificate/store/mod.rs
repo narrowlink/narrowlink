@@ -23,11 +23,7 @@ pub trait CertificateStorage: Send + Sync {
     async fn get_default_account_credentials(&self) -> Result<String, GatewayCertificateError> {
         self.get_account_credentials("main").await
     }
-    async fn get_pem(
-        &self,
-        uid: &str,
-        domain: &str,
-    ) -> Result<Vec<Pem>, GatewayCertificateError>;
+    async fn get_pem(&self, uid: &str, domain: &str) -> Result<Vec<Pem>, GatewayCertificateError>;
     async fn put_pem(
         &self,
         uid: &str,

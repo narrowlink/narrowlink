@@ -15,16 +15,16 @@ enum CertificateIssueStatus {
 
 #[async_trait::async_trait]
 pub trait CertificateIssue {
-    fn issue(&self, account: &str, domain: &str) -> Option<()>;
+    fn issue(&self, uid: &str, domain: &str) -> Option<()>;
     fn storage(&self) -> Arc<dyn CertificateStorage>;
-    fn challenge(&self, account: &str, domain: &str) -> Option<Arc<AcmeChallenges>>;
-    fn remove_from_cache(&self, account: &str, domain: &str) -> Option<CertifiedKey>;
-    async fn status(&self, account: &str, domain: &str) -> CertificateIssueStatus {
-        if self.storage().is_failed(account, domain).await {
+    fn challenge(&self, uid: &str, domain: &str) -> Option<Arc<AcmeChallenges>>;
+    fn remove_from_cache(&self, uid: &str, domain: &str) -> Option<CertifiedKey>;
+    async fn status(&self, uid: &str, domain: &str) -> CertificateIssueStatus {
+        if self.storage().is_failed(uid, domain).await {
             CertificateIssueStatus::Failure
-        } else if self.storage().is_pending(account, domain).await {
+        } else if self.storage().is_pending(uid, domain).await {
             CertificateIssueStatus::Pending
-        } else if self.storage().get_pem(account, domain).await.is_ok() {
+        } else if self.storage().get_pem(uid, domain).await.is_ok() {
             CertificateIssueStatus::Success
         } else {
             CertificateIssueStatus::NotAvailable
