@@ -73,7 +73,7 @@ impl CertificateStorage for CertificateFileStorage {
             .await
             .map_err(|_| GatewayCertificateError::CertificateNotFound)?,
         )
-        .map_err(|e| GatewayCertificateError::InvalidPem(e).into())
+        .map_err(GatewayCertificateError::InvalidPem)
     }
     async fn put_pem(
         &self,

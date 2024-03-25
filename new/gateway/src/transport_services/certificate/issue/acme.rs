@@ -234,10 +234,9 @@ impl AcmeChallenges {
                     params.custom_extensions = vec![rcgen::CustomExtension::new_acme_identifier(
                         key_authorization.digest().as_ref(),
                     )];
-                    let cert = rcgen::Certificate::from_params(params).expect(&format!(
-                        "ACME TLS challenge certificate creation for {} failed",
-                        domain
-                    ));
+                    let cert = rcgen::Certificate::from_params(params).unwrap_or_else(|e| {
+                        panic!("ACME TLS challenge certificate creation for {domain} failed - {e}")
+                    });
                     let signer = crypto::ring::sign::any_supported_type(
                         &rustls::pki_types::PrivateKeyDer::from(
                             rustls::pki_types::PrivatePkcs8KeyDer::from(
@@ -245,12 +244,15 @@ impl AcmeChallenges {
                             ),
                         ),
                     )
-                    .expect("ACME TLS challenge certificate signer creation failed");
+                    .unwrap_or_else(|e| {
+                        panic!("ACME TLS challenge certificate signer creation failed - {e}")
+                    });
 
                     let certified_key = CertifiedKey::new(
                         vec![rustls::pki_types::CertificateDer::from(
-                            cert.serialize_der()
-                                .expect("ACME TLS challenge certificate serialization failed"),
+                            cert.serialize_der().unwrap_or_else(|e| {
+                                panic!("ACME TLS challenge certificate serialization failed - {e}")
+                            }),
                         )],
                         signer,
                     );

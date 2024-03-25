@@ -13,31 +13,22 @@ message Request {
 message Publish {
   bytes uid = 1;
   bytes socketaddr = 2;
-  enum Protocol {
-    TCP = 0;
-    UDP = 1;
-  }
+  TransportProtocol transport_protocol = 3;
 }
 message IpPolicy {
   string agent = 1;
   bytes socketaddr = 2;
   uint32 netmask = 3;
-  enum Protocol {
-    TCP = 0;
-    UDP = 1;
-  }
+  TransportProtocol transport_protocol = 4;
 }
 message DomainPolicy {
   string agent = 1;
   string domain = 2;
   uint32 port = 3;
-  enum Protocol {
-    TCP = 0;
-    UDP = 1;
-  }
+  TransportProtocol transport_protocol = 4;
 }
 
-message Policy {
+message NetworkPolicy {
   oneof policy {
     IpPolicy ip = 1;
     DomainPolicy domain = 2;
@@ -47,13 +38,14 @@ message Policy {
 message Client {
   bytes uid = 1;
   string name = 2;
-  message ClientPolicy {
+  message ClientNetworkPolicy {
     enum Type {
       WhiteList = 0;
       BlackList = 1;
     }
-    repeated Policy policy = 1;
+    repeated NetworkPolicy policy = 1;
   }
+  ClientNetworkPolicy client_network_policy = 3;
 }
 message Agent {
   bytes uid = 1;
@@ -66,4 +58,10 @@ message Response {
     OK = 0;
     ERROR = 1;
   }
+  Status status = 1;
+}
+
+enum TransportProtocol {
+  TCP = 0;
+  UDP = 1;
 }

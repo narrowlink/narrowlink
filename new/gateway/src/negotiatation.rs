@@ -1,9 +1,10 @@
 use std::net::SocketAddr;
 use uuid::Uuid;
 
+
 include!(concat!(env!("OUT_DIR"), "/negotiatation.rs"));
 impl Publish {
-    pub fn new(uid: Uuid, socketaddr: SocketAddr) -> Publish {
+    pub fn new(uid: Uuid, socketaddr: SocketAddr,transport_protocol:TransportProtocol) -> Publish {
         let (mut ip, port) = match socketaddr {
             SocketAddr::V4(v4) => (v4.ip().octets().to_vec(), v4.port()),
             SocketAddr::V6(v6) => (v6.ip().octets().to_vec(), v6.port()),
@@ -12,6 +13,7 @@ impl Publish {
         Publish {
             uid: uid.as_bytes().to_vec(),
             socketaddr: ip,
+            transport_protocol: transport_protocol.into()
         }
     }
     pub fn uid(&self) -> Uuid {
