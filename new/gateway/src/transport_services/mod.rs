@@ -10,7 +10,7 @@ use tokio::sync::oneshot;
 
 mod tcp;
 use crate::error::GatewayError;
-use crate::negotiatation;
+use crate::messages::command;
 pub use tcp::Tcp;
 mod tls;
 pub(super) use tls::Tls;
@@ -24,11 +24,7 @@ pub use self::certificate::{cache::DashMapCache, CertificateIssue};
 use self::tls::TlsInfo;
 
 pub(crate) enum TransportStream {
-    Command(
-        negotiatation::Request,
-        Box<dyn AsyncSocket>,
-        negotiatation::Response,
-    ),
+    Command(command::Request, Box<dyn AsyncSocket>, command::Response),
     Data(String, Box<dyn AsyncSocket>, String),
     HttpProxy(
         hyper::Request<hyper::body::Incoming>,

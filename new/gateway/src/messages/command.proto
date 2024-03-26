@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package negotiatation;
+package command;
 
 message Request {
   oneof msg {

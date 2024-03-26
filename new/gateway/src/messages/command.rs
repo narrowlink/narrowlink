@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 use uuid::Uuid;
 
-include!(concat!(env!("OUT_DIR"), "/negotiatation.rs"));
+include!(concat!(env!("OUT_DIR"), "/command.rs"));
 impl Publish {
     pub fn new(
         uid: Uuid,
