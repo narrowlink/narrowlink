@@ -11,7 +11,6 @@ use transport_services::{AcmeService, CertificateResolver};
 use crate::transport_services::{CertificateFileStorage, DashMapCache, TransportStream};
 mod config;
 mod error;
-mod messages;
 mod state;
 mod transport_services;
 

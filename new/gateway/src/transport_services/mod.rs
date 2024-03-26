@@ -10,7 +10,7 @@ use tokio::sync::oneshot;
 
 mod tcp;
 use crate::error::GatewayError;
-use crate::messages::command;
+use narrowlink_messages::command;
 pub use tcp::Tcp;
 mod tls;
 pub(super) use tls::Tls;

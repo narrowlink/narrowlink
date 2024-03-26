@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+package negotiation;
+
+message Client {
+  bytes uid = 1;
+  string name = 2;
+}

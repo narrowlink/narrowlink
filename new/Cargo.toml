@@ -1,5 +1,5 @@
 [workspace]
-members = ["gateway", "client", "agent"]
+members = ["gateway", "client", "agent", "messages"]
 resolver = "2"
 
 [workspace.lints.clippy]
