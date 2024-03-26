@@ -181,8 +181,8 @@ impl CertificateIssue for AcmeService {
                     })
                 })
                 .unwrap();
+            let certificate_key = storage.get_certified_key(&pem).await.unwrap();
             storage.put_pem(&uid, &domain, pem).await.unwrap();
-            let certificate_key = storage.get_certified_key(&uid, &domain).await.unwrap();
             cache.put(&uid, &domain, certificate_key);
         });
         None

@@ -46,18 +46,17 @@ impl CertificateResolver {
         uid: &str,
         domain: &str,
     ) -> Result<CertificateResolveStatus, GatewayError> {
-        match self.storage.get_certified_key(uid, domain).await {
+        let pem = self.storage.get_pem(uid, domain).await?;
+        match self.storage.get_certified_key(&pem).await {
             Ok(certificate_key) => {
                 let days_until_expiration = certificate_key.days_until_expiration();
                 if let Some(issue) = self.issue.as_ref().filter(|_| days_until_expiration == 0) {
                     issue.issue(
                         uid,
                         domain,
-                        self.storage.get_pem(uid, domain).await.ok().and_then(|p| {
-                            self.storage
-                                .get_private_key(&p)
-                                .map(|k| k.secret_der().to_vec())
-                        }),
+                        self.storage
+                            .get_private_key(&pem)
+                            .map(|k| k.secret_der().to_vec()),
                     );
                     Ok(CertificateResolveStatus::PendingIssue)
                 } else {
@@ -66,11 +65,9 @@ impl CertificateResolver {
                         issue.issue(
                             uid,
                             domain,
-                            self.storage.get_pem(uid, domain).await.ok().and_then(|p| {
-                                self.storage
-                                    .get_private_key(&p)
-                                    .map(|k| k.secret_der().to_vec())
-                            }),
+                            self.storage
+                                .get_private_key(&pem)
+                                .map(|k| k.secret_der().to_vec()),
                         );
                         Ok(CertificateResolveStatus::Renew)
                     } else {
@@ -83,11 +80,9 @@ impl CertificateResolver {
                 issue.issue(
                     uid,
                     domain,
-                    self.storage.get_pem(uid, domain).await.ok().and_then(|p| {
-                        self.storage
-                            .get_private_key(&p)
-                            .map(|k| k.secret_der().to_vec())
-                    }),
+                    self.storage
+                        .get_private_key(&pem)
+                        .map(|k| k.secret_der().to_vec()),
                 );
                 Ok(CertificateResolveStatus::PendingIssue)
             }
@@ -115,10 +110,8 @@ impl ResolvesServerCert for CertificateResolver {
                 return acme
                     .challenge(account, sni)
                     .and_then(|c| c.get_tls_challenge().map(Arc::new));
-            } else {
-                if let Some(certified_key) = acme.remove_from_cache(account, sni) {
-                    self.cache.put(account, sni, certified_key)
-                }
+            } else if let Some(certified_key) = acme.remove_from_cache(account, sni) {
+                self.cache.put(account, sni, certified_key)
             }
         }
         self.get_certified_key(account, sni)
