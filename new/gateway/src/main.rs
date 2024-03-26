@@ -6,7 +6,6 @@ use std::{
 
 use futures::{stream::select_all, Stream, StreamExt, TryStreamExt};
 
-
 use transport_services::{AcmeService, CertificateResolver};
 
 use crate::transport_services::{CertificateFileStorage, DashMapCache, TransportStream};
@@ -101,4 +100,3 @@ pub enum ServiceType<T> {
     Sni(T),
     Regular(T),
 }
-

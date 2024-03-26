@@ -41,7 +41,8 @@ impl Http {
                 }),
             )
             // .with_upgrades()
-            .await.unwrap();
+            .await
+            .unwrap();
         });
         Ok(Http {
             receiver: stream_receiver,

@@ -2,7 +2,11 @@ mod file;
 use crate::error::GatewayCertificateError;
 pub use file::CertificateFileStorage;
 use pem::Pem;
-use rustls::{crypto, sign::CertifiedKey};
+use rustls::{
+    crypto,
+    pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer},
+    sign::CertifiedKey,
+};
 use sha3::{Digest, Sha3_256};
 use std::fmt::Write;
 
@@ -42,40 +46,42 @@ pub trait CertificateStorage: Send + Sync {
                 acc
             })
     }
-    async fn get_certificate_key(
+    fn get_private_key(&self, pem: &Vec<Pem>) -> Option<PrivateKeyDer<'static>> {
+        for i in pem {
+            if i.tag() == "PRIVATE KEY" {
+                return Some(PrivateKeyDer::from(PrivatePkcs8KeyDer::from(
+                    i.contents().to_vec(),
+                )));
+            }
+        }
+        None
+    }
+    fn get_certificate_chain(&self, pem: &Vec<Pem>) -> Option<Vec<CertificateDer<'static>>> {
+        let mut certificate_chain = Vec::new();
+        for i in pem {
+            if i.tag() == "CERTIFICATE" {
+                certificate_chain.push(CertificateDer::from(i.contents().to_vec()));
+            }
+        }
+        if certificate_chain.is_empty() {
+            return None;
+        }
+        Some(certificate_chain)
+    }
+    async fn get_certified_key(
         &self,
         uid: &str,
         domain: &str,
     ) -> Result<CertifiedKey, GatewayCertificateError> {
         let pems = self.get_pem(uid, domain).await?;
-        let mut certificate_chain = Vec::new();
-        let mut private_key = None;
+        let key = self
+            .get_private_key(&pems)
+            .ok_or(GatewayCertificateError::PrivateKeyNotFound)?;
+        let cert = self
+            .get_certificate_chain(&pems)
+            .ok_or(GatewayCertificateError::CertificateNotFound)?;
+        let signer = crypto::ring::sign::any_supported_type(&key).unwrap();
 
-        for i in pems {
-            match i.tag() {
-                "CERTIFICATE" => {
-                    certificate_chain.push(rustls::pki_types::CertificateDer::from(
-                        i.contents().to_vec(),
-                    ));
-                }
-                "PRIVATE KEY" => {
-                    private_key.replace(rustls::pki_types::PrivateKeyDer::from(
-                        rustls::pki_types::PrivatePkcs8KeyDer::from(i.contents().to_vec()),
-                    ));
-                }
-                _ => continue,
-            }
-        }
-
-        let signer = crypto::ring::sign::any_supported_type(
-            &private_key.ok_or(GatewayCertificateError::PrivateKeyNotFound)?,
-        )
-        .unwrap();
-
-        if certificate_chain.is_empty() {
-            return Err(GatewayCertificateError::CertificateNotFound.into());
-        }
-
-        Ok(CertifiedKey::new(certificate_chain, signer))
+        Ok(CertifiedKey::new(cert, signer))
     }
 }

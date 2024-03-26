@@ -15,7 +15,7 @@ enum CertificateIssueStatus {
 
 #[async_trait::async_trait]
 pub trait CertificateIssue {
-    fn issue(&self, uid: &str, domain: &str) -> Option<()>;
+    fn issue(&self, uid: &str, domain: &str, private_key: Option<Vec<u8>>) -> Option<()>;
     fn storage(&self) -> Arc<dyn CertificateStorage>;
     fn challenge(&self, uid: &str, domain: &str) -> Option<Arc<AcmeChallenges>>;
     fn remove_from_cache(&self, uid: &str, domain: &str) -> Option<CertifiedKey>;

@@ -58,11 +58,7 @@ impl CertificateStorage for CertificateFileStorage {
             .replace(account.to_string());
         Ok(())
     }
-    async fn get_pem(
-        &self,
-        uid: &str,
-        domain: &str,
-    ) -> Result<Vec<Pem>, GatewayCertificateError> {
+    async fn get_pem(&self, uid: &str, domain: &str) -> Result<Vec<Pem>, GatewayCertificateError> {
         pem::parse_many(
             fs::read_to_string(format!(
                 "{}/{}/{}.pem",
@@ -121,11 +117,7 @@ impl CertificateStorage for CertificateFileStorage {
             .filter(|v| *v + 60 * 60 > ts) // 1 hour
             .is_some()
     }
-    async fn set_pending(
-        &self,
-        uid: &str,
-        domain: &str,
-    ) -> Result<(), GatewayCertificateError> {
+    async fn set_pending(&self, uid: &str, domain: &str) -> Result<(), GatewayCertificateError> {
         let domain_hash = self.domain_hash(domain);
         let base_path = format!("{}/{}", self.path, uid);
         let pending_path = format!("{}/{}.pending", base_path, domain_hash);

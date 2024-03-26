@@ -77,7 +77,7 @@ impl AcmeService {
 }
 
 impl CertificateIssue for AcmeService {
-    fn issue(&self, uid: &str, domain: &str) -> Option<()> {
+    fn issue(&self, uid: &str, domain: &str, private_key: Option<Vec<u8>>) -> Option<()> {
         debug!("issue certificate for {}@{}", uid, domain);
         if self
             .challenges
@@ -161,6 +161,7 @@ impl CertificateIssue for AcmeService {
                 return;
             }
             let mut params = CertificateParams::new(vec![domain.clone()]);
+            params.key_pair = private_key.and_then(|k| rcgen::KeyPair::from_der(&k).ok());
             params.distinguished_name = DistinguishedName::new();
             let cert = Certificate::from_params(params).unwrap();
             let csr = cert.serialize_request_der().unwrap();
@@ -181,7 +182,7 @@ impl CertificateIssue for AcmeService {
                 })
                 .unwrap();
             storage.put_pem(&uid, &domain, pem).await.unwrap();
-            let certificate_key = storage.get_certificate_key(&uid, &domain).await.unwrap();
+            let certificate_key = storage.get_certified_key(&uid, &domain).await.unwrap();
             cache.put(&uid, &domain, certificate_key);
         });
         None
@@ -217,15 +218,15 @@ impl AcmeChallenges {
             match challenge.r#type {
                 ChallengeType::Http01 => {
                     let token = challenge.token.clone();
-                    let key_authorization = order.key_authorization(&challenge);
+                    let key_authorization = order.key_authorization(challenge);
                     ret.http_challenge = Some((token, key_authorization.as_str().to_owned()));
                 }
                 ChallengeType::Dns01 => {
                     ret.dns_challenge =
-                        Some(order.key_authorization(&challenge).as_str().to_owned());
+                        Some(order.key_authorization(challenge).as_str().to_owned());
                 }
                 ChallengeType::TlsAlpn01 => {
-                    let key_authorization = order.key_authorization(&challenge);
+                    let key_authorization = order.key_authorization(challenge);
                     let mut params = rcgen::CertificateParams::new(vec![domain.to_owned()]);
                     let mut dn = DistinguishedName::new();
                     dn.push(DnType::OrganizationName, "narrowlink");

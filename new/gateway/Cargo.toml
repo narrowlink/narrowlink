@@ -28,7 +28,7 @@ rustls = { version = "0.23", features = [
     "std",
 ], default-features = false }
 rcgen = "0.12.1"
-serde_json = { version = "1.0.114", default-features = false, features = [
+serde_json = { version = "1.0.115", default-features = false, features = [
     "std",
 ] }
 log = { version = "0.4", default-features = false }

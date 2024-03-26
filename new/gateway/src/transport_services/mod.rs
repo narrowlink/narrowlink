@@ -61,4 +61,3 @@ impl SocketInfoImpl for Box<dyn AsyncSocket> {
 pub(crate) trait SocketInfoImpl {
     fn info(&self) -> io::Result<SocketInfo>;
 }
-
