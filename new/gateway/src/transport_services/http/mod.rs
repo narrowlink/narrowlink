@@ -39,10 +39,6 @@ impl Stream for Http {
     type Item = TransportStream;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        match self.receiver.poll_recv(cx) {
-            Poll::Ready(Some(x)) => Poll::Ready(Some(x)),
-            Poll::Ready(None) => Poll::Ready(None),
-            Poll::Pending => Poll::Pending,
-        }
+        self.receiver.poll_recv(cx)
     }
 }

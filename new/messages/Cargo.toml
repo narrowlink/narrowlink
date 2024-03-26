@@ -6,12 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-prost = "0.12"
-prost-types = "0.12"
-uuid = { version = "1.8", default-features = false, features = ["v4"] }
+prost = { workspace = true }
+prost-types = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
 
 [build-dependencies]
-prost-build = "0.12"
+prost-build = { workspace = true }
 
 
 [lints]
