@@ -1,0 +1,41 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html>
+
+<head>
+    <title>{{title}} - Narrowlink</title>
+    <link rel="shortcut icon" href="/favicon.ico" />
+    <style>
+        body {
+            color: #777;
+            background-color: #fff;
+            font-family: sans-serif;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            body {
+                color: #aaa;
+                background-color: #1f1f1f;
+            }
+        }
+
+        a {
+            text-decoration: none;
+            color: #35A7E4;
+        }
+
+        p#down {
+            position: fixed;
+            bottom: 5px;
+            left: 5px;
+            font-size: 12px
+        }
+    </style>
+</head>
+
+<body>
+    <h1>{{title}}</h1>
+    <p>{{body}}</p>
+    <p id='down'>Powered By <a href='https://narrowlink.com'>Narrowlink</a></p>
+</body>
+
+</html>
