@@ -270,9 +270,9 @@ checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "bytes"
-version = "1.5.0"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2bd12c1caf447e69cd4528f47f94d203fd2582878ecb9e9465484c4148a8223"
+checksum = "514de17de45fdb8dc022b1a7975556c53c86f9f0aa5f534b98977b171857c2c9"
 
 [[package]]
 name = "c2rust-bitfields"
@@ -349,6 +349,18 @@ dependencies = [
  "iana-time-zone",
  "num-traits",
  "windows-targets 0.52.4",
+]
+
+[[package]]
+name = "chunkio"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a62ddc75e134ebff27370a9a24d8c2824020a9c4ca81e22f2e0a1873458e3e6"
+dependencies = [
+ "futures",
+ "thiserror",
+ "tokio",
+ "tokio-util",
 ]
 
 [[package]]
@@ -854,7 +866,7 @@ dependencies = [
  "iana-time-zone-haiku",
  "js-sys",
  "wasm-bindgen",
- "windows-core 0.51.1",
+ "windows-core 0.52.0",
 ]
 
 [[package]]
@@ -950,9 +962,9 @@ dependencies = [
 
 [[package]]
 name = "ipstack"
-version = "0.0.6"
+version = "0.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ca0ca5a62a6497c045738a4bb238168c6a27b858898b89214c8b22556d86765"
+checksum = "baa88fc9ee4f1668c50d27e273f0b7f462b8ceea1a0dfc5ac4e1b991b4ba749e"
 dependencies = [
  "etherparse",
  "log",
@@ -1219,6 +1231,7 @@ dependencies = [
  "async-recursion",
  "bytes",
  "chacha20poly1305",
+ "chunkio",
  "futures-util",
  "hyper",
  "narrowlink-types",
@@ -1985,9 +1998,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.114"
+version = "1.0.115"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5f09b1bd632ef549eaa9f60a1f8de742bdbc698e6cee2095fc84dde5f549ae0"
+checksum = "12dc5c46daa8e9fdf4f5e71b6cf9a53f2487da0e86e55808e2d35539666497dd"
 dependencies = [
  "itoa",
  "ryu",
@@ -2227,9 +2240,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.36.0"
+version = "1.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61285f6515fa018fb2d1e46eb21223fff441ee8db5d0f1435e8ab4f5cdb80931"
+checksum = "1adbebffeca75fcfd058afa480fb6c0b81e165a0323f9c9d39c9697e37c46787"
 dependencies = [
  "backtrace",
  "bytes",
