@@ -3,7 +3,7 @@ use pem::Pem;
 use std::time::SystemTime;
 use tokio::{fs, io::AsyncWriteExt, sync::RwLock};
 
-use crate::{error::GatewayCertificateError, transport_services::certificate::CertificateStorage};
+use crate::{error::GatewayCertificateError, transport::certificate::CertificateStorage};
 pub struct CertificateFileStorage {
     path: String,
     default_account: RwLock<Option<String>>,

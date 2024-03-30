@@ -1,8 +1,8 @@
 use error::ClientError;
 
+mod control;
 mod error;
 mod gate;
-mod manage;
 mod transport;
 
 #[tokio::main]

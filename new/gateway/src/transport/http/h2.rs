@@ -6,7 +6,7 @@ use hyper_util::rt::TokioExecutor;
 
 use crate::{
     error::{GatewayError, GatewayNetworkError},
-    transport_services::{AsyncSocket, TransportStream},
+    transport::{AsyncSocket, TransportStream},
 };
 
 use super::Http;

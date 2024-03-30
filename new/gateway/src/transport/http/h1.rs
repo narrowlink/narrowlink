@@ -8,7 +8,7 @@ use tokio_tungstenite::WebSocketStream;
 
 use crate::{
     error::{GatewayError, GatewayNetworkError},
-    transport_services::{AsyncSocket, CertificateIssue, TransportStream},
+    transport::{AsyncSocket, CertificateIssue, TransportStream},
 };
 
 use super::{
@@ -93,6 +93,7 @@ impl Http {
                                     None,
                                 )
                                 .await;
+
                                 let (tx, rx) = ws_stream.split();
                                 rx.forward(tx).await.unwrap();
                             });

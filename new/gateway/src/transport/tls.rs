@@ -9,7 +9,7 @@ use tokio_rustls::{server::TlsStream, TlsAcceptor};
 
 use crate::{
     error::{GatewayError, GatewayNetworkError},
-    transport_services::certificate::CertificateResolver,
+    transport::certificate::CertificateResolver,
 };
 
 use super::{AsyncSocket, SocketInfo, SocketInfoImpl};

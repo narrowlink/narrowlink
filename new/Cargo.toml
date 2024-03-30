@@ -36,6 +36,7 @@ tower-service = { version = "0.3", default-features = false }
 tungstenite = { version = "0.21.0", default-features = false }
 uuid = { version = "1.8", default-features = false }
 x509-parser = { version = "0.16.0", default-features = false }
+chunkio = { version = "0.0.1", default-features = false }
 
 [profile.release]
 opt-level = "z"          # Optimize for size.

@@ -12,7 +12,7 @@ use tokio::time::sleep;
 
 use crate::{
     error::{GatewayCertificateError, GatewayError},
-    transport_services::certificate::{cache::DashMapCache, CertificateCache, CertificateStorage},
+    transport::certificate::{cache::DashMapCache, CertificateCache, CertificateStorage},
 };
 
 use super::CertificateIssue;

@@ -1,6 +1,6 @@
 use std::{fmt::Debug, sync::Arc};
 
-use crate::{error::GatewayError, transport_services::tls::alpn::ACME_TLS_ALPN_NAME};
+use crate::{error::GatewayError, transport::tls::alpn::ACME_TLS_ALPN_NAME};
 use core::fmt::{self, Display, Formatter};
 use rustls::{server::ResolvesServerCert, sign::CertifiedKey};
 pub mod cache;

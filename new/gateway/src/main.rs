@@ -6,13 +6,13 @@ use std::{
 
 use futures::{stream::select_all, Stream, StreamExt, TryStreamExt};
 
-use transport_services::{AcmeService, CertificateResolver};
+use transport::{AcmeService, CertificateResolver};
 
-use crate::transport_services::{CertificateFileStorage, DashMapCache, TransportStream};
+use crate::transport::{CertificateFileStorage, DashMapCache, TransportStream};
 mod config;
 mod error;
 mod state;
-mod transport_services;
+mod transport;
 
 #[tokio::main]
 async fn main() {
@@ -34,18 +34,18 @@ async fn main() {
         .unwrap();
 
     let resolver = Arc::new(resolver);
-    let tls = transport_services::Tls::new(resolver.clone());
+    let tls = transport::Tls::new(resolver.clone());
     let mut streams = Vec::<Pin<Box<dyn Stream<Item = TransportStream>>>>::new();
 
     streams.push(Box::pin(
-        transport_services::Tcp::new(SocketAddr::new(
+        transport::Tcp::new(SocketAddr::new(
             std::net::IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             80,
         ))
         .await
         .map_err(error::GatewayError::IOError)
         .flat_map_unordered(None, |s| {
-            match s.and_then(|s| transport_services::Http::new(s, acme.clone())) {
+            match s.and_then(|s| transport::Http::new(s, acme.clone())) {
                 Ok(s) => Box::pin(s) as Pin<Box<dyn Stream<Item = TransportStream>>>,
                 Err(e) => Box::pin(futures::stream::once(futures::future::ready(
                     TransportStream::Error(e),
@@ -56,7 +56,7 @@ async fn main() {
     dbg!("sss");
 
     streams.push(Box::pin(
-        transport_services::Tcp::new(SocketAddr::new(
+        transport::Tcp::new(SocketAddr::new(
             std::net::IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             443,
         ))
@@ -64,8 +64,7 @@ async fn main() {
         .map_err(error::GatewayError::IOError)
         .and_then(|s| tls.accept(s))
         .flat_map_unordered(None, |s| {
-            match s.and_then(|s| transport_services::Http::new(s.inner(), None::<Arc<AcmeService>>))
-            {
+            match s.and_then(|s| transport::Http::new(s.inner(), None::<Arc<AcmeService>>)) {
                 Ok(s) => Box::pin(s) as Pin<Box<dyn Stream<Item = TransportStream>>>,
                 Err(e) => Box::pin(futures::stream::once(futures::future::ready(
                     TransportStream::Error(e),

@@ -208,6 +208,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
+name = "chunkio"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a62ddc75e134ebff27370a9a24d8c2824020a9c4ca81e22f2e0a1873458e3e6"
+dependencies = [
+ "futures",
+ "thiserror",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
 name = "client"
 version = "0.1.0"
 
@@ -446,6 +458,7 @@ dependencies = [
  "askama",
  "async-trait",
  "base64 0.22.0",
+ "chunkio",
  "dashmap",
  "env_logger",
  "futures",
