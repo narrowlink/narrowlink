@@ -93,7 +93,6 @@ impl Http {
                                     None,
                                 )
                                 .await;
-
                                 let (tx, rx) = ws_stream.split();
                                 rx.forward(tx).await.unwrap();
                             });
@@ -105,7 +104,10 @@ impl Http {
                                 .header(header::UPGRADE, "websocket")
                                 .header(header::SEC_WEBSOCKET_ACCEPT, key)
                                 .body(Full::new(Bytes::new()))
-                                .unwrap())
+                                .unwrap_or(response_error(
+                                    ErrorFormat::Html,
+                                    HttpErrors::InternalServerError,
+                                )))
                         } else {
                             // HTTP - WebSocket Not Found
                             let socket_info = socket_info.clone();
