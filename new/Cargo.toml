@@ -7,7 +7,7 @@ unwrap_used = "warn"
 
 [workspace.dependencies]
 askama = { version = "0.12.1", default-features = false }
-async-trait = { version = "0.1.79", default-features = false }
+async-trait = { version = "0.1.80", default-features = false }
 base64 = { version = "0.22", default-features = false }
 dashmap = { version = "5.5.3", default-features = false }
 env_logger = { version = "0.11.3", default-features = false }
@@ -18,12 +18,12 @@ hyper-util = { version = "0.1", default-features = false }
 instant-acme = { version = "0.4.3", default-features = false }
 log = { version = "0.4", default-features = false }
 lru = { version = "0.12.3", default-features = false }
-pem = { version = "3.0.3", default-features = false }
+pem = { version = "3.0.4", default-features = false }
 prost = { version = "0.12", default-features = false }
 prost-build = { version = "0.12", default-features = false }
 prost-types = { version = "0.12", default-features = false }
 quinn = { version = "0.10.2", default-features = false }
-rcgen = { version = "0.12.1", default-features = false }
+rcgen = { version = "0.13.1", default-features = false }
 rustls = { version = "0.23", default-features = false }
 serde = { version = "1.0.197", default-features = false }
 serde_json = { version = "1.0.115", default-features = false }

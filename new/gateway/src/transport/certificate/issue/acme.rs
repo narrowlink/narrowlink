@@ -160,12 +160,14 @@ impl CertificateIssue for AcmeService {
                 storage.set_failed(&uid, &domain).await.unwrap();
                 return;
             }
-            let mut params = CertificateParams::new(vec![domain.clone()]);
-            params.key_pair = private_key.and_then(|k| rcgen::KeyPair::from_der(&k).ok());
+            let mut params = CertificateParams::new(vec![domain.clone()]).unwrap();
             params.distinguished_name = DistinguishedName::new();
-            let cert = Certificate::from_params(params).unwrap();
-            let csr = cert.serialize_request_der().unwrap();
-            order.finalize(&csr).await.unwrap();
+            let key_pair = private_key
+                .and_then(|k| rcgen::KeyPair::try_from(k).ok())
+                .unwrap_or(rcgen::KeyPair::generate().unwrap());
+            let csr = params.serialize_request(&key_pair).unwrap();
+            // let cert = params.self_signed(&key_pair).unwrap();
+            order.finalize(&csr.der()).await.unwrap();
             let cert_chain_pem = loop {
                 match order.certificate().await.unwrap() {
                     Some(cert_chain_pem) => break cert_chain_pem,
@@ -175,7 +177,7 @@ impl CertificateIssue for AcmeService {
 
             let pem = pem::parse_many(cert_chain_pem)
                 .and_then(|mut c| {
-                    pem::parse(cert.get_key_pair().serialize_pem()).map(|p| {
+                    pem::parse(key_pair.serialize_pem()).map(|p| {
                         c.push(p);
                         c
                     })
@@ -227,22 +229,24 @@ impl AcmeChallenges {
                 }
                 ChallengeType::TlsAlpn01 => {
                     let key_authorization = order.key_authorization(challenge);
-                    let mut params = rcgen::CertificateParams::new(vec![domain.to_owned()]);
+                    let mut params =
+                        rcgen::CertificateParams::new(vec![domain.to_owned()]).unwrap();
                     let mut dn = DistinguishedName::new();
                     dn.push(DnType::OrganizationName, "narrowlink");
                     params.distinguished_name = dn;
-                    params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
+                    // params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
                     params.custom_extensions = vec![rcgen::CustomExtension::new_acme_identifier(
                         key_authorization.digest().as_ref(),
                     )];
-                    let cert = rcgen::Certificate::from_params(params).unwrap_or_else(|e| {
-                        panic!("ACME TLS challenge certificate creation for {domain} failed - {e}")
-                    });
+                    let key_pair = rcgen::KeyPair::generate().unwrap();
+                    let cert = params.self_signed(&key_pair).unwrap();
+
+                    // let cert = rcgen::Certificate::from_params(params).unwrap_or_else(|e| {
+                    //     panic!("ACME TLS challenge certificate creation for {domain} failed - {e}")
+                    // });
                     let signer = crypto::ring::sign::any_supported_type(
                         &rustls::pki_types::PrivateKeyDer::from(
-                            rustls::pki_types::PrivatePkcs8KeyDer::from(
-                                cert.serialize_private_key_der(),
-                            ),
+                            rustls::pki_types::PrivatePkcs8KeyDer::from(key_pair.serialize_der()),
                         ),
                     )
                     .unwrap_or_else(|e| {
@@ -250,11 +254,7 @@ impl AcmeChallenges {
                     });
 
                     let certified_key = CertifiedKey::new(
-                        vec![rustls::pki_types::CertificateDer::from(
-                            cert.serialize_der().unwrap_or_else(|e| {
-                                panic!("ACME TLS challenge certificate serialization failed - {e}")
-                            }),
-                        )],
+                        vec![rustls::pki_types::CertificateDer::from(cert.der().to_vec())],
                         signer,
                     );
                     ret.tls_challenge = Some(certified_key);
