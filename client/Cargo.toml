@@ -70,7 +70,7 @@ narrowlink-types = { version = "0.2.5", default-features = false }
 narrowlink-network = { version = "0.2.5", default-features = false }
 
 [target.'cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))'.dependencies]
-ipstack = { version = "0.0.7", default-features = false }
+ipstack = { version = "0.0.9", default-features = false }
 net-route = { version = "0.4.2", default-features = false }
 
 
