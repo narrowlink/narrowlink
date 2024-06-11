@@ -164,7 +164,7 @@ impl TunnelFactory {
                 };
                 let mut addr: (String, u16) = interrupted_stream.addr().into();
                 let protocol = generic::Protocol::TCP;
-                if matches!(interrupted_stream.proto(),proxy_stream::Protocol::Udp) {
+                if matches!(interrupted_stream.proto(), proxy_stream::Protocol::Udp) {
                     generic::Protocol::UDP
                 } else {
                     generic::Protocol::TCP

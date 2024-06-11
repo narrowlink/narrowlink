@@ -1763,6 +1763,7 @@ dependencies = [
 [[package]]
 name = "proxy-stream"
 version = "0.0.2"
+source = "git+https://github.com/narrowlink/proxy-stream/#b02ec24402c4f4105f63c49f34188f05430af62f"
 dependencies = [
  "futures",
  "http-body-util",
