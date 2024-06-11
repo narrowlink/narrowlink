@@ -11,7 +11,7 @@ use futures_util::{
 use ipstack::stream::IpStackStream;
 use narrowlink_network::AsyncSocket;
 use narrowlink_types::generic::{self};
-use proxy_stream::ProxyStream;
+// use proxy_stream::ProxyStream;
 
 use tracing::info;
 use udp_stream::UdpListener;
@@ -152,20 +152,23 @@ impl TunnelFactory {
                 ))
             }
             Some(TunnelListener::Proxy(l, map)) => {
-                let interrupted_stream = match ProxyStream::new(proxy_stream::ProxyType::SOCKS5)
-                    .accept(l.accept().await?.0)
-                    .await
+                let interrupted_stream = match proxy_stream::Socks5::new_server(
+                    proxy_stream::SocksConfig::default(),
+                    l.accept().await?.0,
+                )
+                .accept()
+                .await
                 {
                     Ok(s) => s,
                     Err(_e) => return Err(ClientError::InvalidSocksRequest),
                 };
                 let mut addr: (String, u16) = interrupted_stream.addr().into();
-                let protocol =
-                    if interrupted_stream.command() == proxy_stream::Command::UdpAssociate {
-                        generic::Protocol::UDP
-                    } else {
-                        generic::Protocol::TCP
-                    };
+                let protocol = generic::Protocol::TCP;
+                if matches!(interrupted_stream.proto(),proxy_stream::Protocol::Udp) {
+                    generic::Protocol::UDP
+                } else {
+                    generic::Protocol::TCP
+                };
                 if let Some(m) = map {
                     if addr.0 == m.0 {
                         addr.0 = m.1.to_string();
@@ -174,7 +177,7 @@ impl TunnelFactory {
                 Ok((
                     Box::new(
                         interrupted_stream
-                            .connect()
+                            .proxied_stream()
                             .await
                             .map_err(|_| ClientError::InvalidSocksRequest)?,
                     ),
