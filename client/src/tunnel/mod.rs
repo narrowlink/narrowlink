@@ -163,8 +163,8 @@ impl TunnelFactory {
                     Err(_e) => return Err(ClientError::InvalidSocksRequest),
                 };
                 let mut addr: (String, u16) = interrupted_stream.addr().into();
-                let protocol = generic::Protocol::TCP;
-                if matches!(interrupted_stream.proto(), proxy_stream::Protocol::Udp) {
+                // let protocol = generic::Protocol::TCP;
+                let protocol = if matches!(interrupted_stream.proto(), proxy_stream::Protocol::Udp) {
                     generic::Protocol::UDP
                 } else {
                     generic::Protocol::TCP
