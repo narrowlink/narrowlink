@@ -27,7 +27,7 @@ pub struct AcmeService {
 
 impl AcmeService {
     pub async fn new(
-        storage: Arc<impl CertificateStorage + 'static + Send + Sync>,
+        storage: Arc<impl CertificateStorage + 'static>,
         email: &str,
         server_url: Option<&str>,
     ) -> Result<Self, GatewayError> {
@@ -167,7 +167,7 @@ impl CertificateIssue for AcmeService {
                 .unwrap_or(rcgen::KeyPair::generate().unwrap());
             let csr = params.serialize_request(&key_pair).unwrap();
             // let cert = params.self_signed(&key_pair).unwrap();
-            order.finalize(&csr.der()).await.unwrap();
+            order.finalize(csr.der()).await.unwrap();
             let cert_chain_pem = loop {
                 match order.certificate().await.unwrap() {
                     Some(cert_chain_pem) => break cert_chain_pem,

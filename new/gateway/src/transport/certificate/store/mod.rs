@@ -73,10 +73,10 @@ pub trait CertificateStorage: Send + Sync {
         pem: &Vec<Pem>,
     ) -> Result<CertifiedKey, GatewayCertificateError> {
         let key = self
-            .get_private_key(&pem)
+            .get_private_key(pem)
             .ok_or(GatewayCertificateError::PrivateKeyNotFound)?;
         let cert = self
-            .get_certificate_chain(&pem)
+            .get_certificate_chain(pem)
             .ok_or(GatewayCertificateError::CertificateNotFound)?;
         let signer = crypto::ring::sign::any_supported_type(&key).unwrap();
 

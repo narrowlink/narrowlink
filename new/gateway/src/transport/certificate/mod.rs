@@ -25,7 +25,7 @@ pub struct CertificateResolver {
 
 impl CertificateResolver {
     pub fn new(
-        storage: Arc<impl CertificateStorage + 'static + Send + Sync>,
+        storage: Arc<impl CertificateStorage + 'static >,
         cache: impl CertificateCache + 'static + Send + Sync,
     ) -> Self {
         Self {
