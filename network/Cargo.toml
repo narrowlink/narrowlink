@@ -1,6 +1,6 @@
 [package]
 name = "narrowlink-network"
-version = "0.2.5"
+version = "0.2.6"
 edition = "2021"
 description = "Narrowlink Network Library"
 homepage = "https://narrowlink.com"
@@ -52,7 +52,7 @@ tracing = { version = "0.1.40", default-features = false }
 thiserror = { version = "1.0.61", default-features = false }
 chunkio = { version = "0.0.1", default-features = false }
 
-narrowlink-types = { version = "0.2.5", default-features = false }
+narrowlink-types = { version = "0.2.6", default-features = false }
 
 
 [target.'cfg(unix)'.dependencies]
