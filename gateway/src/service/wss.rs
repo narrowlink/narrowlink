@@ -135,7 +135,7 @@ impl Service for Wss {
             let wss = wss.clone();
             let tls_engine = tls_engine.clone();
             tokio::spawn(async move {
-                let mut buf = vec![0; 1024];
+                let mut buf = vec![0; 2048];
                 tcp_stream
                     .peek(&mut buf)
                     .instrument(span_connection.clone())
