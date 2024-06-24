@@ -1,7 +1,6 @@
-name: Audit
+name: Deny
 
 on:
-  workflow_dispatch: null
   pull_request:
     paths:
       - '**/Cargo.toml'
@@ -17,6 +16,3 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: EmbarkStudios/cargo-deny-action@v1
-      # with:
-      #  arguments: -c Deny.toml
-#        arguments: --manifest-path=${{ matrix.package }}/Cargo.toml
