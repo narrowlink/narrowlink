@@ -30,7 +30,7 @@ tokio = { version = "1.38.0", features = [
 tokio-util = { version = "0.7", features = ["codec"], default-features = false }
 tokio-rustls = { version = "0.24.1", default-features = false }
 rustls = { version = "0.21.12", default-features = false }
-webpki-roots = { version = "0.25.4", default-features = false }
+rustls-platform-verifier = { version = "0.1", default-features = false }
 hyper = { version = "0.14.29", features = [
     "client",
     "http1",
