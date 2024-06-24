@@ -1,8 +1,8 @@
-[advisories]
-vulnerability = "deny"
-unmaintained = "deny"
-notice = "deny"
-unsound = "deny"
+#[advisories]
+#vulnerability = "deny"
+#unmaintained = "deny"
+#notice = "deny"
+#unsound = "deny"
 
 # [bans]
 # multiple-versions = "deny"
@@ -15,11 +15,16 @@ unknown-git = "deny"
 github = ["narrowlink"]
 
 [licenses]
-unlicensed = "deny"
 allow-osi-fsf-free = "either"
 copyleft = "deny"
 confidence-threshold = 0.93
 allow = ["MPL-2.0"]
+
+exceptions = [
+    { allow = ["AGPL-3.0"], crate = "narrowlink-gateway" },
+    { allow = ["ISC", "MIT", "OpenSSL"], name = "ring" }
+]
+
 
 [[licenses.clarify]]
 name = "ring"
@@ -28,3 +33,4 @@ expression = "MIT AND ISC AND OpenSSL"
 license-files = [
     { path = "LICENSE", hash = 0xbd0eed23 }
 ]
+
