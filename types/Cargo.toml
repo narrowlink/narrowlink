@@ -15,7 +15,7 @@ include = ["Cargo.toml", "LICENSE", "src/**/*"]
 workspace = true
 
 [dependencies]
-uuid = { version = "1.8.0", default-features = false, features = ["serde"] }
+uuid = { version = "1.9.0", default-features = false, features = ["serde"] }
 serde = { version = "1.0.203", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0.117", default-features = false }
 jsonwebtoken = { version = "9.3.0", default-features = false }

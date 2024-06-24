@@ -33,7 +33,7 @@ tokio-util = { version = "0.7.11", default-features = false }
 serde = { version = "1.0.203", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0.117", default-features = false }
 serde_yaml = { version = "0.9.34", default-features = false }
-uuid = { version = "1.8.0", default-features = false }
+uuid = { version = "1.9.0", default-features = false }
 sysinfo = { version = "0.30", default-features = false }
 futures-channel = { version = "0.3.30", features = [
   "sink",
