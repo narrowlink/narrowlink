@@ -90,11 +90,10 @@ impl PolicyItem {
                 protocol,
             ),
             Self::Ip(_, ip, port, protocol) => (
-                if let Ok(state) = con.host.parse::<IpAddr>().map(|addr| ip.contains(&addr)) {
-                    state
-                } else {
-                    false
-                },
+                con.host
+                    .parse::<IpAddr>()
+                    .map(|addr| ip.contains(&addr))
+                    .unwrap_or(false),
                 port,
                 protocol,
             ),

@@ -223,10 +223,7 @@ impl TunListener {
 
         let route = route
             .await
-            .map_err(|e| {
-                warn!("Unable to manage routes");
-                e
-            })
+            .inspect_err(|_e| warn!("Unable to manage routes"))
             .ok();
 
         let mut ipstack_config = ipstack::IpStackConfig::default();
