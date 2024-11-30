@@ -15,8 +15,8 @@ unknown-git = "deny"
 github = ["narrowlink"]
 
 [licenses]
-allow-osi-fsf-free = "either"
-copyleft = "deny"
+# allow-osi-fsf-free = "either"
+# copyleft = "deny"
 confidence-threshold = 0.93
 allow = ["MPL-2.0"]
 
