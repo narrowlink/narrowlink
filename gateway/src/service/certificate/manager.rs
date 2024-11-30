@@ -15,6 +15,7 @@ use tokio::{
     },
     time,
 };
+use validator::ValidateEmail;
 
 use super::{
     acme::{ACMEChallenge, Acme},
@@ -142,7 +143,7 @@ impl CertificateManager {
         let (sender, mut receiver) = mpsc::unbounded_channel::<CertificateServiceMessage>();
 
         let mut res = if let Some(acme_info) = acme_info {
-            if !validator::validate_email(&acme_info.0) {
+            if !acme_info.0.validate_email() {
                 trace!("invalid email");
                 return Err(GatewayError::Invalid("email"));
             }
