@@ -15,10 +15,17 @@ unknown-git = "deny"
 github = ["narrowlink"]
 
 [licenses]
-allow-osi-fsf-free = "both"
+# allow-osi-fsf-free = "both"
 # copyleft = "deny"
 confidence-threshold = 0.93
-allow = ["MPL-2.0"]
+allow = [
+    "MPL-2.0",
+    "MIT",
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "BSD-2-Clause",
+    "ISC",
+]
 
 exceptions = [
     { allow = ["AGPL-3.0"], crate = "narrowlink-gateway" },
