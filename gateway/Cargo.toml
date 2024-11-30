@@ -23,30 +23,30 @@ include = [
 workspace = true
 
 [dependencies]
-tokio = { version = "1.38.0", features = ["full"] }
-hyper = { version = "0.14.29", features = ["full"] }
-tracing = { version = "0.1.40", default-features = false, features = [
+tokio = { version = "1.41.1", features = ["full"] }
+hyper = { version = "0.14.31", features = ["full"] }
+tracing = { version = "0.1.41", default-features = false, features = [
     "attributes",
 ] }
-tracing-subscriber = { version = "0.3.18", default-features = false, features = [
+tracing-subscriber = { version = "0.3.19", default-features = false, features = [
     "fmt",
     "ansi",
     "json",
 ] }
 tracing-appender = { version = "0.2.3", default-features = false }
 dirs = { version = "5.0.1", default-features = false }
-serde_json = { version = "1.0.117", default-features = false }
+serde_json = { version = "1.0.133", default-features = false }
 serde_yaml = { version = "0.9.34", default-features = false }
-serde = { version = "1.0.203", features = ["derive"], default-features = false }
-async-trait = { version = "0.1.80", default-features = false }
-futures-util = { version = "0.3.30", default-features = false }
+serde = { version = "1.0.215", features = ["derive"], default-features = false }
+async-trait = { version = "0.1.83", default-features = false }
+futures-util = { version = "0.3.31", default-features = false }
 askama = { version = "0.12.1", default-features = false }
 pem = { version = "3.0.4", default-features = false, features = ["std"] }
-uuid = { version = "1.9.0", default-features = false, features = [
+uuid = { version = "1.11.0", default-features = false, features = [
     "v4",
     "serde",
 ] }
-either = { version = "1.12.0", default-features = false }
+either = { version = "1.13.0", default-features = false }
 instant-acme = { version = "0.4.3", default-features = false, features = [
     "hyper-rustls",
 ] }
@@ -61,9 +61,9 @@ rcgen = { version = "0.11.3", default-features = false, features = [
     "x509-parser",
 ] }
 x509-parser = { version = "0.15.1", default-features = false }
-clap_lex = { version = "0.7.1", default-features = false }
+clap_lex = { version = "0.7.3", default-features = false }
 sha3 = { version = "0.10.8", default-features = false }
-thiserror = { version = "1.0.61", default-features = false }
+thiserror = { version = "1.0.69", default-features = false }
 
 narrowlink-types = { version = "0.2.6" }
 narrowlink-network = { version = "0.2.6" }

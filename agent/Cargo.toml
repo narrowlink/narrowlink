@@ -22,37 +22,37 @@ include = [
 workspace = true
 
 [dependencies]
-tokio = { version = "1.38.0", default-features = false, features = [
+tokio = { version = "1.41.1", default-features = false, features = [
   "macros",
   "rt",
   "time",
   "rt-multi-thread",
 ] }
-futures-util = { version = "0.3.30", default-features = false }
-tokio-util = { version = "0.7.11", default-features = false }
-serde = { version = "1.0.203", default-features = false, features = ["derive"] }
-serde_json = { version = "1.0.117", default-features = false }
+futures-util = { version = "0.3.31", default-features = false }
+tokio-util = { version = "0.7.12", default-features = false }
+serde = { version = "1.0.215", default-features = false, features = ["derive"] }
+serde_json = { version = "1.0.133", default-features = false }
 serde_yaml = { version = "0.9.34", default-features = false }
-uuid = { version = "1.9.0", default-features = false }
+uuid = { version = "1.11.0", default-features = false }
 sysinfo = { version = "0.30", default-features = false }
-futures-channel = { version = "0.3.30", features = [
+futures-channel = { version = "0.3.31", features = [
   "sink",
 ], default-features = false }
 udp-stream = { version = "0.0.11", default-features = false }
 sha3 = { version = "0.10.8", default-features = false }
 hmac = { version = "0.12.1", default-features = false }
 dirs = { version = "5.0.1", default-features = false }
-tracing = { version = "0.1.40", default-features = false, features = [
+tracing = { version = "0.1.41", default-features = false, features = [
   "attributes",
 ] }
-tracing-subscriber = { version = "0.3.18", default-features = false, features = [
+tracing-subscriber = { version = "0.3.19", default-features = false, features = [
   "fmt",
   "ansi",
   "json",
 ] }
 tracing-appender = { version = "0.2.3", default-features = false }
-clap_lex = { version = "0.7.1", default-features = false }
-thiserror = { version = "1.0.61", default-features = false }
+clap_lex = { version = "0.7.3", default-features = false }
+thiserror = { version = "1.0.69", default-features = false }
 # base64 = { version = "0.21.0", default-features = false }
 
 narrowlink-types = { version = "0.2.6", default-features = false }
