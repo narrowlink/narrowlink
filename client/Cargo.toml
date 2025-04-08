@@ -28,7 +28,7 @@ workspace = true
 [dependencies]
 clap_lex = { version = "0.7.3", default-features = false }
 thiserror = { version = "1.0.69", default-features = false }
-tokio = { version = "1.41.1", features = [
+tokio = { version = "1.43.1", features = [
     "macros",
     "rt",
     "io-std",

@@ -21,7 +21,7 @@ serde_json = { version = "1.0.133", default-features = false, features = [
     "alloc",
 ] }
 futures-util = { version = "0.3.31", default-features = false }
-tokio = { version = "1.41.1", features = [
+tokio = { version = "1.43.1", features = [
     "macros",
     "rt",
     "net",
