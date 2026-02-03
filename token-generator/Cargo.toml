@@ -26,7 +26,7 @@ path = "src/main.rs"
 workspace = true
 
 [dependencies]
-jsonwebtoken = { version = "9.3.0", default-features = false }
+jsonwebtoken = { version = "10.3.0", default-features = false }
 serde = { version = "1.0.215", features = ["derive"], default-features = false }
 serde_yaml = { version = "0.9.34", default-features = false }
 dirs = { version = "5.0.1", default-features = false }

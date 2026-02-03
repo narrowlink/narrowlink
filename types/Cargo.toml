@@ -18,7 +18,7 @@ workspace = true
 uuid = { version = "1.11.0", default-features = false, features = ["serde"] }
 serde = { version = "1.0.215", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0.133", default-features = false }
-jsonwebtoken = { version = "9.3.0", default-features = false }
+jsonwebtoken = { version = "10.3.0", default-features = false }
 ipnet = { version = "2.10.1", default-features = false, features = [
   "std",
   "serde",
