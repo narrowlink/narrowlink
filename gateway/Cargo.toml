@@ -23,7 +23,7 @@ include = [
 workspace = true
 
 [dependencies]
-tokio = { version = "1.41.1", features = ["full"] }
+tokio = { version = "1.43.1", features = ["full"] }
 hyper = { version = "0.14.31", features = ["full"] }
 tracing = { version = "0.1.41", default-features = false, features = [
     "attributes",
