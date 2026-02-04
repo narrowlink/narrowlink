@@ -15,7 +15,7 @@ include = ["Cargo.toml", "LICENSE", "src/**/*"]
 workspace = true
 
 [dependencies]
-bytes = { version = "1.9.0", default-features = false }
+bytes = { version = "1.11.1", default-features = false }
 serde = { version = "1.0.215", features = ["derive"], default-features = false }
 serde_json = { version = "1.0.133", default-features = false, features = [
     "alloc",
