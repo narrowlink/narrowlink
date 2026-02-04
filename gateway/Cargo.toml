@@ -28,7 +28,7 @@ hyper = { version = "0.14.31", features = ["full"] }
 tracing = { version = "0.1.41", default-features = false, features = [
     "attributes",
 ] }
-tracing-subscriber = { version = "0.3.19", default-features = false, features = [
+tracing-subscriber = { version = "0.3.20", default-features = false, features = [
     "fmt",
     "ansi",
     "json",
