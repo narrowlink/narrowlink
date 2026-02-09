@@ -1,6 +1,7 @@
 [workspace]
 members = ["gateway", "network", "client", "agent", "types","token-generator"]
 resolver = "2"
+exclude = ["new"]
 
 [workspace.lints.clippy]
 unwrap_used = "warn"

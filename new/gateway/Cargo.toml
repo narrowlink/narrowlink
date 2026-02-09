@@ -1,0 +1,47 @@
+[package]
+name = "gateway"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { workspace = true, features = [
+    "rt",
+    "macros",
+    "rt-multi-thread",
+    "net",
+    "fs",
+] }
+hyper = { workspace = true, features = ["server", "http1", "http2"] }
+hyper-util = { workspace = true, features = ["tokio"] }
+http-body-util = { workspace = true }
+tower-service = { workspace = true }
+tokio-rustls = { workspace = true }
+rustls = { workspace = true, features = ["ring", "std"] }
+rcgen = { workspace = true, features = ["ring", "pem"] }
+serde_json = { workspace = true, features = ["std"] }
+log = { workspace = true }
+env_logger = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+futures = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
+# prost = "0.12"
+# prost-types = "0.12"
+base64 = { workspace = true }
+tokio-tungstenite = { workspace = true }
+tungstenite = { workspace = true, features = ["handshake"] }
+instant-acme = { workspace = true, features = ["hyper-rustls"] }
+thiserror = { workspace = true }
+pem = { workspace = true, features = ["std"] }
+x509-parser = { workspace = true }
+lru = { workspace = true }
+dashmap = { workspace = true }
+async-trait = { workspace = true }
+sha3 = { workspace = true }
+quinn = { workspace = true }
+askama = { workspace = true }
+chunkio = { workspace = true }
+narrowlink-messages = { path = "../messages" }
+# [build-dependencies]
+# prost-build = "0.12"

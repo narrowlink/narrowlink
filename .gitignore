@@ -1,7 +1,9 @@
 /target
+/new/target
 .DS_Store 
 .vscode
 .db
 *.yaml
 !sample_*.yaml
 /certificates
+/new/certificates
