@@ -5,6 +5,8 @@ use validator::{Validate, ValidationError};
 
 use crate::{error::GatewayError, service::certificate::ACMEChallengeType};
 
+const CONFIG_PATH_ENV: &str = "NARROWLINK_GATEWAY_CONFIG";
+
 #[derive(Deserialize, Validate)]
 #[validate(schema(function = "Self::verify"))]
 pub struct Config {
@@ -70,7 +72,11 @@ impl Config {
     #[instrument(name = "config::load", skip(path))]
     pub fn load(path: Option<String>) -> Result<Self, GatewayError> {
         trace!("loading config");
-        let custom_path = if let Some(path) = path {
+        let custom_path = if let Some(path) = path.or_else(|| {
+            env::var(CONFIG_PATH_ENV)
+                .ok()
+                .filter(|path| !path.is_empty())
+        }) {
             debug!("loading config from custom path: {:?}", path);
             let path = PathBuf::from(path);
             Some(
@@ -219,4 +225,117 @@ pub struct File {
 
 pub fn _default_acme_directory_url() -> String {
     "https://acme-v02.api.letsencrypt.org/directory".to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{
+        fs,
+        path::Path,
+        sync::{
+            atomic::{AtomicU64, Ordering},
+            Mutex,
+        },
+    };
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+    static NEXT_PATH_ID: AtomicU64 = AtomicU64::new(0);
+
+    #[test]
+    fn load_uses_environment_config_path_when_cli_path_is_missing(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let _guard = ENV_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let path = TestConfigFile::write(
+            r#"name: env-gateway
+secret: [1, 2, 3, 4, 5, 6, 7, 8]
+services:
+  - !Ws
+    domains: ["example.com"]
+    listen_addr: "127.0.0.1:8080"
+"#,
+        )?;
+
+        let _env = EnvVarGuard::set(&path.path);
+        let config = Config::load(None)?;
+
+        assert_eq!(config.name, "env-gateway");
+        Ok(())
+    }
+
+    #[test]
+    fn cli_config_path_takes_precedence_over_environment() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let _guard = ENV_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let env_path = TestConfigFile::write(
+            r#"name: env-gateway
+secret: [1, 2, 3, 4, 5, 6, 7, 8]
+services: []
+"#,
+        )?;
+        let cli_path = TestConfigFile::write(
+            r#"name: cli-gateway
+secret: [1, 2, 3, 4, 5, 6, 7, 8]
+services: []
+"#,
+        )?;
+
+        let _env = EnvVarGuard::set(&env_path.path);
+        let config = Config::load(Some(cli_path.path.to_string_lossy().into_owned()))?;
+
+        assert_eq!(config.name, "cli-gateway");
+        Ok(())
+    }
+
+    fn temp_config_path() -> PathBuf {
+        env::temp_dir().join(format!(
+            "narrowlink-gateway-{}-{}.yaml",
+            std::process::id(),
+            NEXT_PATH_ID.fetch_add(1, Ordering::Relaxed)
+        ))
+    }
+
+    struct TestConfigFile {
+        path: PathBuf,
+    }
+
+    impl TestConfigFile {
+        fn write(contents: &str) -> Result<Self, std::io::Error> {
+            let path = temp_config_path();
+            fs::write(&path, contents)?;
+            Ok(Self { path })
+        }
+    }
+
+    impl Drop for TestConfigFile {
+        fn drop(&mut self) {
+            let _ = fs::remove_file(&self.path);
+        }
+    }
+
+    struct EnvVarGuard {
+        previous: Option<std::ffi::OsString>,
+    }
+
+    impl EnvVarGuard {
+        fn set(path: &Path) -> Self {
+            let previous = env::var_os(CONFIG_PATH_ENV);
+            env::set_var(CONFIG_PATH_ENV, path);
+            Self { previous }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            if let Some(previous) = &self.previous {
+                env::set_var(CONFIG_PATH_ENV, previous);
+            } else {
+                env::remove_var(CONFIG_PATH_ENV);
+            }
+        }
+    }
 }

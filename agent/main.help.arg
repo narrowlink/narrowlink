@@ -9,3 +9,5 @@ Options:
   -d, --daemon     Run as a daemon (Unix/Linux only)
       --version    Print version information
 
+Environment:
+  NARROWLINK_AGENT_CONFIG    Specify a config file when --config is not set
