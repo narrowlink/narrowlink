@@ -11,7 +11,7 @@ use std::{
     env,
     io::{self, IsTerminal},
 };
-use tracing::{debug, error, warn, Level};
+use tracing::{debug, warn, Level};
 use transport::TransportFactory;
 use tunnel::TunnelFactory;
 

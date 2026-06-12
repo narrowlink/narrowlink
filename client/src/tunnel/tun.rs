@@ -203,10 +203,7 @@ impl TunListener {
             .netmask((255, 255, 255, 255))
             .mtu(MTU as u16)
             .up();
-        #[cfg(target_os = "linux")]
-        config.platform_config(|config| {
-            config.packet_information(true);
-        });
+
         #[cfg(not(target_family = "windows"))]
         let device = tun::create_as_async(&config).map_err(ClientError::UnableToCreateTun)?;
         #[cfg(target_family = "windows")]
