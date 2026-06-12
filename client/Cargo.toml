@@ -46,7 +46,7 @@ tungstenite = { version = "0.20.1", default-features = false }
 serde = { version = "1.0.228", features = ["derive"], default-features = false }
 serde_json = { version = "1.0.150", default-features = false }
 serde_yaml = { version = "0.9.34", default-features = false }
-udp-stream = { version = "0.0.11", default-features = false }
+udp-stream = { version = "0.0.12", default-features = false }
 regex = { version = "1.12.4", features = ["std"], default-features = false }
 either = { version = "1.16.0", default-features = false }
 tracing = { version = "0.1.44", default-features = false, features = [
