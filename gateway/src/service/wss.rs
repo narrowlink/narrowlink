@@ -129,13 +129,12 @@ impl Wss {
                         let name_type = buf[p];
                         let name_len = ((buf[p+1] as usize) << 8) | (buf[p+2] as usize);
                         p += 3;
-                        if p + name_len <= pos + e_len {
-                            if name_type == 0 { // host_name
+                        if p + name_len <= pos + e_len
+                            && name_type == 0 { // host_name
                                 if let Ok(s) = std::str::from_utf8(&buf[p..p+name_len]) {
                                     sni = Some(s.to_string());
                                 }
                             }
-                        }
                         p += name_len;
                     }
                 }
@@ -144,7 +143,7 @@ impl Wss {
                 if p + 2 <= pos + e_len {
                     let _alpn_list_len = ((buf[p] as usize) << 8) | (buf[p+1] as usize);
                     p += 2;
-                    while p + 1 <= pos + e_len {
+                    while p < pos + e_len {
                         let name_len = buf[p] as usize;
                         p += 1;
                         if p + name_len <= pos + e_len {

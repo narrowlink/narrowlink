@@ -233,15 +233,21 @@ impl ConnectionData {
                             .insert(hyper::http::header::HOST, host);
                     }
                 }
-                request_sender
-                    .send_request(*request)
-                    .await
-                    .map_err(|_| ())
-                    .and_then(|mut response| {
-                        *response.version_mut() = original_version;
-                        replay.send(Ok(response.map(|_b| http_body_util::Full::new(bytes::Bytes::new())))).map_err(|_| ())
-                    })
-                    .map_err(|_| GatewayError::Other("Connection gone"))
+                match request_sender.send_request(*request).await {
+                    Ok(response) => {
+                        let (mut parts, body) = response.into_parts();
+                        parts.version = original_version;
+                        // Collect the full response body from the agent before forwarding
+                        use http_body_util::BodyExt;
+                        let collected = body.collect().await
+                            .map(|c| c.to_bytes())
+                            .unwrap_or_default();
+                        let full_response = hyper::Response::from_parts(parts, http_body_util::Full::new(collected));
+                        replay.send(Ok(full_response))
+                            .map_err(|_| GatewayError::Other("Connection gone"))
+                    }
+                    Err(_) => Err(GatewayError::Other("Connection gone")),
+                }
             }
         }
     }

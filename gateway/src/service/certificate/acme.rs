@@ -123,7 +123,7 @@ impl Acme {
                     let has_http = auth.challenges.iter().any(|c| c.r#type == instant_acme::ChallengeType::Http01);
 
                     if has_tls {
-                        let challenge = auth.challenge(instant_acme::ChallengeType::TlsAlpn01).unwrap();
+                        let challenge = auth.challenge(instant_acme::ChallengeType::TlsAlpn01).ok_or(GatewayError::ACMEFailed)?;
                         let key_auth_str = challenge.key_authorization().as_str().to_string();
                         let url = challenge.url.clone();
                         let digest = ring::digest::digest(
@@ -158,11 +158,11 @@ impl Acme {
                             challenge: ACMEChallenge::TlsAlpn01(Arc::new(server_config)),
                         });
                     } else if has_http {
-                        let challenge = auth.challenge(instant_acme::ChallengeType::Http01).unwrap();
+                        let challenge = auth.challenge(instant_acme::ChallengeType::Http01).ok_or(GatewayError::ACMEFailed)?;
                         let key_auth_str = challenge.key_authorization().as_str().to_string();
                         let url = challenge.url.clone();
                         let digest = key_auth_str;
-                        let token = digest.split('.').next().unwrap().to_string();
+                        let token = digest.split('.').next().unwrap_or_default().to_string();
                         challenges.push(ChallengeInfo {
                             verification_url: url,
                             domain: identifier.to_owned(),
@@ -212,7 +212,7 @@ impl Acme {
         Ok(None)
     }
 
-        pub fn get_tls_alpn_01_certificate_challenges(
+    pub fn get_tls_alpn_01_certificate_challenges(
         &self,
     ) -> Result<Vec<ChallengeInfo>, GatewayError> {
         Ok(self.challenges.iter().filter(|c| matches!(c.challenge, ACMEChallenge::TlsAlpn01(_))).cloned().collect())
@@ -234,17 +234,38 @@ impl Acme {
             .as_mut()
             .ok_or(GatewayError::ACMEOrderNotAvailable)?;
         let mut domain = Vec::new();
-                {
+        // Collect the verification URLs from the passed-in challenges so we only
+        // mark those specific challenges as ready (matching old set_challenge_ready behavior)
+        let challenge_urls: std::collections::HashSet<String> = challenges
+            .iter()
+            .map(|c| c.verification_url.clone())
+            .collect();
+        {
             let mut auths_stream = order.authorizations();
             while let Some(auth) = auths_stream.next().await {
                 let mut auth = auth.map_err(|_| GatewayError::ACMEFailed)?;
-                let has_tls = auth.challenges.iter().any(|c| c.r#type == instant_acme::ChallengeType::TlsAlpn01);
-                let has_http = auth.challenges.iter().any(|c| c.r#type == instant_acme::ChallengeType::Http01);
-                
-                if has_tls {
-                    auth.challenge(instant_acme::ChallengeType::TlsAlpn01).expect("TLS ALPN 01 challenge not found").set_ready().await.map_err(|_| GatewayError::ACMEFailed)?;
-                } else if has_http {
-                    auth.challenge(instant_acme::ChallengeType::Http01).expect("HTTP 01 challenge not found").set_ready().await.map_err(|_| GatewayError::ACMEFailed)?;
+                // Only set_ready for challenge types whose URL matches one we were given
+                let has_matching_tls = auth.challenges.iter().any(|c| {
+                    c.r#type == instant_acme::ChallengeType::TlsAlpn01
+                        && challenge_urls.contains(&c.url)
+                });
+                let has_matching_http = auth.challenges.iter().any(|c| {
+                    c.r#type == instant_acme::ChallengeType::Http01
+                        && challenge_urls.contains(&c.url)
+                });
+
+                if has_matching_tls {
+                    auth.challenge(instant_acme::ChallengeType::TlsAlpn01)
+                        .ok_or(GatewayError::ACMEFailed)?
+                        .set_ready()
+                        .await
+                        .map_err(|_| GatewayError::ACMEFailed)?;
+                } else if has_matching_http {
+                    auth.challenge(instant_acme::ChallengeType::Http01)
+                        .ok_or(GatewayError::ACMEFailed)?
+                        .set_ready()
+                        .await
+                        .map_err(|_| GatewayError::ACMEFailed)?;
                 }
             }
         }
@@ -285,7 +306,7 @@ impl Acme {
         order.finalize_csr(&csr).await.map_err(|_| GatewayError::ACMEFailed)?;
         trace!("acme certificate finalized");
         let cert_chain_pem = loop {
-            match order.certificate().await? {
+            match order.certificate().await.map_err(|_| GatewayError::ACMEFailed)? {
                 Some(cert_chain_pem) => break cert_chain_pem,
                 None => tokio::time::sleep(tokio::time::Duration::from_secs(1)).await,
             }
