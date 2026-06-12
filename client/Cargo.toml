@@ -62,7 +62,7 @@ proxy-stream = { version = "0.0.2", default-features = false }
 sha3 = { version = "0.10.9", default-features = false }
 hmac = { version = "0.12.1", default-features = false }
 rand = { version = "0.8.6", default-features = false }
-dirs = { version = "5.0.1", default-features = false }
+dirs = { version = "6.0.0", default-features = false }
 uuid = { version = "1.23.3", features = ["v4"], default-features = false }
 chrono = { version = "0.4.45", default-features = false }
 

@@ -56,7 +56,7 @@ narrowlink-types = { version = "0.2.6", default-features = false }
 
 
 [target.'cfg(unix)'.dependencies]
-rlimit = { version = "0.10", default-features = false }
+rlimit = { version = "0.11.0", default-features = false }
 
 
 [features]

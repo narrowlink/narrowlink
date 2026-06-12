@@ -41,7 +41,7 @@ futures-channel = { version = "0.3.32", features = [
 udp-stream = { version = "0.0.11", default-features = false }
 sha3 = { version = "0.10.9", default-features = false }
 hmac = { version = "0.12.1", default-features = false }
-dirs = { version = "5.0.1", default-features = false }
+dirs = { version = "6.0.0", default-features = false }
 tracing = { version = "0.1.44", default-features = false, features = [
   "attributes",
 ] }

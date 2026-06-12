@@ -29,7 +29,7 @@ workspace = true
 jsonwebtoken = { version = "10.4.0", default-features = false }
 serde = { version = "1.0.228", features = ["derive"], default-features = false }
 serde_yaml = { version = "0.9.34", default-features = false }
-dirs = { version = "5.0.1", default-features = false }
+dirs = { version = "6.0.0", default-features = false }
 clap_lex = { version = "0.7.7", default-features = false }
 uuid = { version = "1.23.3", features = ["serde", "v4"] }
 thiserror = { version = "2.0.18", default-features = false }
