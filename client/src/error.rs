@@ -76,7 +76,7 @@ pub enum ClientError {
     ControlChannelNotConnected,
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     #[error("IpStack Error: {0}")]
-    IpStackError(#[from] ipstack::IpStackError),
+    IpStackError(#[source] Box<ipstack::IpStackError>),
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     #[error("Unsupported Tun Protocol")]
     UnsupportedTunProtocol,
@@ -86,4 +86,10 @@ pub enum ClientError {
     #[cfg(target_os = "windows")]
     #[error("wintun.dll not found, please download from https://www.wintun.net/ and put it in the same directory as narrowlink.exe")]
     WinTunDLLNotFound,
+}
+
+impl From<ipstack::IpStackError> for ClientError {
+    fn from(err: ipstack::IpStackError) -> Self {
+        Self::IpStackError(Box::new(err))
+    }
 }

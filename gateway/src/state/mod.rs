@@ -514,7 +514,7 @@ impl State {
                                     let connection = Uuid::new_v4();
                                     debug!("HttpTransparent Connection ({}) Request to {} with {} address Received", connection,domain_name,peer_addr);
                                     let _ = agent.send(AgentEventInBound::Connect(connection, connect, vec![])).await;
-                                    users.add_connection(user_id, connection::Connection::new(connection,None,Some(connection::ClientConnection::HttpTransparent(request,peer_addr,response,service_protocol)),None));
+                                    users.add_connection(user_id, connection::Connection::new(connection,None,Some(connection::ClientConnection::HttpTransparent(Box::new(request),peer_addr,response,service_protocol)),None));
                                 }
                                 None | Some(Err(()))=>{
                                     debug!("Unoccupied HttpTransparent Connection Request to {} with {} address Rejected", domain_name,peer_addr);

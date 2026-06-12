@@ -30,7 +30,6 @@ pub enum Command {
 }
 
 impl Command {
-    #[allow(clippy::result_large_err)]
     fn from_u8(val: u8) -> Result<Self, NetworkError> {
         match val {
             0x01 => Ok(Self::IPv4TCP),
