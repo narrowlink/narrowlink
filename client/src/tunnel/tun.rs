@@ -204,7 +204,7 @@ impl TunListener {
             .mtu(MTU as u16)
             .up();
         #[cfg(target_os = "linux")]
-        config.platform(|config| {
+        config.platform_config(|config| {
             config.packet_information(true);
         });
         #[cfg(not(target_family = "windows"))]
