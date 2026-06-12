@@ -119,20 +119,61 @@ impl Acme {
                     any_valid = true;
                 } else {
                     let identifier = auth.identifier().to_string();
-                    let challenge = auth
-                        .challenge(instant_acme::ChallengeType::TlsAlpn01)
-                        .ok_or(GatewayError::ACMEFailed)?;
+                    let has_tls = auth.challenges.iter().any(|c| c.r#type == instant_acme::ChallengeType::TlsAlpn01);
+                    let has_http = auth.challenges.iter().any(|c| c.r#type == instant_acme::ChallengeType::Http01);
 
-                    let key_auth = challenge.key_authorization();
-                    let digest = ring::digest::digest(
-                        &ring::digest::SHA256,
-                        key_auth.as_str().as_bytes(),
-                    );
-                    challenges.push((
-                        challenge.url.clone(),
-                        identifier.to_owned(),
-                        digest.as_ref().to_vec(),
-                    ));
+                    if has_tls {
+                        let challenge = auth.challenge(instant_acme::ChallengeType::TlsAlpn01).unwrap();
+                        let key_auth_str = challenge.key_authorization().as_str().to_string();
+                        let url = challenge.url.clone();
+                        let digest = ring::digest::digest(
+                            &ring::digest::SHA256,
+                            key_auth_str.as_bytes(),
+                        );
+                        let key_pair = rcgen::KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).map_err(|_| GatewayError::ACMEFailed)?;
+                        let mut params = rcgen::CertificateParams::new(vec![identifier.clone()]).map_err(|_| GatewayError::ACMEFailed)?;
+                        let mut dn = rcgen::DistinguishedName::new();
+                        dn.push(rcgen::DnType::OrganizationName, "narrowlink");
+                        params.distinguished_name = dn;
+                        params.custom_extensions = vec![rcgen::CustomExtension::new_acme_identifier(digest.as_ref())];
+                        
+                        let cert = params.self_signed(&key_pair).map_err(|_| GatewayError::ACMEFailed)?;
+                        let cert_der = cert.der().to_vec();
+                        let key_der = key_pair.serialize_der();
+                        
+                        let mut server_config = rustls::ServerConfig::builder()
+                            .with_no_client_auth()
+                            .with_single_cert(
+                                vec![rustls::pki_types::CertificateDer::from(cert_der).into_owned()],
+                                rustls::pki_types::PrivateKeyDer::try_from(key_der).map_err(|_| GatewayError::ACMEFailed)?
+                            ).map_err(|_| GatewayError::ACMEFailed)?;
+                        
+                        server_config
+                            .alpn_protocols
+                            .push(crate::service::certificate::ACME_TLS_ALPN_NAME.to_vec());
+
+                        challenges.push(ChallengeInfo {
+                            verification_url: url,
+                            domain: identifier.to_owned(),
+                            challenge: ACMEChallenge::TlsAlpn01(Arc::new(server_config)),
+                        });
+                    } else if has_http {
+                        let challenge = auth.challenge(instant_acme::ChallengeType::Http01).unwrap();
+                        let key_auth_str = challenge.key_authorization().as_str().to_string();
+                        let url = challenge.url.clone();
+                        let digest = key_auth_str;
+                        let token = digest.split('.').next().unwrap().to_string();
+                        challenges.push(ChallengeInfo {
+                            verification_url: url,
+                            domain: identifier.to_owned(),
+                            challenge: ACMEChallenge::Http01(
+                                format!("/.well-known/acme-challenge/{}", token),
+                                digest,
+                            ),
+                        });
+                    } else {
+                        return Err(GatewayError::ACMEFailed);
+                    }
                 }
             }
         }
@@ -166,6 +207,7 @@ impl Acme {
             );
         }
 
+        self.challenges = challenges;
         self.order = Some(order);
         Ok(None)
     }
