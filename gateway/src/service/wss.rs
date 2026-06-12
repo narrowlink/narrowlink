@@ -86,7 +86,7 @@ impl Wss {
         if record_len < 4 + hs_len { return None; }
         pos += 4;
         
-        if pos + 34 > buf.len() { return None; }
+        if pos + 35 > buf.len() { return None; }
         pos += 2; // Version
         pos += 32; // Random
         
