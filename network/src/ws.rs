@@ -4,7 +4,7 @@ use hyper::{client::conn, http::HeaderValue, Body, HeaderMap, Request, StatusCod
 use narrowlink_types::ServiceType;
 use std::{
     collections::HashMap,
-    io::{self, Error, ErrorKind},
+    io::{self, Error},
     net::{SocketAddr, SocketAddrV4},
     pin::Pin,
     task::{Context, Poll},
@@ -204,10 +204,7 @@ impl AsyncRead for WsConnection {
                                 match self.ws_stream.send(Message::Ping(vec![0])).poll_unpin(cx) {
                                     Poll::Ready(Ok(_)) => continue,
                                     Poll::Ready(Err(_e)) => {
-                                        return Poll::Ready(Err(Error::new(
-                                            ErrorKind::Other,
-                                            "Ping Error!",
-                                        )))
+                                        return Poll::Ready(Err(Error::other("Ping Error!")))
                                     }
                                     Poll::Pending => return Poll::Pending,
                                 }
@@ -231,7 +228,7 @@ impl AsyncWrite for WsConnection {
     ) -> Poll<Result<usize, io::Error>> {
         match Pin::new(&mut self.ws_stream.send(Message::binary(buf)))
             .poll(cx)
-            .map_err(|e| Error::new(ErrorKind::Other, e.to_string()))?
+            .map_err(|e| Error::other(e.to_string()))?
         {
             Poll::Ready(_) => Poll::Ready(Ok(buf.len())),
             Poll::Pending => Poll::Pending,
@@ -541,7 +538,7 @@ impl AsyncRead for WsConnectionBinary {
                     }
                 }
                 Poll::Ready(Some(Err(e))) => {
-                    return Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, e.to_string())))
+                    return Poll::Ready(Err(io::Error::other(e.to_string())))
                 }
                 Poll::Ready(None) => return Poll::Ready(Ok(())),
                 Poll::Pending => {
@@ -551,10 +548,7 @@ impl AsyncRead for WsConnectionBinary {
                                 match self.ws_stream.send(Message::Ping(vec![0])).poll_unpin(cx) {
                                     Poll::Ready(Ok(_)) => continue,
                                     Poll::Ready(Err(e)) => {
-                                        return Poll::Ready(Err(io::Error::new(
-                                            io::ErrorKind::Other,
-                                            e.to_string(),
-                                        )))
+                                        return Poll::Ready(Err(io::Error::other(e.to_string())))
                                     }
                                     Poll::Pending => return Poll::Pending,
                                 }
@@ -579,12 +573,12 @@ impl AsyncWrite for WsConnectionBinary {
         match self
             .ws_stream
             .poll_ready_unpin(cx)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?
+            .map_err(|e| io::Error::other(e.to_string()))?
         {
             Poll::Ready(()) => {
                 self.ws_stream
                     .start_send_unpin(Message::binary(buf))
-                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+                    .map_err(|e| io::Error::other(e.to_string()))?;
                 Poll::Ready(Ok(buf.len()))
             }
             Poll::Pending => Poll::Pending,
@@ -594,7 +588,7 @@ impl AsyncWrite for WsConnectionBinary {
     fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
         self.ws_stream
             .poll_flush_unpin(cx)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+            .map_err(|e| io::Error::other(e.to_string()))
     }
 
     fn poll_shutdown(
@@ -603,6 +597,6 @@ impl AsyncWrite for WsConnectionBinary {
     ) -> Poll<Result<(), io::Error>> {
         self.ws_stream
             .poll_close_unpin(cx)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+            .map_err(|e| io::Error::other(e.to_string()))
     }
 }

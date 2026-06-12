@@ -110,12 +110,12 @@ impl Stream for AsyncSocketCrypt {
         match self
             .inner
             .poll_next_unpin(cx)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?
+            .map_err(|e| std::io::Error::other(e.to_string()))?
         {
             Poll::Ready(Some(chunk)) => Poll::Ready(Some(
                 self.cipher
                     .decrypt(&self.nonce.into(), chunk.as_ref())
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string())),
+                    .map_err(|e| std::io::Error::other(e.to_string())),
             )),
             Poll::Pending => Poll::Pending,
             _ => Poll::Ready(None),
@@ -131,17 +131,17 @@ impl Sink<Vec<u8>> for AsyncSocketCrypt {
     ) -> Poll<Result<(), Self::Error>> {
         self.inner
             .poll_ready_unpin(cx)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+            .map_err(|e| io::Error::other(e.to_string()))
     }
 
     fn start_send(mut self: Pin<&mut Self>, item: Vec<u8>) -> Result<(), Self::Error> {
         let buf = self
             .cipher
             .encrypt(&self.nonce.into(), item.as_ref())
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| io::Error::other(e.to_string()))?;
         self.inner
             .start_send_unpin(buf)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+            .map_err(|e| io::Error::other(e.to_string()))
     }
 
     fn poll_flush(
@@ -150,7 +150,7 @@ impl Sink<Vec<u8>> for AsyncSocketCrypt {
     ) -> Poll<Result<(), Self::Error>> {
         self.inner
             .poll_flush_unpin(cx)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+            .map_err(|e| io::Error::other(e.to_string()))
     }
 
     fn poll_close(
@@ -159,7 +159,7 @@ impl Sink<Vec<u8>> for AsyncSocketCrypt {
     ) -> Poll<Result<(), Self::Error>> {
         self.inner
             .poll_close_unpin(cx)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))
+            .map_err(|e| io::Error::other(e.to_string()))
     }
 }
 
@@ -174,7 +174,7 @@ impl AsyncRead for AsyncSocketCrypt {
                 let b = self
                     .cipher
                     .decrypt(&self.nonce.into(), item.as_slice())
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+                    .map_err(|e| std::io::Error::other(e.to_string()))?;
                 buf.put_slice(&b); // todo: fix
                 Poll::Ready(Ok(()))
             }
@@ -195,7 +195,7 @@ impl AsyncWrite for AsyncSocketCrypt {
                 let cipher_text = self
                     .cipher
                     .encrypt(&self.nonce.into(), buf)
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+                    .map_err(|e| std::io::Error::other(e.to_string()))?;
                 match self.start_send_unpin(cipher_text) {
                     Ok(()) => Poll::Ready(Ok(buf.len())),
                     Err(e) => Poll::Ready(Err(e)),

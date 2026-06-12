@@ -22,7 +22,7 @@ pub struct Connection {
 // #[derive(Debug)]
 pub enum ClientConnection {
     HttpTransparent(
-        Request<Body>,
+        Box<Request<Body>>,
         SocketAddr,
         oneshot::Sender<Result<Response<Body>, ResponseErrors>>,
         RequestProtocol,
@@ -231,7 +231,7 @@ impl ConnectionData {
                     }
                 }
                 request_sender
-                    .send_request(request)
+                    .send_request(*request)
                     .await
                     .map_err(|_| ())
                     .and_then(|mut response| {

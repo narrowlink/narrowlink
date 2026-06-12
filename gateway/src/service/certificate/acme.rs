@@ -35,16 +35,11 @@ pub struct ChallengeInfo {
     pub challenge: ACMEChallenge,
 }
 #[allow(dead_code)]
-#[derive(Debug, Clone, Hash, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Deserialize, Default)]
 pub enum ACMEChallengeType {
+    #[default]
     Http01,
     TlsAlpn01,
-}
-
-impl Default for ACMEChallengeType {
-    fn default() -> Self {
-        Self::Http01
-    }
 }
 
 #[derive(Debug, Clone)]

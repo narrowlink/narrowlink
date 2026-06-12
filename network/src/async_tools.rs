@@ -10,7 +10,7 @@ use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 pub struct AsyncToStream {
     socket: Box<dyn AsyncSocket>,
-    buffer: Option<(usize, Vec<u8>)>,
+    buffer: Option<Vec<u8>>,
 }
 
 impl AsyncToStream {
@@ -51,9 +51,9 @@ impl Sink<Vec<u8>> for AsyncToStream {
         mut self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> Poll<Result<(), Self::Error>> {
-        if let Some((mut len, buffer)) = self.buffer.take() {
+        if let Some(buffer) = self.buffer.take() {
             loop {
-                len = match Pin::new(&mut self.socket).poll_write(cx, &buffer)? {
+                let len = match Pin::new(&mut self.socket).poll_write(cx, &buffer)? {
                     Poll::Ready(written) => written,
                     Poll::Pending => return Poll::Pending,
                 };
@@ -67,7 +67,7 @@ impl Sink<Vec<u8>> for AsyncToStream {
     }
 
     fn start_send(mut self: Pin<&mut Self>, item: Vec<u8>) -> Result<(), Self::Error> {
-        self.buffer = Some((0, item));
+        self.buffer = Some(item);
         Ok(())
     }
 
@@ -128,10 +128,7 @@ impl AsyncRead for StreamToAsync {
                     continue;
                 }
                 Poll::Ready(Some(Err(e))) => {
-                    return Poll::Ready(Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        e.to_string(),
-                    )))
+                    return Poll::Ready(Err(std::io::Error::other(e.to_string())))
                 }
                 Poll::Ready(None) => return Poll::Ready(Ok(())),
                 Poll::Pending => return Poll::Pending,
@@ -148,7 +145,7 @@ impl AsyncWrite for StreamToAsync {
     ) -> Poll<Result<usize, std::io::Error>> {
         match Pin::new(&mut self.stream.send(buf.to_vec()))
             .poll(cx)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?
+            .map_err(|e| std::io::Error::other(e.to_string()))?
         {
             Poll::Ready(_) => Poll::Ready(Ok(buf.len())),
             Poll::Pending => Poll::Pending,

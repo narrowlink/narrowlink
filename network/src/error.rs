@@ -9,7 +9,7 @@ pub enum NetworkError {
     #[error("Network Error: {0}")]
     HyperError(#[from] hyper::Error),
     #[error("Network Error: {0}")]
-    Tungstenite(#[from] tungstenite::Error),
+    Tungstenite(#[source] Box<tungstenite::Error>),
     #[error("TLS Error")]
     TlsError,
     #[error("Unable To Upgrade: {0}")]
@@ -39,5 +39,11 @@ pub enum NetworkError {
 impl From<chacha20poly1305::Error> for NetworkError {
     fn from(err: chacha20poly1305::Error) -> Self {
         Self::XChaCha20Poly1305(err)
+    }
+}
+
+impl From<tungstenite::Error> for NetworkError {
+    fn from(err: tungstenite::Error) -> Self {
+        Self::Tungstenite(Box::new(err))
     }
 }
