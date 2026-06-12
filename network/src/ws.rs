@@ -1,6 +1,7 @@
 use bytes::{BufMut, BytesMut};
 use futures_util::{Future, FutureExt, SinkExt, StreamExt};
-use hyper::{client::conn, http::HeaderValue, Body, HeaderMap, Request, StatusCode};
+use hyper::{client::conn::http1, http::HeaderValue, body::Bytes, HeaderMap, Request, StatusCode};
+use http_body_util::{BodyExt, Full};
 use narrowlink_types::ServiceType;
 use std::{
     collections::HashMap,
@@ -78,7 +79,7 @@ impl WsConnection {
         let stream = UnifiedSocket::new(host, transport_type).await?;
         let local_addr = stream.local_addr();
         let peer_addr = stream.peer_addr();
-        let (mut request_sender, connection) = conn::handshake(stream).await?;
+        let (mut request_sender, connection) = http1::handshake(hyper_util::rt::TokioIo::new(stream)).await?;
         let conn_handler = tokio::spawn(async move {
             if let Err(e) = connection.await {
                 eprintln!("Error in connection: {}", e);
@@ -107,7 +108,7 @@ impl WsConnection {
                     .and_then(|headers| headers.insert(*key, header_value));
             }
         }
-        let request = request.method("GET").body(Body::from(""))?;
+        let request = request.method("GET").body(Full::new(Bytes::from(""))).map_err(|_| NetworkError::Invalid("Invalid Method"))?;
         let response = request_sender.send_request(request).await?;
         let response_headers = response.headers().clone();
         trace!("response status: {}", response.status().to_string());
@@ -116,7 +117,7 @@ impl WsConnection {
             trace!(
                 "response body: {}",
                 String::from_utf8_lossy(
-                    hyper::body::to_bytes(response.into_body()).await?.as_ref()
+                    response.into_body().collect().await.map_err(NetworkError::HyperError)?.to_bytes().as_ref()
                 )
             );
 
@@ -125,7 +126,7 @@ impl WsConnection {
 
         let upgraded = hyper::upgrade::on(response).await?;
         let ws_stream = tokio_tungstenite::WebSocketStream::from_raw_socket(
-            Box::new(upgraded) as Box<dyn AsyncSocket>,
+            Box::new(hyper_util::rt::TokioIo::new(upgraded)) as Box<dyn AsyncSocket>,
             tungstenite::protocol::Role::Client,
             None,
         )
@@ -201,7 +202,7 @@ impl AsyncRead for WsConnection {
                     if let WsMode::Server(interval) = &mut self.mode {
                         match interval.poll_tick(cx) {
                             Poll::Ready(_) => {
-                                match self.ws_stream.send(Message::Ping(vec![0])).poll_unpin(cx) {
+                                match self.ws_stream.send(Message::Ping(vec![0].into())).poll_unpin(cx) {
                                     Poll::Ready(Ok(_)) => continue,
                                     Poll::Ready(Err(_e)) => {
                                         return Poll::Ready(Err(Error::other("Ping Error!")))
@@ -226,7 +227,7 @@ impl AsyncWrite for WsConnection {
         cx: &mut Context<'_>,
         buf: &[u8],
     ) -> Poll<Result<usize, io::Error>> {
-        match Pin::new(&mut self.ws_stream.send(Message::binary(buf)))
+        match Pin::new(&mut self.ws_stream.send(Message::Binary(bytes::Bytes::copy_from_slice(buf))))
             .poll(cx)
             .map_err(|e| Error::other(e.to_string()))?
         {
@@ -265,7 +266,7 @@ impl futures_util::Stream for WsConnection {
             match self.ws_stream.poll_next_unpin(cx) {
                 Poll::Ready(Some(Ok(msg))) => {
                     if let Message::Text(msg) = msg {
-                        return Poll::Ready(Some(Ok(msg)));
+                        return Poll::Ready(Some(Ok(msg.to_string())));
                     } else {
                         continue;
                     }
@@ -276,7 +277,7 @@ impl futures_util::Stream for WsConnection {
                     if let WsMode::Server(interval) = &mut self.mode {
                         match interval.poll_tick(cx) {
                             Poll::Ready(_) => {
-                                match self.ws_stream.send(Message::Ping(vec![0])).poll_unpin(cx) {
+                                match self.ws_stream.send(Message::Ping(vec![0].into())).poll_unpin(cx) {
                                     Poll::Ready(Ok(_)) => continue,
                                     Poll::Ready(Err(e)) => return Poll::Ready(Some(Err(e.into()))),
                                     Poll::Pending => return Poll::Pending,
@@ -304,7 +305,7 @@ impl futures_util::Sink<String> for WsConnection {
 
     fn start_send(mut self: std::pin::Pin<&mut Self>, item: String) -> Result<(), Self::Error> {
         self.ws_stream
-            .start_send_unpin(Message::Text(item))
+            .start_send_unpin(Message::Text(item.into()))
             .map_err(|e| e.into())
     }
 
@@ -367,7 +368,7 @@ impl WsConnectionBinary {
         };
         let stream = UnifiedSocket::new(host, transport_type).await?;
 
-        let (mut request_sender, connection) = conn::handshake(stream).await?;
+        let (mut request_sender, connection) = http1::handshake(hyper_util::rt::TokioIo::new(stream)).await?;
         let conn_handler = tokio::spawn(async move {
             if let Err(e) = connection.await {
                 warn!("Error in connection: {}", e);
@@ -396,7 +397,7 @@ impl WsConnectionBinary {
                     .and_then(|headers| headers.insert(*key, header_value));
             }
         }
-        let request = request.method("GET").body(Body::from(""))?;
+        let request = request.method("GET").body(Full::new(Bytes::from(""))).map_err(|_| NetworkError::Invalid("Invalid Method"))?;
         let response = request_sender.send_request(request).await?;
         let response_headers = response.headers().clone();
         debug!("ws connection status: {}", response.status());
@@ -405,14 +406,14 @@ impl WsConnectionBinary {
             trace!(
                 "response body: {}",
                 String::from_utf8_lossy(
-                    hyper::body::to_bytes(response.into_body()).await?.as_ref()
+                    response.into_body().collect().await.map_err(NetworkError::HyperError)?.to_bytes().as_ref()
                 )
             );
             return Err(NetworkError::UnableToUpgrade(status_code));
         }
         let upgraded = hyper::upgrade::on(response).await?;
         let ws_stream = tokio_tungstenite::WebSocketStream::from_raw_socket(
-            Box::new(upgraded) as Box<dyn AsyncSocket>,
+            Box::new(hyper_util::rt::TokioIo::new(upgraded)) as Box<dyn AsyncSocket>,
             tungstenite::protocol::Role::Client,
             None,
         )
@@ -446,7 +447,7 @@ impl futures_util::Stream for WsConnectionBinary {
             match self.ws_stream.poll_next_unpin(cx) {
                 Poll::Ready(Some(Ok(msg))) => {
                     if let Message::Binary(msg) = msg {
-                        return Poll::Ready(Some(Ok(msg)));
+                        return Poll::Ready(Some(Ok(msg.to_vec())));
                     } else {
                         continue;
                     }
@@ -457,7 +458,7 @@ impl futures_util::Stream for WsConnectionBinary {
                     if let WsMode::Server(interval) = &mut self.mode {
                         match interval.poll_tick(cx) {
                             Poll::Ready(_) => {
-                                match self.ws_stream.send(Message::Ping(vec![0])).poll_unpin(cx) {
+                                match self.ws_stream.send(Message::Ping(vec![0].into())).poll_unpin(cx) {
                                     Poll::Ready(Ok(_)) => continue,
                                     Poll::Ready(Err(e)) => return Poll::Ready(Some(Err(e.into()))),
                                     Poll::Pending => return Poll::Pending,
@@ -485,7 +486,7 @@ impl futures_util::Sink<Vec<u8>> for WsConnectionBinary {
 
     fn start_send(mut self: std::pin::Pin<&mut Self>, item: Vec<u8>) -> Result<(), Self::Error> {
         self.ws_stream
-            .start_send_unpin(Message::Binary(item))
+            .start_send_unpin(Message::Binary(item.into()))
             .map_err(|e| e.into())
     }
 
@@ -545,7 +546,7 @@ impl AsyncRead for WsConnectionBinary {
                     if let WsMode::Server(interval) = &mut self.mode {
                         match interval.poll_tick(cx) {
                             Poll::Ready(_) => {
-                                match self.ws_stream.send(Message::Ping(vec![0])).poll_unpin(cx) {
+                                match self.ws_stream.send(Message::Ping(vec![0].into())).poll_unpin(cx) {
                                     Poll::Ready(Ok(_)) => continue,
                                     Poll::Ready(Err(e)) => {
                                         return Poll::Ready(Err(io::Error::other(e.to_string())))
@@ -577,7 +578,7 @@ impl AsyncWrite for WsConnectionBinary {
         {
             Poll::Ready(()) => {
                 self.ws_stream
-                    .start_send_unpin(Message::binary(buf))
+                    .start_send_unpin(Message::Binary(bytes::Bytes::copy_from_slice(buf)))
                     .map_err(|e| io::Error::other(e.to_string()))?;
                 Poll::Ready(Ok(buf.len()))
             }

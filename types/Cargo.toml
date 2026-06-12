@@ -31,7 +31,7 @@ validator = { version = "0.20.0", default-features = false, features = [
 regex-lite = { version = "0.1.9", default-features = false, features = [
   "std","string"
 ] }
-hmac = { version = "0.12.1", default-features = false }
-sha3 = { version = "0.10.9", default-features = false }
+hmac = { version = "0.13.0", default-features = false }
+sha3 = { version = "0.12.0", default-features = false }
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 thiserror = { version = "2.0.18", default-features = false }

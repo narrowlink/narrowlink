@@ -1,6 +1,9 @@
 use std::net::SocketAddr;
 
-use hyper::{client::conn, http::HeaderValue, Body, Request, Response};
+use hyper::{http::HeaderValue, Request, Response, body::Incoming};
+use hyper::client::conn::http1;
+use http_body_util::Full;
+use bytes::Bytes;
 use narrowlink_network::{error::NetworkError, UniversalStream};
 // use narrowlink_types::policy::Policy;
 use tokio::{net::TcpStream, sync::oneshot};
@@ -22,9 +25,9 @@ pub struct Connection {
 // #[derive(Debug)]
 pub enum ClientConnection {
     HttpTransparent(
-        Box<Request<Body>>,
+        Box<Request<Incoming>>,
         SocketAddr,
-        oneshot::Sender<Result<Response<Body>, ResponseErrors>>,
+        oneshot::Sender<Result<Response<Full<Bytes>>, ResponseErrors>>,
         RequestProtocol,
     ),
     TlsTransparent(TcpStream),
@@ -166,7 +169,7 @@ impl ConnectionData {
                     .await
                     .map_err(|_| GatewayError::Other("Agent Connection gone"))?;
                 let agent_socket = narrowlink_network::StreamToAsync::new(agent_stream);
-                let (mut request_sender, connection) = conn::handshake(agent_socket).await?;
+                let (mut request_sender, connection) = http1::handshake(hyper_util::rt::TokioIo::new(agent_socket)).await?;
                 tokio::spawn(
                     async move {
                         if let Err(e) = connection.await {
@@ -236,7 +239,7 @@ impl ConnectionData {
                     .map_err(|_| ())
                     .and_then(|mut response| {
                         *response.version_mut() = original_version;
-                        replay.send(Ok(response)).map_err(|_| ())
+                        replay.send(Ok(response.map(|_b| http_body_util::Full::new(bytes::Bytes::new())))).map_err(|_| ())
                     })
                     .map_err(|_| GatewayError::Other("Connection gone"))
             }

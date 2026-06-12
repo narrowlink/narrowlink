@@ -1,0 +1,35 @@
+   Compiling narrowlink-gateway v0.2.6 (/Users/sajjad/Desktop/narrowlink/gateway)
+   Compiling narrowlink-client v0.2.6 (/Users/sajjad/Desktop/narrowlink/client)
+error: using `clone` on type `SocketAddr` which implements the `Copy` trait
+  --> gateway/src/service/ws.rs:78:56
+   |
+78 |                     listen_addr: RequestProtocol::Http(listen_addr.clone()),
+   |                                                        ^^^^^^^^^^^^^^^^^^^ help: try removing the `clone` call: `listen_addr`
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#clone_on_copy
+   = note: `-D clippy::clone-on-copy` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::clone_on_copy)]`
+
+error: using `clone` on type `SocketAddr` which implements the `Copy` trait
+   --> gateway/src/service/wss.rs:190:57
+    |
+190 |                     listen_addr: RequestProtocol::Https(self.listen_addr.clone()),
+    |                                                         ^^^^^^^^^^^^^^^^^^^^^^^^ help: try removing the `clone` call: `self.listen_addr`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#clone_on_copy
+
+error: used `unwrap()` on a `Result` value
+   --> gateway/src/state/mod.rs:174:56
+    |
+174 | ...                   let key_pair = rcgen::KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).unwrap();
+    |                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: if this value is an `Err`, it will panic
+    = help: consider using `expect()` to provide a better panic message
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#unwrap_used
+    = note: `-D clippy::unwrap-used` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::unwrap_used)]`
+
+error: could not compile `narrowlink-gateway` (bin "narrowlink-gateway") due to 3 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `narrowlink-gateway` (bin "narrowlink-gateway" test) due to 3 previous errors

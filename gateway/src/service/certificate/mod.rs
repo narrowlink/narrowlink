@@ -48,12 +48,12 @@ pub trait CertificateStorage {
     async fn is_pending(&self, account: &str, domain: &str) -> bool;
     async fn get_default_account(&self) -> Result<Account, GatewayError> {
         let account_credentials = self.get_default_account_credentials().await?;
-        Ok(Account::from_credentials(account_credentials).await?)
+        Ok(instant_acme::Account::builder().map_err(|_| GatewayError::ACMEFailed)?.from_credentials(account_credentials).await.map_err(|_| GatewayError::ACMEFailed)?)
     }
     async fn get_acme_account(&self, account: &str, domain: &str) -> Result<Account, GatewayError> {
         let account_credentials = self.get_acme_account_credentials(account, domain).await;
         if let Some(account_credentials) = account_credentials {
-            Ok(Account::from_credentials(account_credentials).await?)
+            Ok(instant_acme::Account::builder().map_err(|_| GatewayError::ACMEFailed)?.from_credentials(account_credentials).await.map_err(|_| GatewayError::ACMEFailed)?)
         } else {
             Err(GatewayError::Invalid("No account credentials found"))
         }
@@ -61,7 +61,7 @@ pub trait CertificateStorage {
 }
 
 pub struct Certificate {
-    certificate_chain: Vec<rustls::Certificate>,
+    certificate_chain: Vec<rustls::pki_types::CertificateDer<'static>>,
     // private_key: rustls::PrivateKey,
     config: Arc<ServerConfig>,
 }
@@ -73,10 +73,10 @@ impl Certificate {
         for i in v {
             match i.tag() {
                 "CERTIFICATE" => {
-                    certificate_chain.push(rustls::Certificate(i.contents().to_vec()));
+                    certificate_chain.push(rustls::pki_types::CertificateDer::from(i.contents().to_vec()));
                 }
                 "PRIVATE KEY" => {
-                    private_key.replace(rustls::PrivateKey(i.contents().to_vec()));
+                    private_key.replace(rustls::pki_types::PrivateKeyDer::try_from(i.contents().to_vec()).map_err(|_| GatewayError::Invalid("Invalid Private Key"))?);
                 }
                 _ => continue,
             }
@@ -90,9 +90,8 @@ impl Certificate {
             return Err(GatewayError::Invalid("Invalid Pem FIle"));
         }
         let mut config = rustls::ServerConfig::builder()
-            .with_safe_defaults()
             .with_no_client_auth()
-            .with_single_cert(certificate_chain.clone(), private_key.clone())?;
+            .with_single_cert(certificate_chain.clone(), private_key.clone_key())?;
         config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
 
         Ok(Certificate {

@@ -5,7 +5,7 @@ use std::{
 };
 
 use instant_acme::Account;
-use rustls::{PrivateKey, ServerConfig};
+use rustls::ServerConfig;
 use tracing::{debug, error, instrument, span, trace, warn, Instrument, Span};
 
 use tokio::{
@@ -258,7 +258,7 @@ impl CertificateManager {
         uid: &str,
         agent_name: &str,
         domain: String,
-        suggested_private_key: Option<PrivateKey>,
+        suggested_private_key: Option<rustls::pki_types::PrivateKeyDer<'static>>,
     ) -> Result<(), GatewayError> {
         if self.storage.is_failed(uid, &domain).await {
             return Err(GatewayError::ACMEFailed);

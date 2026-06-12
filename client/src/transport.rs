@@ -1,4 +1,5 @@
-use hmac::Mac;
+use rand::RngExt;
+use hmac::{Mac, KeyInit};
 use narrowlink_network::{
     async_forward, error::NetworkError, p2p::QuicStream, ws::WsConnectionBinary, AsyncSocket,
     AsyncSocketCrypt,
@@ -155,7 +156,7 @@ impl TransportFactory {
         let e2ee_params: Option<([u8; 32], [u8; 24])> = match e2ee {
             Some(ck) => {
                 trace!("Cryptography required");
-                let n = rand::random::<[u8; 24]>();
+                let n = rand::rng().random::<[u8; 24]>();
                 connect.set_cryptography_nonce(n);
                 let k = Sha3_256::digest(
                     ck.as_bytes()
@@ -252,7 +253,7 @@ impl TransportFactory {
         let e2ee_params: Option<([u8; 32], [u8; 24])> = match e2ee {
             Some(ck) => {
                 trace!("Cryptography required");
-                let n = rand::random::<[u8; 24]>();
+                let n = rand::rng().random::<[u8; 24]>();
                 connect.set_cryptography_nonce(n);
                 let k = Sha3_256::digest(
                     ck.as_bytes()

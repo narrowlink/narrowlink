@@ -39,13 +39,18 @@ impl UnifiedSocket {
                     {
                         debug!("using rustls to connect to {}", peer_addr.to_string());
                         use std::sync::Arc;
-                        use tokio_rustls::{rustls::ServerName, TlsConnector};
+                        use rustls::pki_types::ServerName;
+                        use tokio_rustls::TlsConnector;
+                        use rustls_platform_verifier::BuilderVerifierExt;
 
-                        let config = rustls_platform_verifier::tls_config();
+                        let config = rustls::ClientConfig::builder()
+                            .with_platform_verifier()
+                            .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "tls config error"))?
+                            .with_no_client_auth();
 
                         let config = TlsConnector::from(Arc::new(config));
 
-                        let dnsname = ServerName::try_from(conf.sni.as_str()).or(Err(
+                        let dnsname = ServerName::try_from(conf.sni.clone()).or(Err(
                             io::Error::new(io::ErrorKind::InvalidInput, "invalid dnsname"),
                         ))?;
                         stream = Box::new(config.connect(dnsname, stream).await?);

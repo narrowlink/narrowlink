@@ -26,7 +26,7 @@ path = "src/main.rs"
 workspace = true
 
 [dependencies]
-clap_lex = { version = "0.7.7", default-features = false }
+clap_lex = { version = "1.1.0", default-features = false }
 thiserror = { version = "2.0.18", default-features = false }
 tokio = { version = "1.52.3", features = [
     "macros",
@@ -41,8 +41,8 @@ futures-sink = { version = "0.3.32", features = [
     "alloc",
 ], default-features = false }
 futures-timer = { version = "3.0.4", default-features = false }
-tokio-tungstenite = { version = "0.20.1", default-features = false }
-tungstenite = { version = "0.20.1", default-features = false }
+tokio-tungstenite = { version = "0.29.0", default-features = false }
+tungstenite = { version = "0.29.0", default-features = false }
 serde = { version = "1.0.228", features = ["derive"], default-features = false }
 serde_json = { version = "1.0.150", default-features = false }
 serde_yaml = { version = "0.9.34", default-features = false }
@@ -59,9 +59,9 @@ tracing-subscriber = { version = "0.3.23", default-features = false, features = 
 ] }
 tracing-appender = { version = "0.2.5" }
 proxy-stream = { version = "0.0.2", default-features = false }
-sha3 = { version = "0.10.9", default-features = false }
-hmac = { version = "0.12.1", default-features = false }
-rand = { version = "0.8.6", default-features = false }
+sha3 = { version = "0.12.0", default-features = false }
+hmac = { version = "0.13.0", default-features = false }
+rand = { version = "0.10.1", default-features = false, features = ["thread_rng"] }
 dirs = { version = "6.0.0", default-features = false }
 uuid = { version = "1.23.3", features = ["v4"], default-features = false }
 chrono = { version = "0.4.45", default-features = false }
@@ -70,12 +70,12 @@ narrowlink-types = { version = "0.2.6", default-features = false }
 narrowlink-network = { version = "0.2.6", default-features = false }
 
 [target.'cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))'.dependencies]
-ipstack = { version = "0.0.10", default-features = false }
+ipstack = { version = "1.0.0", default-features = false }
 net-route = { version = "0.4.6", default-features = false }
 
 
 [target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
-tun = { version = "0.6", features = ["async"], default-features = false }
+tun = { version = "0.8", features = ["async"], default-features = false }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-wintun = { version = "0.4.0", default-features = false }
+wintun = { version = "0.5.1", default-features = false }

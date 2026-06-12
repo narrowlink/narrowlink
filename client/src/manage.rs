@@ -1,5 +1,5 @@
 use futures_util::StreamExt;
-use rand::Rng;
+use rand::RngExt;
 use std::{
     collections::HashMap,
     net::SocketAddr,
@@ -418,9 +418,9 @@ impl ManageInstruction {
     fn default_p2p(agent_name: String) -> Self {
         Self::Peer2Peer(Peer2PeerRequest {
             agent_name,
-            easy_seed_port: rand::thread_rng().gen_range((49152 + 2)..(65535 - 2)),
+            easy_seed_port: rand::rng().random_range((49152 + 2)..(65535 - 2)),
             easy_seq: 2,
-            hard_seed_port: rand::thread_rng().gen_range((49152 + 255)..(65535 - 255)),
+            hard_seed_port: rand::rng().random_range((49152 + 255)..(65535 - 255)),
             hard_seq: 255,
         })
     }

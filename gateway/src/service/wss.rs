@@ -3,8 +3,7 @@ use std::{net::SocketAddr, sync::Arc};
 use crate::{config::TlsConfig, error::GatewayError, state::InBound};
 
 use async_trait::async_trait;
-use hyper::server::conn::Http;
-use rustls::{internal::msgs::codec::Codec, ServerConfig};
+use rustls::ServerConfig;
 use tokio::{net::TcpListener, sync::mpsc::UnboundedSender};
 use tokio_rustls::TlsAcceptor;
 use tracing::{debug, instrument, span, trace, warn, Instrument};
@@ -75,33 +74,24 @@ impl Wss {
     #[instrument(name = "peek_sni_and_alpns", skip(buf))]
     pub fn peek_sni_and_alpns(buf: &[u8]) -> Option<(String, Vec<Vec<u8>>)> {
         trace!("peeking sni and alpns from client hello");
-        let message = rustls::internal::msgs::message::OpaqueMessage::read(
-            &mut rustls::internal::msgs::codec::Reader::init(buf),
-        )
-        .ok()?;
-        trace!("buffer successfully parsed into a TLS opaque message");
-        let mut r = rustls::internal::msgs::codec::Reader::init(&message.payload.0);
-        let _typ = rustls::HandshakeType::read(&mut r).ok()?;
-        let len = rustls::internal::msgs::codec::u24::read(&mut r).ok()?.0 as usize;
-        let mut sub = r.sub(len).ok()?;
-        trace!("reading client hello payload");
-        let ch = rustls::internal::msgs::handshake::ClientHelloPayload::read(&mut sub).ok()?;
-        trace!("extracting sni from client hello");
-        let rustls::internal::msgs::handshake::ServerNamePayload::HostName(ref sni) =
-            ch.get_sni_extension()?.first()?.payload
-        else {
+        let mut acceptor = rustls::server::Acceptor::default();
+        let mut read_buf = buf;
+        if acceptor.read_tls(&mut read_buf).is_err() {
             return None;
+        }
+        let accepted = match acceptor.accept() {
+            Ok(Some(accepted)) => accepted,
+            _ => return None,
         };
-        debug!("sni: {:?}", sni);
+        let ch = accepted.client_hello();
+        let sni = ch.server_name()?.to_string();
         let mut available_alpns = Vec::new();
-        trace!("extracting alpns from client hello");
-        if let Some(alpns) = ch.get_alpn_extension() {
+        if let Some(alpns) = ch.alpn() {
             for alpn in alpns {
-                available_alpns.push(alpn.as_ref().to_vec())
+                available_alpns.push(alpn.to_vec());
             }
         }
-        debug!("alpns: {:?}", available_alpns);
-        Some((sni.as_ref().to_string(), available_alpns))
+        Some((sni, available_alpns))
     }
 }
 
@@ -196,17 +186,21 @@ impl Service for Wss {
                     .await
                     .map_err(|_| ())?;
                 span_connection.in_scope(|| trace!("tls acceptor successfully created"));
-                if let Err(http_err) = Http::new()
+                let ws_service = WsService {
+                    listen_addr: RequestProtocol::Https(self.listen_addr),
+                    domains: wss.domains.clone(),
+                    sni: Some(sni),
+                    status_sender: wss.status_sender.clone(),
+                    peer_addr,
+                    cm: None,
+                };
+                if let Err(http_err) = hyper::server::conn::http1::Builder::new()
                     .serve_connection(
-                        secure_stream,
-                        WsService {
-                            listen_addr: RequestProtocol::Https(self.listen_addr),
-                            domains: wss.domains,
-                            sni: Some(sni),
-                            status_sender: wss.status_sender,
-                            peer_addr,
-                            cm: None,
-                        },
+                        hyper_util::rt::TokioIo::new(secure_stream),
+                        hyper::service::service_fn(move |req| {
+                            let mut ws_service = ws_service.clone();
+                            async move { Ok::<_, std::convert::Infallible>(ws_service.handle(req).await) }
+                        }),
                     )
                     .with_upgrades()
                     .instrument(span_connection.clone())

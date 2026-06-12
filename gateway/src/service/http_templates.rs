@@ -62,7 +62,7 @@ pub enum ErrorFormat {
     Html,
 }
 
-pub fn response_error(error_format: ErrorFormat, err: HttpErrors) -> hyper::Response<hyper::Body> {
+pub fn response_error(error_format: ErrorFormat, err: HttpErrors) -> hyper::Response<http_body_util::Full<bytes::Bytes>> {
     let (status_title, body) = err.parts();
     let status_code = err.into();
     let msg: Result<String, Box<dyn std::error::Error>> = match error_format {
@@ -93,8 +93,8 @@ pub fn response_error(error_format: ErrorFormat, err: HttpErrors) -> hyper::Resp
             HttpErrors::InternalServerError.parts().1.to_owned(),
         )
     };
-    let response = hyper::Response::new(msg);
+    let response = hyper::Response::new(http_body_util::Full::new(bytes::Bytes::from(msg)));
     let (mut parts, body) = response.into_parts();
     parts.status = status;
-    hyper::Response::from_parts(parts, body.into())
+    hyper::Response::from_parts(parts, body)
 }

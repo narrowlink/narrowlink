@@ -11,7 +11,7 @@ use args::Args;
 use config::KeyPolicy;
 use error::AgentError;
 use futures_util::{SinkExt, StreamExt};
-use hmac::Mac;
+use hmac::{Mac, KeyInit};
 use narrowlink_network::{
     async_forward,
     error::NetworkError,

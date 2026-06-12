@@ -1,12 +1,12 @@
 use core::fmt::Display;
-use hmac::Hmac;
+
 use serde::{Deserialize, Serialize};
 use sha3::Sha3_256;
 use std::{fmt::Debug, net::SocketAddr, str::FromStr};
 
 use crate::agent::{AgentPublishInfo, SystemInfo};
 
-pub type HmacSha256 = Hmac<Sha3_256>;
+pub type HmacSha256 = hmac::SimpleHmac<Sha3_256>;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum CryptographicAlgorithm {

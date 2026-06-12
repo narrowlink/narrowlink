@@ -24,7 +24,10 @@ workspace = true
 
 [dependencies]
 tokio = { version = "1.52.3", features = ["full"] }
-hyper = { version = "0.14.32", features = ["full"] }
+hyper = { version = "1.10.1", features = ["full"] }
+hyper-util = { version = "0.1", features = ["full"] }
+http-body-util = "0.1"
+ring = "0.17"
 tracing = { version = "0.1.44", default-features = false, features = [
     "attributes",
 ] }
@@ -40,30 +43,32 @@ serde_yaml = { version = "0.9.34", default-features = false }
 serde = { version = "1.0.228", features = ["derive"], default-features = false }
 async-trait = { version = "0.1.89", default-features = false }
 futures-util = { version = "0.3.32", default-features = false }
-askama = { version = "0.12.1", default-features = false }
+askama = { version = "0.16.0" }
 pem = { version = "3.0.6", default-features = false, features = ["std"] }
 uuid = { version = "1.23.3", default-features = false, features = [
     "v4",
     "serde",
 ] }
 either = { version = "1.16.0", default-features = false }
-instant-acme = { version = "0.4.3", default-features = false, features = [
+instant-acme = { version = "0.8.5", default-features = false, features = [
     "hyper-rustls",
+    "ring",
 ] }
-tokio-rustls = { version = "0.24.1", default-features = false }
-rustls = { version = "0.21.12", default-features = false }
-rustls-pemfile = { version = "1.0.4", default-features = false }
+tokio-rustls = { version = "0.26.4", default-features = false }
+rustls = { version = "0.23.40", default-features = false }
+rustls-pemfile = { version = "2.2.0", default-features = false }
 validator = { version = "0.20.0", default-features = false, features = [
     "derive",
 ] }
-rcgen = { version = "0.11.3", default-features = false, features = [
+rcgen = { version = "0.14.8", default-features = false, features = [
     "pem",
     "x509-parser",
 ] }
-x509-parser = { version = "0.15.1", default-features = false }
-clap_lex = { version = "0.7.7", default-features = false }
-sha3 = { version = "0.10.9", default-features = false }
+x509-parser = { version = "0.18.1", default-features = false }
+clap_lex = { version = "1.1.0", default-features = false }
+sha3 = { version = "0.12.0", default-features = false }
 thiserror = { version = "2.0.18", default-features = false }
 
 narrowlink-types = { version = "0.2.6" }
 narrowlink-network = { version = "0.2.6" }
+bytes = "1.11.1"
