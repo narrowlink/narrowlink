@@ -62,7 +62,10 @@ pub enum ErrorFormat {
     Html,
 }
 
-pub fn response_error(error_format: ErrorFormat, err: HttpErrors) -> hyper::Response<http_body_util::Full<bytes::Bytes>> {
+pub fn response_error(
+    error_format: ErrorFormat,
+    err: HttpErrors,
+) -> hyper::Response<http_body_util::Full<bytes::Bytes>> {
     let (status_title, body) = err.parts();
     let status_code = err.into();
     let msg: Result<String, Box<dyn std::error::Error>> = match error_format {

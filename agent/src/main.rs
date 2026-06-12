@@ -11,7 +11,7 @@ use args::Args;
 use config::KeyPolicy;
 use error::AgentError;
 use futures_util::{SinkExt, StreamExt};
-use hmac::{Mac, KeyInit};
+use hmac::{KeyInit, Mac};
 use narrowlink_network::{
     async_forward,
     error::NetworkError,
@@ -50,7 +50,8 @@ use uuid::Uuid;
 mod config;
 mod error;
 
-fn main() -> Result<(), AgentError> {
+#[tokio::main]
+async fn main() -> Result<(), AgentError> {
     let (stdout, _stdout_guard) = tracing_appender::non_blocking(io::stdout());
     let (stderr, _stderr_guard) = tracing_appender::non_blocking(io::stderr());
 
@@ -101,11 +102,6 @@ fn main() -> Result<(), AgentError> {
     //         return Ok(());
     //     }
     // }
-    start(args)
-}
-
-#[tokio::main]
-async fn start(args: Args) -> Result<(), AgentError> {
     let mut conf = match config::Config::load(args.config_path) {
         Ok(c) => c,
         Err(e) => {

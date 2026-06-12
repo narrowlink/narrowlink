@@ -73,90 +73,116 @@ impl Wss {
     // buf is the first 1024 bytes of the tcp stream, which is the client hello
     pub fn peek_sni_and_alpns(buf: &[u8]) -> Option<(String, Vec<Vec<u8>>)> {
         trace!("peeking sni and alpns from client hello");
-        if buf.len() < 5 { return None; }
+        if buf.len() < 5 {
+            return None;
+        }
         // Record header
-        if buf[0] != 0x16 { return None; } // Handshake
+        if buf[0] != 0x16 {
+            return None;
+        } // Handshake
         let record_len = ((buf[3] as usize) << 8) | (buf[4] as usize);
-        if buf.len() < 5 + record_len { return None; }
-        
+        if buf.len() < 5 + record_len {
+            return None;
+        }
+
         let mut pos = 5;
         // Handshake header
-        if buf[pos] != 0x01 { return None; } // ClientHello
-        let hs_len = ((buf[pos+1] as usize) << 16) | ((buf[pos+2] as usize) << 8) | (buf[pos+3] as usize);
-        if record_len < 4 + hs_len { return None; }
+        if buf[pos] != 0x01 {
+            return None;
+        } // ClientHello
+        let hs_len = ((buf[pos + 1] as usize) << 16)
+            | ((buf[pos + 2] as usize) << 8)
+            | (buf[pos + 3] as usize);
+        if record_len < 4 + hs_len {
+            return None;
+        }
         pos += 4;
-        
-        if pos + 35 > buf.len() { return None; }
+
+        if pos + 35 > buf.len() {
+            return None;
+        }
         pos += 2; // Version
         pos += 32; // Random
-        
+
         // Session ID
         let sid_len = buf[pos] as usize;
         pos += 1 + sid_len;
-        if pos + 2 > buf.len() { return None; }
-        
+        if pos + 2 > buf.len() {
+            return None;
+        }
+
         // Cipher Suites
-        let cs_len = ((buf[pos] as usize) << 8) | (buf[pos+1] as usize);
+        let cs_len = ((buf[pos] as usize) << 8) | (buf[pos + 1] as usize);
         pos += 2 + cs_len;
-        if pos + 1 > buf.len() { return None; }
-        
+        if pos + 1 > buf.len() {
+            return None;
+        }
+
         // Compression Methods
         let cm_len = buf[pos] as usize;
         pos += 1 + cm_len;
-        if pos + 2 > buf.len() { return None; } // no extensions
-        
+        if pos + 2 > buf.len() {
+            return None;
+        } // no extensions
+
         // Extensions
-        let ext_len = ((buf[pos] as usize) << 8) | (buf[pos+1] as usize);
+        let ext_len = ((buf[pos] as usize) << 8) | (buf[pos + 1] as usize);
         pos += 2;
         let ext_end = pos + ext_len;
-        if ext_end > buf.len() { return None; }
-        
+        if ext_end > buf.len() {
+            return None;
+        }
+
         let mut sni = None;
         let mut alpns = Vec::new();
-        
+
         while pos + 4 <= ext_end {
-            let e_type = ((buf[pos] as usize) << 8) | (buf[pos+1] as usize);
-            let e_len = ((buf[pos+2] as usize) << 8) | (buf[pos+3] as usize);
+            let e_type = ((buf[pos] as usize) << 8) | (buf[pos + 1] as usize);
+            let e_len = ((buf[pos + 2] as usize) << 8) | (buf[pos + 3] as usize);
             pos += 4;
-            if pos + e_len > ext_end { break; }
-            
-            if e_type == 0x0000 { // SNI
+            if pos + e_len > ext_end {
+                break;
+            }
+
+            if e_type == 0x0000 {
+                // SNI
                 let mut p = pos;
                 if p + 2 <= pos + e_len {
-                    let _sni_list_len = ((buf[p] as usize) << 8) | (buf[p+1] as usize);
+                    let _sni_list_len = ((buf[p] as usize) << 8) | (buf[p + 1] as usize);
                     p += 2;
                     while p + 3 <= pos + e_len {
                         let name_type = buf[p];
-                        let name_len = ((buf[p+1] as usize) << 8) | (buf[p+2] as usize);
+                        let name_len = ((buf[p + 1] as usize) << 8) | (buf[p + 2] as usize);
                         p += 3;
-                        if p + name_len <= pos + e_len
-                            && name_type == 0 { // host_name
-                                if let Ok(s) = std::str::from_utf8(&buf[p..p+name_len]) {
-                                    sni = Some(s.to_string());
-                                }
+                        if p + name_len <= pos + e_len && name_type == 0 {
+                            // host_name
+                            if let Ok(s) = std::str::from_utf8(&buf[p..p + name_len]) {
+                                sni = Some(s.to_string());
                             }
+                        }
                         p += name_len;
                     }
                 }
-            } else if e_type == 0x0010 { // ALPN
+            } else if e_type == 0x0010 {
+                // ALPN
                 let mut p = pos;
                 if p + 2 <= pos + e_len {
-                    let _alpn_list_len = ((buf[p] as usize) << 8) | (buf[p+1] as usize);
+                    let _alpn_list_len = ((buf[p] as usize) << 8) | (buf[p + 1] as usize);
                     p += 2;
                     while p < pos + e_len {
                         let name_len = buf[p] as usize;
                         p += 1;
                         if p + name_len <= pos + e_len {
-                            alpns.push(buf[p..p+name_len].to_vec());
+                            alpns.push(buf[p..p + name_len].to_vec());
                         }
                         p += name_len;
                     }
                 }
             }
-            
+
             pos += e_len;
         }
-        
+
         sni.map(|s| (s, alpns))
     }
 }
@@ -265,7 +291,9 @@ impl Service for Wss {
                         hyper_util::rt::TokioIo::new(secure_stream),
                         hyper::service::service_fn(move |req| {
                             let mut ws_service = ws_service.clone();
-                            async move { Ok::<_, std::convert::Infallible>(ws_service.handle(req).await) }
+                            async move {
+                                Ok::<_, std::convert::Infallible>(ws_service.handle(req).await)
+                            }
                         }),
                     )
                     .with_upgrades()

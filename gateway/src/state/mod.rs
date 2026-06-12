@@ -68,11 +68,13 @@ pub enum InBound {
         oneshot::Sender<Result<ResponseHeaders, ResponseErrors>>,
     ),
     HttpTransparent(
-        String,                                                                //domain_name
-        hyper::Request<hyper::body::Incoming>,                                           //request
-        SocketAddr,                                                            //peer_addr
-        oneshot::Sender<Result<hyper::Response<http_body_util::Full<bytes::Bytes>>, ResponseErrors>>, //response
-        RequestProtocol,                                                       //service_protocol
+        String,                                //domain_name
+        hyper::Request<hyper::body::Incoming>, //request
+        SocketAddr,                            //peer_addr
+        oneshot::Sender<
+            Result<hyper::Response<http_body_util::Full<bytes::Bytes>>, ResponseErrors>,
+        >, //response
+        RequestProtocol,                       //service_protocol
     ),
     TlsTransparent(
         String,    //sni

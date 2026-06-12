@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use instant_acme::{
-    Account, AccountCredentials, AuthorizationStatus, Identifier,
-    NewOrder, Order, OrderStatus,
+    Account, AccountCredentials, AuthorizationStatus, Identifier, NewOrder, Order, OrderStatus,
 };
 use rcgen::{CertificateParams, DistinguishedName};
 use rustls::ServerConfig;
@@ -57,17 +56,19 @@ impl Acme {
         directory: &str,
     ) -> Result<(Self, AccountCredentials), GatewayError> {
         let contact = format!("mailto:{}", email);
-        let (account, account_credentials) = instant_acme::Account::builder().map_err(|_| GatewayError::ACMEFailed)?.create(
-            &instant_acme::NewAccount {
-                contact: &[&contact],
-                terms_of_service_agreed: true,
-                only_return_existing: false,
-            },
-            directory.to_string(),
-            None,
-        )
-        .await
-        .map_err(|_| GatewayError::ACMEFailed)?;
+        let (account, account_credentials) = instant_acme::Account::builder()
+            .map_err(|_| GatewayError::ACMEFailed)?
+            .create(
+                &instant_acme::NewAccount {
+                    contact: &[&contact],
+                    terms_of_service_agreed: true,
+                    only_return_existing: false,
+                },
+                directory.to_string(),
+                None,
+            )
+            .await
+            .map_err(|_| GatewayError::ACMEFailed)?;
         Ok((
             Self {
                 account,
@@ -96,10 +97,7 @@ impl Acme {
             .map(|name| Identifier::Dns(name.into()))
             .collect::<Vec<_>>();
 
-        let mut order = self
-            .account
-            .new_order(&NewOrder::new(&identifiers))
-            .await?;
+        let mut order = self.account.new_order(&NewOrder::new(&identifiers)).await?;
         debug!("new acme order placed for {:?}", &domains);
         let mut has_invalid = false;
         let mut any_valid = false;
@@ -119,35 +117,50 @@ impl Acme {
                     any_valid = true;
                 } else {
                     let identifier = auth.identifier().to_string();
-                    let has_tls = auth.challenges.iter().any(|c| c.r#type == instant_acme::ChallengeType::TlsAlpn01);
-                    let has_http = auth.challenges.iter().any(|c| c.r#type == instant_acme::ChallengeType::Http01);
+                    let has_tls = auth
+                        .challenges
+                        .iter()
+                        .any(|c| c.r#type == instant_acme::ChallengeType::TlsAlpn01);
+                    let has_http = auth
+                        .challenges
+                        .iter()
+                        .any(|c| c.r#type == instant_acme::ChallengeType::Http01);
 
                     if has_tls {
-                        let challenge = auth.challenge(instant_acme::ChallengeType::TlsAlpn01).ok_or(GatewayError::ACMEFailed)?;
+                        let challenge = auth
+                            .challenge(instant_acme::ChallengeType::TlsAlpn01)
+                            .ok_or(GatewayError::ACMEFailed)?;
                         let key_auth_str = challenge.key_authorization().as_str().to_string();
                         let url = challenge.url.clone();
-                        let digest = ring::digest::digest(
-                            &ring::digest::SHA256,
-                            key_auth_str.as_bytes(),
-                        );
-                        let key_pair = rcgen::KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).map_err(|_| GatewayError::ACMEFailed)?;
-                        let mut params = rcgen::CertificateParams::new(vec![identifier.clone()]).map_err(|_| GatewayError::ACMEFailed)?;
+                        let digest =
+                            ring::digest::digest(&ring::digest::SHA256, key_auth_str.as_bytes());
+                        let key_pair = rcgen::KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256)
+                            .map_err(|_| GatewayError::ACMEFailed)?;
+                        let mut params = rcgen::CertificateParams::new(vec![identifier.clone()])
+                            .map_err(|_| GatewayError::ACMEFailed)?;
                         let mut dn = rcgen::DistinguishedName::new();
                         dn.push(rcgen::DnType::OrganizationName, "narrowlink");
                         params.distinguished_name = dn;
-                        params.custom_extensions = vec![rcgen::CustomExtension::new_acme_identifier(digest.as_ref())];
-                        
-                        let cert = params.self_signed(&key_pair).map_err(|_| GatewayError::ACMEFailed)?;
+                        params.custom_extensions =
+                            vec![rcgen::CustomExtension::new_acme_identifier(digest.as_ref())];
+
+                        let cert = params
+                            .self_signed(&key_pair)
+                            .map_err(|_| GatewayError::ACMEFailed)?;
                         let cert_der = cert.der().to_vec();
                         let key_der = key_pair.serialize_der();
-                        
-                        let mut server_config = rustls::ServerConfig::builder()
-                            .with_no_client_auth()
-                            .with_single_cert(
-                                vec![rustls::pki_types::CertificateDer::from(cert_der).into_owned()],
-                                rustls::pki_types::PrivateKeyDer::try_from(key_der).map_err(|_| GatewayError::ACMEFailed)?
-                            ).map_err(|_| GatewayError::ACMEFailed)?;
-                        
+
+                        let mut server_config =
+                            rustls::ServerConfig::builder()
+                                .with_no_client_auth()
+                                .with_single_cert(
+                                    vec![rustls::pki_types::CertificateDer::from(cert_der)
+                                        .into_owned()],
+                                    rustls::pki_types::PrivateKeyDer::try_from(key_der)
+                                        .map_err(|_| GatewayError::ACMEFailed)?,
+                                )
+                                .map_err(|_| GatewayError::ACMEFailed)?;
+
                         server_config
                             .alpn_protocols
                             .push(crate::service::certificate::ACME_TLS_ALPN_NAME.to_vec());
@@ -158,7 +171,9 @@ impl Acme {
                             challenge: ACMEChallenge::TlsAlpn01(Arc::new(server_config)),
                         });
                     } else if has_http {
-                        let challenge = auth.challenge(instant_acme::ChallengeType::Http01).ok_or(GatewayError::ACMEFailed)?;
+                        let challenge = auth
+                            .challenge(instant_acme::ChallengeType::Http01)
+                            .ok_or(GatewayError::ACMEFailed)?;
                         let key_auth_str = challenge.key_authorization().as_str().to_string();
                         let url = challenge.url.clone();
                         let digest = key_auth_str;
@@ -185,26 +200,42 @@ impl Acme {
         if any_valid {
             let key_pair = suggested_private_key
                 .and_then(|private_key| rcgen::KeyPair::try_from(private_key.secret_der()).ok())
-                .unwrap_or_else(|| rcgen::KeyPair::generate().expect("Failed to generate key pair"));
-            let mut params = rcgen::CertificateParams::new(domains.clone()).map_err(|_| GatewayError::ACMEFailed)?;
+                .unwrap_or_else(|| {
+                    rcgen::KeyPair::generate().expect("Failed to generate key pair")
+                });
+            let mut params = rcgen::CertificateParams::new(domains.clone())
+                .map_err(|_| GatewayError::ACMEFailed)?;
             params.distinguished_name = rcgen::DistinguishedName::new();
-            let csr = params.serialize_request(&key_pair).map_err(|_| GatewayError::ACMEFailed)?.der().to_vec();
-            order.finalize_csr(&csr).await.map_err(|_| GatewayError::ACMEFailed)?;
+            let csr = params
+                .serialize_request(&key_pair)
+                .map_err(|_| GatewayError::ACMEFailed)?
+                .der()
+                .to_vec();
+            order
+                .finalize_csr(&csr)
+                .await
+                .map_err(|_| GatewayError::ACMEFailed)?;
             let cert_chain_pem = loop {
-                match order.certificate().await.map_err(|_| GatewayError::ACMEFailed)? {
+                match order
+                    .certificate()
+                    .await
+                    .map_err(|_| GatewayError::ACMEFailed)?
+                {
                     Some(cert_chain_pem) => break cert_chain_pem,
                     None => tokio::time::sleep(tokio::time::Duration::from_secs(1)).await,
                 }
             };
 
-            return pem::parse_many(cert_chain_pem).map_err(|_| GatewayError::ACMEFailed).and_then(
-                |mut c| {
-                    pem::parse(key_pair.serialize_pem()).map_err(|_| GatewayError::ACMEFailed).map(|p| {
-                        c.push(p);
-                        Some(c)
-                    })
-                },
-            );
+            return pem::parse_many(cert_chain_pem)
+                .map_err(|_| GatewayError::ACMEFailed)
+                .and_then(|mut c| {
+                    pem::parse(key_pair.serialize_pem())
+                        .map_err(|_| GatewayError::ACMEFailed)
+                        .map(|p| {
+                            c.push(p);
+                            Some(c)
+                        })
+                });
         }
 
         self.challenges = challenges;
@@ -215,11 +246,21 @@ impl Acme {
     pub fn get_tls_alpn_01_certificate_challenges(
         &self,
     ) -> Result<Vec<ChallengeInfo>, GatewayError> {
-        Ok(self.challenges.iter().filter(|c| matches!(c.challenge, ACMEChallenge::TlsAlpn01(_))).cloned().collect())
+        Ok(self
+            .challenges
+            .iter()
+            .filter(|c| matches!(c.challenge, ACMEChallenge::TlsAlpn01(_)))
+            .cloned()
+            .collect())
     }
 
     pub fn get_http_01_certificate_challenges(&self) -> Result<Vec<ChallengeInfo>, GatewayError> {
-        Ok(self.challenges.iter().filter(|c| matches!(c.challenge, ACMEChallenge::Http01(_, _))).cloned().collect())
+        Ok(self
+            .challenges
+            .iter()
+            .filter(|c| matches!(c.challenge, ACMEChallenge::Http01(_, _)))
+            .cloned()
+            .collect())
     }
 
     pub async fn check_challenge(
@@ -278,7 +319,10 @@ impl Acme {
         let state = loop {
             trace!("waiting for acme verification");
             time::sleep(delay).await;
-            let state = order.refresh().await.map_err(|_| GatewayError::ACMEFailed)?;
+            let state = order
+                .refresh()
+                .await
+                .map_err(|_| GatewayError::ACMEFailed)?;
 
             if let OrderStatus::Ready | OrderStatus::Invalid = state.status {
                 // dbg!("order state: {:#?}", &state);
@@ -302,22 +346,37 @@ impl Acme {
             .unwrap_or_else(|| rcgen::KeyPair::generate().expect("Failed to generate key pair"));
         let mut params = CertificateParams::new(domain).map_err(|_| GatewayError::ACMEFailed)?;
         params.distinguished_name = DistinguishedName::new();
-        let csr = params.serialize_request(&key_pair).map_err(|_| GatewayError::ACMEFailed)?.der().to_vec();
-        order.finalize_csr(&csr).await.map_err(|_| GatewayError::ACMEFailed)?;
+        let csr = params
+            .serialize_request(&key_pair)
+            .map_err(|_| GatewayError::ACMEFailed)?
+            .der()
+            .to_vec();
+        order
+            .finalize_csr(&csr)
+            .await
+            .map_err(|_| GatewayError::ACMEFailed)?;
         trace!("acme certificate finalized");
         let cert_chain_pem = loop {
-            match order.certificate().await.map_err(|_| GatewayError::ACMEFailed)? {
+            match order
+                .certificate()
+                .await
+                .map_err(|_| GatewayError::ACMEFailed)?
+            {
                 Some(cert_chain_pem) => break cert_chain_pem,
                 None => tokio::time::sleep(tokio::time::Duration::from_secs(1)).await,
             }
         };
         trace!("acme certificate received");
 
-        pem::parse_many(cert_chain_pem).map_err(|_| GatewayError::ACMEFailed).and_then(|mut c| {
-            pem::parse(key_pair.serialize_pem()).map_err(|_| GatewayError::ACMEFailed).map(|p| {
-                c.push(p);
-                c
+        pem::parse_many(cert_chain_pem)
+            .map_err(|_| GatewayError::ACMEFailed)
+            .and_then(|mut c| {
+                pem::parse(key_pair.serialize_pem())
+                    .map_err(|_| GatewayError::ACMEFailed)
+                    .map(|p| {
+                        c.push(p);
+                        c
+                    })
             })
-        })
     }
 }

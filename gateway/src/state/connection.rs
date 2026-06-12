@@ -1,9 +1,9 @@
 use std::net::SocketAddr;
 
-use hyper::{http::HeaderValue, Request, Response, body::Incoming};
-use hyper::client::conn::http1;
-use http_body_util::Full;
 use bytes::Bytes;
+use http_body_util::Full;
+use hyper::client::conn::http1;
+use hyper::{body::Incoming, http::HeaderValue, Request, Response};
 use narrowlink_network::{error::NetworkError, UniversalStream};
 // use narrowlink_types::policy::Policy;
 use tokio::{net::TcpStream, sync::oneshot};
@@ -169,7 +169,8 @@ impl ConnectionData {
                     .await
                     .map_err(|_| GatewayError::Other("Agent Connection gone"))?;
                 let agent_socket = narrowlink_network::StreamToAsync::new(agent_stream);
-                let (mut request_sender, connection) = http1::handshake(hyper_util::rt::TokioIo::new(agent_socket)).await?;
+                let (mut request_sender, connection) =
+                    http1::handshake(hyper_util::rt::TokioIo::new(agent_socket)).await?;
                 tokio::spawn(
                     async move {
                         if let Err(e) = connection.await {
@@ -239,11 +240,17 @@ impl ConnectionData {
                         parts.version = original_version;
                         // Collect the full response body from the agent before forwarding
                         use http_body_util::BodyExt;
-                        let collected = body.collect().await
+                        let collected = body
+                            .collect()
+                            .await
                             .map(|c| c.to_bytes())
                             .unwrap_or_default();
-                        let full_response = hyper::Response::from_parts(parts, http_body_util::Full::new(collected));
-                        replay.send(Ok(full_response))
+                        let full_response = hyper::Response::from_parts(
+                            parts,
+                            http_body_util::Full::new(collected),
+                        );
+                        replay
+                            .send(Ok(full_response))
                             .map_err(|_| GatewayError::Other("Connection gone"))
                     }
                     Err(_) => Err(GatewayError::Other("Connection gone")),

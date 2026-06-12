@@ -48,12 +48,20 @@ pub trait CertificateStorage {
     async fn is_pending(&self, account: &str, domain: &str) -> bool;
     async fn get_default_account(&self) -> Result<Account, GatewayError> {
         let account_credentials = self.get_default_account_credentials().await?;
-        Ok(instant_acme::Account::builder().map_err(|_| GatewayError::ACMEFailed)?.from_credentials(account_credentials).await.map_err(|_| GatewayError::ACMEFailed)?)
+        Ok(instant_acme::Account::builder()
+            .map_err(|_| GatewayError::ACMEFailed)?
+            .from_credentials(account_credentials)
+            .await
+            .map_err(|_| GatewayError::ACMEFailed)?)
     }
     async fn get_acme_account(&self, account: &str, domain: &str) -> Result<Account, GatewayError> {
         let account_credentials = self.get_acme_account_credentials(account, domain).await;
         if let Some(account_credentials) = account_credentials {
-            Ok(instant_acme::Account::builder().map_err(|_| GatewayError::ACMEFailed)?.from_credentials(account_credentials).await.map_err(|_| GatewayError::ACMEFailed)?)
+            Ok(instant_acme::Account::builder()
+                .map_err(|_| GatewayError::ACMEFailed)?
+                .from_credentials(account_credentials)
+                .await
+                .map_err(|_| GatewayError::ACMEFailed)?)
         } else {
             Err(GatewayError::Invalid("No account credentials found"))
         }
@@ -73,10 +81,15 @@ impl Certificate {
         for i in v {
             match i.tag() {
                 "CERTIFICATE" => {
-                    certificate_chain.push(rustls::pki_types::CertificateDer::from(i.contents().to_vec()));
+                    certificate_chain.push(rustls::pki_types::CertificateDer::from(
+                        i.contents().to_vec(),
+                    ));
                 }
                 "PRIVATE KEY" => {
-                    private_key.replace(rustls::pki_types::PrivateKeyDer::try_from(i.contents().to_vec()).map_err(|_| GatewayError::Invalid("Invalid Private Key"))?);
+                    private_key.replace(
+                        rustls::pki_types::PrivateKeyDer::try_from(i.contents().to_vec())
+                            .map_err(|_| GatewayError::Invalid("Invalid Private Key"))?,
+                    );
                 }
                 _ => continue,
             }

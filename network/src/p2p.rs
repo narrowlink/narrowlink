@@ -309,7 +309,8 @@ impl QuicStream {
             .with_no_client_auth();
         config.enable_sni = false;
         end.set_default_client_config(ClientConfig::new(Arc::new(
-            quinn::crypto::rustls::QuicClientConfig::try_from(config).map_err(|_| NetworkError::TlsError)?
+            quinn::crypto::rustls::QuicClientConfig::try_from(config)
+                .map_err(|_| NetworkError::TlsError)?,
         )));
 
         let con = end
@@ -402,7 +403,9 @@ impl AsyncWrite for QuicBiSocket {
         cx: &mut std::task::Context<'_>,
         buf: &[u8],
     ) -> std::task::Poll<Result<usize, std::io::Error>> {
-        std::pin::Pin::new(&mut self.send).poll_write(cx, buf).map(|r| r.map_err(|e| std::io::Error::other(e.to_string())))
+        std::pin::Pin::new(&mut self.send)
+            .poll_write(cx, buf)
+            .map(|r| r.map_err(|e| std::io::Error::other(e.to_string())))
     }
 
     fn poll_flush(

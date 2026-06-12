@@ -1,5 +1,4 @@
-use rand::RngExt;
-use hmac::{Mac, KeyInit};
+use hmac::{KeyInit, Mac};
 use narrowlink_network::{
     async_forward, error::NetworkError, p2p::QuicStream, ws::WsConnectionBinary, AsyncSocket,
     AsyncSocketCrypt,
@@ -9,6 +8,7 @@ use narrowlink_types::{
     client::Peer2PeerInstruction,
     generic::{self, Connect},
 };
+use rand::RngExt;
 use std::{
     collections::HashMap,
     sync::{

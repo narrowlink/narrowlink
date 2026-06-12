@@ -1,17 +1,17 @@
 use std::{collections::HashMap, net::SocketAddr, pin::Pin, sync::Arc};
 
 use async_trait::async_trait;
+use bytes::Bytes;
 use either::Either::{Left, Right};
 use futures_util::Future;
+use http_body_util::Full;
 use hyper::{
+    body::Incoming,
     header::{self, HOST},
     http::HeaderValue,
     service::Service as HyperService,
     upgrade, Request, Response, StatusCode,
-    body::Incoming,
 };
-use http_body_util::Full;
-use bytes::Bytes;
 use tokio::{
     net::TcpListener,
     sync::{mpsc::UnboundedSender, oneshot},
@@ -87,7 +87,9 @@ impl Service for Ws {
                         hyper_util::rt::TokioIo::new(tcp_stream),
                         hyper::service::service_fn(move |req| {
                             let mut ws_service = ws_service.clone();
-                            async move { Ok::<_, std::convert::Infallible>(ws_service.handle(req).await) }
+                            async move {
+                                Ok::<_, std::convert::Infallible>(ws_service.handle(req).await)
+                            }
                         }),
                     )
                     .with_upgrades()
@@ -136,9 +138,9 @@ impl WsService {
         else {
             //inconsistency:port number
             return crate::service::http_templates::response_error(
-                    crate::service::http_templates::ErrorFormat::Html,
-                    crate::service::http_templates::HttpErrors::BadRequest,
-                );
+                crate::service::http_templates::ErrorFormat::Html,
+                crate::service::http_templates::HttpErrors::BadRequest,
+            );
         };
 
         span.record("host", &host);
@@ -163,7 +165,8 @@ impl WsService {
                             return Response::builder()
                                 .version(req_version)
                                 .status(StatusCode::OK)
-                                .body(Full::new(Bytes::from(key_authorization))).expect("Expected operation to succeed");
+                                .body(Full::new(Bytes::from(key_authorization)))
+                                .expect("Expected operation to succeed");
                         }
                     } else {
                         trace!("acme challenge not found for {}", host);
@@ -326,8 +329,9 @@ impl WsService {
                             .header(header::CONNECTION, "Upgrade")
                             .header(header::UPGRADE, "websocket")
                             .header(header::SEC_WEBSOCKET_ACCEPT, derived_key)
-                            .body(Full::new(Bytes::new())).expect("Expected operation to succeed");
-                        
+                            .body(Full::new(Bytes::new()))
+                            .expect("Expected operation to succeed");
+
                         let headers: HashMap<&str, HeaderValue> = response_headers.into();
                         for (k, v) in headers {
                             response.headers_mut().append(k, v);
@@ -370,7 +374,8 @@ impl WsService {
                             return Response::builder()
                                 .version(req_version)
                                 .status(StatusCode::OK)
-                                .body(Full::new(Bytes::from(INDEX_HTML))).expect("Expected operation to succeed");
+                                .body(Full::new(Bytes::from(INDEX_HTML)))
+                                .expect("Expected operation to succeed");
                         }
                         debug!("an expected response error received: {:?}", e);
                         crate::service::http_templates::response_error(
