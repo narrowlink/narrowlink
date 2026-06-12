@@ -34,4 +34,4 @@ regex-lite = { version = "0.1.9", default-features = false, features = [
 hmac = { version = "0.12.1", default-features = false }
 sha3 = { version = "0.10.9", default-features = false }
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
-thiserror = { version = "1.0.69", default-features = false }
+thiserror = { version = "2.0.18", default-features = false }
