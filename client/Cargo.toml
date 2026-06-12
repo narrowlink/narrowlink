@@ -26,9 +26,9 @@ path = "src/main.rs"
 workspace = true
 
 [dependencies]
-clap_lex = { version = "0.7.3", default-features = false }
-thiserror = { version = "1.0.69", default-features = false }
-tokio = { version = "1.43.1", features = [
+clap_lex = { version = "0.7.7", default-features = false }
+thiserror = { version = "2.0.18", default-features = false }
+tokio = { version = "1.52.3", features = [
     "macros",
     "rt",
     "io-std",
@@ -36,42 +36,42 @@ tokio = { version = "1.43.1", features = [
     "time",
     "signal",
 ], default-features = false }
-futures-util = { version = "0.3.31", default-features = false }
-futures-sink = { version = "0.3.31", features = [
+futures-util = { version = "0.3.32", default-features = false }
+futures-sink = { version = "0.3.32", features = [
     "alloc",
 ], default-features = false }
-futures-timer = { version = "3.0.3", default-features = false }
+futures-timer = { version = "3.0.4", default-features = false }
 tokio-tungstenite = { version = "0.20.1", default-features = false }
 tungstenite = { version = "0.20.1", default-features = false }
-serde = { version = "1.0.215", features = ["derive"], default-features = false }
-serde_json = { version = "1.0.133", default-features = false }
+serde = { version = "1.0.228", features = ["derive"], default-features = false }
+serde_json = { version = "1.0.150", default-features = false }
 serde_yaml = { version = "0.9.34", default-features = false }
-udp-stream = { version = "0.0.11", default-features = false }
-regex = { version = "1.11.1", features = ["std"], default-features = false }
-either = { version = "1.13.0", default-features = false }
-tracing = { version = "0.1.41", default-features = false, features = [
+udp-stream = { version = "0.0.12", default-features = false }
+regex = { version = "1.12.4", features = ["std"], default-features = false }
+either = { version = "1.16.0", default-features = false }
+tracing = { version = "0.1.44", default-features = false, features = [
     "attributes",
 ] }
-tracing-subscriber = { version = "0.3.20", default-features = false, features = [
+tracing-subscriber = { version = "0.3.23", default-features = false, features = [
     "fmt",
     "ansi",
     "json",
 ] }
-tracing-appender = { version = "0.2.3" }
+tracing-appender = { version = "0.2.5" }
 proxy-stream = { version = "0.0.2", default-features = false }
-sha3 = { version = "0.10.8", default-features = false }
+sha3 = { version = "0.10.9", default-features = false }
 hmac = { version = "0.12.1", default-features = false }
-rand = { version = "0.8.5", default-features = false }
-dirs = { version = "5.0.1", default-features = false }
-uuid = { version = "1.11.0", features = ["v4"], default-features = false }
-chrono = { version = "0.4.38", default-features = false }
+rand = { version = "0.8.6", default-features = false }
+dirs = { version = "6.0.0", default-features = false }
+uuid = { version = "1.23.3", features = ["v4"], default-features = false }
+chrono = { version = "0.4.45", default-features = false }
 
 narrowlink-types = { version = "0.2.6", default-features = false }
 narrowlink-network = { version = "0.2.6", default-features = false }
 
 [target.'cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))'.dependencies]
 ipstack = { version = "0.0.10", default-features = false }
-net-route = { version = "0.4.5", default-features = false }
+net-route = { version = "0.4.6", default-features = false }
 
 
 [target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]

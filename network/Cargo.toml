@@ -16,12 +16,12 @@ workspace = true
 
 [dependencies]
 bytes = { version = "1.11.1", default-features = false }
-serde = { version = "1.0.215", features = ["derive"], default-features = false }
-serde_json = { version = "1.0.133", default-features = false, features = [
+serde = { version = "1.0.228", features = ["derive"], default-features = false }
+serde_json = { version = "1.0.150", default-features = false, features = [
     "alloc",
 ] }
-futures-util = { version = "0.3.31", default-features = false }
-tokio = { version = "1.43.1", features = [
+futures-util = { version = "0.3.32", default-features = false }
+tokio = { version = "1.52.3", features = [
     "macros",
     "rt",
     "net",
@@ -31,7 +31,7 @@ tokio-util = { version = "0.7", features = ["codec"], default-features = false }
 tokio-rustls = { version = "0.24.1", default-features = false }
 rustls = { version = "0.21.12", default-features = false }
 rustls-platform-verifier = { version = "0.1", default-features = false }
-hyper = { version = "0.14.31", features = [
+hyper = { version = "0.14.32", features = [
     "client",
     "http1",
     "tcp",
@@ -48,15 +48,15 @@ quinn = { version = "0.10.2", default-features = false, features = [
     "tls-rustls",
 ] }
 async-recursion = { version = "1.1.1", default-features = false }
-tracing = { version = "0.1.41", default-features = false }
-thiserror = { version = "1.0.69", default-features = false }
+tracing = { version = "0.1.44", default-features = false }
+thiserror = { version = "2.0.18", default-features = false }
 chunkio = { version = "0.0.1", default-features = false }
 
 narrowlink-types = { version = "0.2.6", default-features = false }
 
 
 [target.'cfg(unix)'.dependencies]
-rlimit = { version = "0.10", default-features = false }
+rlimit = { version = "0.11.0", default-features = false }
 
 
 [features]
