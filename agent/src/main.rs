@@ -86,21 +86,21 @@ fn main() -> Result<(), AgentError> {
 
     let args = Args::parse(env::args())?;
 
-    #[cfg(unix)]
-    if args.daemon {
-        use daemonize::Daemonize;
-        let stdout = std::fs::File::create("/tmp/narrowlink-agent.out")?;
-        let stderr = std::fs::File::create("/tmp/narrowlink-agent.err")?;
-        let daemonize = Daemonize::new()
-            .pid_file("/tmp/narrowlink-agent.pid")
-            .working_directory("/tmp/")
-            .stdout(stdout)
-            .stderr(stderr);
-        if let Err(e) = daemonize.start() {
-            error!("Unable to daemonize: {}", e.to_string());
-            return Ok(());
-        }
-    }
+    // #[cfg(unix)]
+    // if args.daemon {
+    //     use daemonize::Daemonize;
+    //     let stdout = std::fs::File::create("/tmp/narrowlink-agent.out")?;
+    //     let stderr = std::fs::File::create("/tmp/narrowlink-agent.err")?;
+    //     let daemonize = Daemonize::new()
+    //         .pid_file("/tmp/narrowlink-agent.pid")
+    //         .working_directory("/tmp/")
+    //         .stdout(stdout)
+    //         .stderr(stderr);
+    //     if let Err(e) = daemonize.start() {
+    //         error!("Unable to daemonize: {}", e.to_string());
+    //         return Ok(());
+    //     }
+    // }
     start(args)
 }
 

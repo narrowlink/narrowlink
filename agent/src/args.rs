@@ -6,7 +6,7 @@ static HELP: &str = include_str!("../main.help.arg");
 static BRIEF_LICENCE: &str = "This program is licensed under the Mozilla Public License 2.0.";
 pub struct Args {
     pub config_path: Option<String>,
-    pub daemon: bool,
+    // pub daemon: bool,
 }
 
 impl Args {
@@ -17,7 +17,7 @@ impl Args {
         let mut cursor = raw.cursor();
         raw.next(&mut cursor);
         let mut config_path = None;
-        let mut daemon = false;
+        // let mut daemon = false;
         while let Some(arg) = raw.next(&mut cursor) {
             if let Some((long, value)) = arg.to_long() {
                 match long {
@@ -31,10 +31,10 @@ impl Args {
                         );
                         continue;
                     }
-                    Ok("daemon") => {
-                        daemon = true;
-                        continue;
-                    }
+                    // Ok("daemon") => {
+                    //     daemon = true;
+                    //     continue;
+                    // }
                     Ok("help") => {
                         print!("{}", HELP);
                         process::exit(0x0);
@@ -62,9 +62,9 @@ impl Args {
                                 return Err(AgentError::RequiredValue("config"));
                             };
                         }
-                        Ok('d') => {
-                            daemon = true;
-                        }
+                        // Ok('d') => {
+                        //     daemon = true;
+                        // }
                         Ok('h') => {
                             print!("{}", HELP);
                             process::exit(0x0);
@@ -80,7 +80,7 @@ impl Args {
 
         Ok(Self {
             config_path,
-            daemon,
+            // daemon,
         })
     }
 }
