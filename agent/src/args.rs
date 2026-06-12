@@ -18,10 +18,7 @@ impl Args {
         raw.next(&mut cursor);
         let mut config_path = None;
         let mut daemon = false;
-        loop {
-            let Some(arg) = raw.next(&mut cursor) else {
-                break;
-            };
+        while let Some(arg) = raw.next(&mut cursor) {
             if let Some((long, value)) = arg.to_long() {
                 match long {
                     Ok("config") => {

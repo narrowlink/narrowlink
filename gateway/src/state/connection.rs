@@ -20,6 +20,7 @@ pub struct Connection {
 }
 
 // #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum ClientConnection {
     HttpTransparent(
         Request<Body>,

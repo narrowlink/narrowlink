@@ -48,10 +48,7 @@ impl TunRoute {
     pub async fn new(local_addr: Ipv4Addr, _ifaceid: u32) -> Result<Self, io::Error> {
         let handle: Handle = Handle::new()?;
         let Some(default_gw) = handle.default_route().await? else {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "No default gateway found",
-            ));
+            return Err(io::Error::other("No default gateway found"));
         };
 
         let (my_routes_sender, mut my_routes_receiver) =

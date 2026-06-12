@@ -67,7 +67,7 @@ impl CertificateStorage for CertificateFileStorage {
                 BufWriter::new(std::fs::File::create(acme_account_path)?),
                 &acme_account_credentials,
             )
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
         }
         let pem_path = format!("{}/{}.pem", base_path, domain_hash);
 

@@ -29,7 +29,7 @@ pub struct NarrowEventRequest<T, U> {
     sender: mpsc::UnboundedSender<Option<(usize, T, oneshot::Sender<U>)>>,
 }
 
-impl<'a, T, U> NarrowEventRequest<T, U>
+impl<T, U> NarrowEventRequest<T, U>
 where
     T: RequestManager,
 {
