@@ -8,3 +8,5 @@ Options:
   -h, --help       Print help information
       --version    Print version information
 
+Environment:
+  NARROWLINK_TOKEN_GENERATOR_CONFIG    Specify a config file when --config is not set

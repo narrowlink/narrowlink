@@ -8,4 +8,6 @@ Options:
   -h, --help       Print help information
       --version    Print version information
 
+Environment:
+  NARROWLINK_GATEWAY_CONFIG    Specify a config file when --config is not set
 
