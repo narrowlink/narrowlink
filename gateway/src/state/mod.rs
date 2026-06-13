@@ -68,11 +68,13 @@ pub enum InBound {
         oneshot::Sender<Result<ResponseHeaders, ResponseErrors>>,
     ),
     HttpTransparent(
-        String,                                                                //domain_name
-        hyper::Request<hyper::Body>,                                           //request
-        SocketAddr,                                                            //peer_addr
-        oneshot::Sender<Result<hyper::Response<hyper::Body>, ResponseErrors>>, //response
-        RequestProtocol,                                                       //service_protocol
+        String,                                //domain_name
+        hyper::Request<hyper::body::Incoming>, //request
+        SocketAddr,                            //peer_addr
+        oneshot::Sender<
+            Result<hyper::Response<http_body_util::Full<bytes::Bytes>>, ResponseErrors>,
+        >, //response
+        RequestProtocol,                       //service_protocol
     ),
     TlsTransparent(
         String,    //sni
@@ -165,10 +167,14 @@ impl State {
                                             seq = req.easy_seq;
                                         }
 
-                                        let mut params = CertificateParams::new(vec![agent_ip.to_string()]);
+                                        let Ok(mut params) = CertificateParams::new(vec![agent_ip.to_string()]) else {
+                                            let _ = client.send(ClientEventInBound::Response(request_id,ClientEventResponse::Failed)).await;
+                                            continue
+                                        };
                                         params.distinguished_name = DistinguishedName::new();
                                         params.distinguished_name.push(rcgen::DnType::OrganizationName, "Narrowlink");
-                                        let Ok((cert,key)) = rcgen::Certificate::from_params(params).and_then(|cert|cert.serialize_der().map(|c|(c,cert.serialize_private_key_der()))) else {
+                                        let key_pair = rcgen::KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256).expect("Failed to generate key pair");
+                                        let Ok((cert,key)) = params.self_signed(&key_pair).map(|cert| (cert.der().to_vec(), key_pair.serialize_der())) else {
                                             let _ = client.send(ClientEventInBound::Response(request_id,ClientEventResponse::Failed)).await;
                                             continue
                                         };

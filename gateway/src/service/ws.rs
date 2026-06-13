@@ -1,14 +1,16 @@
-use std::{collections::HashMap, net::SocketAddr, pin::Pin, sync::Arc, task::Poll};
+use std::{collections::HashMap, net::SocketAddr, pin::Pin, sync::Arc};
 
 use async_trait::async_trait;
+use bytes::Bytes;
 use either::Either::{Left, Right};
 use futures_util::Future;
+use http_body_util::Full;
 use hyper::{
+    body::Incoming,
     header::{self, HOST},
-    http::{self, HeaderValue},
-    server::conn::Http,
+    http::HeaderValue,
     service::Service as HyperService,
-    upgrade, Body, Request, Response, StatusCode,
+    upgrade, Request, Response, StatusCode,
 };
 use tokio::{
     net::TcpListener,
@@ -72,19 +74,27 @@ impl Service for Ws {
             let ws = self.clone();
             let span_connection = span_connection.clone();
             tokio::spawn(async move {
-                if let Err(http_err) = Http::new()
-                    .serve_connection(
-                        tcp_stream,
-                        WsService {
-                            listen_addr: RequestProtocol::Http(listen_addr),
-                            domains: ws.domains,
-                            sni: None,
-                            status_sender: ws.status_sender,
-                            peer_addr,
-                            cm: ws.cm,
-                        },
+                let ws_service = WsService {
+                    listen_addr: RequestProtocol::Http(listen_addr),
+                    domains: ws.domains.clone(),
+                    sni: None,
+                    status_sender: ws.status_sender.clone(),
+                    peer_addr,
+                    cm: ws.cm.clone(),
+                };
+                if let Err(http_err) =
+                    hyper_util::server::conn::auto::Builder::new(
+                        hyper_util::rt::TokioExecutor::new(),
                     )
-                    .with_upgrades()
+                    .serve_connection_with_upgrades(
+                        hyper_util::rt::TokioIo::new(tcp_stream),
+                        hyper::service::service_fn(move |req| {
+                            let mut ws_service = ws_service.clone();
+                            async move {
+                                Ok::<_, std::convert::Infallible>(ws_service.handle(req).await)
+                            }
+                        }),
+                    )
                     .instrument(span_connection.clone())
                     .await
                 {
@@ -97,6 +107,7 @@ impl Service for Ws {
 }
 
 //response header
+#[derive(Clone)]
 pub struct WsService {
     pub listen_addr: RequestProtocol,
     pub domains: Vec<String>,
@@ -106,19 +117,19 @@ pub struct WsService {
     pub cm: Option<Arc<CertificateManager>>,
 }
 
-impl HyperService<Request<Body>> for WsService {
-    type Response = Response<Body>;
-    type Error = http::Error;
+impl HyperService<Request<Incoming>> for WsService {
+    type Response = Response<Full<Bytes>>;
+    type Error = std::convert::Infallible;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
-    fn poll_ready(
-        &mut self,
-        _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
+    fn call(&self, req: Request<Incoming>) -> Self::Future {
+        let mut this = self.clone();
+        Box::pin(async move { Ok(this.handle(req).await) })
     }
+}
 
-    fn call(&mut self, req: Request<Body>) -> Self::Future {
+impl WsService {
+    pub(crate) async fn handle(&mut self, req: Request<Incoming>) -> Response<Full<Bytes>> {
         let span = span!(tracing::Level::INFO, "service", peer_addr = %self.peer_addr);
         span.in_scope(|| debug!("request: {:?}", req));
         let Some(host) = req
@@ -128,13 +139,12 @@ impl HyperService<Request<Body>> for WsService {
             .map(|h| h.to_owned())
         else {
             //inconsistency:port number
-            return Box::pin(async {
-                Ok(crate::service::http_templates::response_error(
-                    crate::service::http_templates::ErrorFormat::Html,
-                    crate::service::http_templates::HttpErrors::BadRequest,
-                ))
-            });
+            return crate::service::http_templates::response_error(
+                crate::service::http_templates::ErrorFormat::Html,
+                crate::service::http_templates::HttpErrors::BadRequest,
+            );
         };
+        let host = host.split(':').next().unwrap_or(&host).to_owned();
 
         span.record("host", &host);
         span.in_scope(|| trace!("host: {}", host));
@@ -158,7 +168,8 @@ impl HyperService<Request<Body>> for WsService {
                             return Response::builder()
                                 .version(req_version)
                                 .status(StatusCode::OK)
-                                .body::<Body>(key_authorization.into());
+                                .body(Full::new(Bytes::from(key_authorization)))
+                                .expect("Expected operation to succeed");
                         }
                     } else {
                         trace!("acme challenge not found for {}", host);
@@ -171,7 +182,7 @@ impl HyperService<Request<Body>> for WsService {
                 //         header::LOCATION,
                 //         format!("https://{}{}", host, req.uri().path()),
                 //     )
-                //     .body("".into());
+                //     .body(Full::new(Bytes::new()));
             }
 
             if let Some(token) = req
@@ -195,7 +206,7 @@ impl HyperService<Request<Body>> for WsService {
                 else {
                     trace!("invalid websocket key or key header not found");
                     use crate::service::http_templates::{response_error, ErrorFormat, HttpErrors};
-                    return Ok(response_error(ErrorFormat::Html, HttpErrors::BadRequest));
+                    return response_error(ErrorFormat::Html, HttpErrors::BadRequest);
                 };
                 let publish = req
                     .headers()
@@ -291,7 +302,7 @@ impl HyperService<Request<Body>> for WsService {
                                         if let Ok(upgraded) = upgrade::on(req).await {
                                             let ws_connection = Box::new(
                                                 narrowlink_network::ws::WsConnectionBinary::from(
-                                                    upgraded,
+                                                    hyper_util::rt::TokioIo::new(upgraded),
                                                 )
                                                 .await,
                                             );
@@ -303,7 +314,7 @@ impl HyperService<Request<Body>> for WsService {
                                         if let Ok(upgraded) = upgrade::on(req).await {
                                             let ws_connection = Box::new(
                                                 narrowlink_network::ws::WsConnection::from(
-                                                    upgraded,
+                                                    hyper_util::rt::TokioIo::new(upgraded),
                                                 )
                                                 .await,
                                             );
@@ -315,34 +326,34 @@ impl HyperService<Request<Body>> for WsService {
                             .in_current_span(),
                         );
                         trace!("websocket connection established");
-                        Response::builder()
+                        let mut response = Response::builder()
                             .version(req_version)
                             .status(StatusCode::SWITCHING_PROTOCOLS)
                             .header(header::CONNECTION, "Upgrade")
                             .header(header::UPGRADE, "websocket")
                             .header(header::SEC_WEBSOCKET_ACCEPT, derived_key)
-                            .body::<Body>("".into())
-                            .map(|mut r| {
-                                let headers: HashMap<&str, HeaderValue> = response_headers.into();
-                                for (k, v) in headers {
-                                    r.headers_mut().append(k, v);
-                                }
-                                r
-                            })
+                            .body(Full::new(Bytes::new()))
+                            .expect("Expected operation to succeed");
+
+                        let headers: HashMap<&str, HeaderValue> = response_headers.into();
+                        for (k, v) in headers {
+                            response.headers_mut().append(k, v);
+                        }
+                        response
                     }
                     Ok(Err(error)) => {
                         debug!("an expected response error received: {:?}", error);
-                        Ok(crate::service::http_templates::response_error(
+                        crate::service::http_templates::response_error(
                             crate::service::http_templates::ErrorFormat::Json,
                             error.into(),
-                        ))
+                        )
                     }
                     Err(e) => {
                         debug!("unexpected response error: {}", e);
-                        Ok(crate::service::http_templates::response_error(
+                        crate::service::http_templates::response_error(
                             crate::service::http_templates::ErrorFormat::Html,
                             super::http_templates::HttpErrors::InternalServerError,
-                        ))
+                        )
                     }
                 }
             } else {
@@ -359,33 +370,34 @@ impl HyperService<Request<Body>> for WsService {
                 match response_receiver.await {
                     Ok(Ok(res)) => {
                         trace!("response received");
-                        Ok(res)
+                        res
                     }
                     Ok(Err(e)) => {
                         if matches!(e, crate::state::ResponseErrors::NotFound(_)) && is_homepage {
                             return Response::builder()
                                 .version(req_version)
                                 .status(StatusCode::OK)
-                                .body::<Body>(INDEX_HTML.into());
+                                .body(Full::new(Bytes::from(INDEX_HTML)))
+                                .expect("Expected operation to succeed");
                         }
                         debug!("an expected response error received: {:?}", e);
-                        Ok(crate::service::http_templates::response_error(
+                        crate::service::http_templates::response_error(
                             crate::service::http_templates::ErrorFormat::Html,
                             e.into(),
-                        ))
+                        )
                     }
                     Err(e) => {
                         trace!("unexpected response error: {:?}", e);
-                        Ok(crate::service::http_templates::response_error(
+                        crate::service::http_templates::response_error(
                             crate::service::http_templates::ErrorFormat::Html,
                             super::http_templates::HttpErrors::ServiceUnavailable,
-                        ))
+                        )
                     }
                 }
             }
         }
         .instrument(span);
-        Box::pin(handler)
+        handler.await
     }
 }
 

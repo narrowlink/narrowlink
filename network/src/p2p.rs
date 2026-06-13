@@ -302,14 +302,16 @@ impl QuicStream {
         )?;
         let mut root_store = rustls::RootCertStore::empty();
         root_store
-            .add(&rustls::Certificate(cert))
+            .add(rustls::pki_types::CertificateDer::from(cert))
             .map_err(|_| NetworkError::TlsError)?;
         let mut config = rustls::ClientConfig::builder()
-            .with_safe_defaults()
             .with_root_certificates(root_store)
             .with_no_client_auth();
         config.enable_sni = false;
-        end.set_default_client_config(ClientConfig::new(Arc::new(config)));
+        end.set_default_client_config(ClientConfig::new(Arc::new(
+            quinn::crypto::rustls::QuicClientConfig::try_from(config)
+                .map_err(|_| NetworkError::TlsError)?,
+        )));
 
         let con = end
             .connect(remote_addr, &remote_addr.ip().to_string())
@@ -325,8 +327,8 @@ impl QuicStream {
     ) -> Result<Self, NetworkError> {
         debug("Accepting connection");
         let mut server_config = quinn::ServerConfig::with_single_cert(
-            vec![rustls::Certificate(cert)],
-            rustls::PrivateKey(key),
+            vec![rustls::pki_types::CertificateDer::from(cert)],
+            rustls::pki_types::PrivateKeyDer::try_from(key).map_err(|_| NetworkError::TlsError)?,
         )
         .map_err(|_| NetworkError::TlsError)?;
         if let Some(conf) = std::sync::Arc::get_mut(&mut server_config.transport) {
@@ -401,7 +403,9 @@ impl AsyncWrite for QuicBiSocket {
         cx: &mut std::task::Context<'_>,
         buf: &[u8],
     ) -> std::task::Poll<Result<usize, std::io::Error>> {
-        std::pin::Pin::new(&mut self.send).poll_write(cx, buf)
+        std::pin::Pin::new(&mut self.send)
+            .poll_write(cx, buf)
+            .map(|r| r.map_err(|e| std::io::Error::other(e.to_string())))
     }
 
     fn poll_flush(

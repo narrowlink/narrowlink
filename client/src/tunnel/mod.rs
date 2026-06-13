@@ -8,7 +8,7 @@ use futures_util::{
     StreamExt,
 };
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-use ipstack::stream::IpStackStream;
+use ipstack::IpStackStream;
 use narrowlink_network::AsyncSocket;
 use narrowlink_types::generic::{self};
 use proxy_stream::ProxyStream;

@@ -11,7 +11,7 @@ use args::Args;
 use config::KeyPolicy;
 use error::AgentError;
 use futures_util::{SinkExt, StreamExt};
-use hmac::Mac;
+use hmac::{KeyInit, Mac};
 use narrowlink_network::{
     async_forward,
     error::NetworkError,
@@ -50,7 +50,8 @@ use uuid::Uuid;
 mod config;
 mod error;
 
-fn main() -> Result<(), AgentError> {
+#[tokio::main]
+async fn main() -> Result<(), AgentError> {
     let (stdout, _stdout_guard) = tracing_appender::non_blocking(io::stdout());
     let (stderr, _stderr_guard) = tracing_appender::non_blocking(io::stderr());
 
@@ -86,26 +87,21 @@ fn main() -> Result<(), AgentError> {
 
     let args = Args::parse(env::args())?;
 
-    #[cfg(unix)]
-    if args.daemon {
-        use daemonize::Daemonize;
-        let stdout = std::fs::File::create("/tmp/narrowlink-agent.out")?;
-        let stderr = std::fs::File::create("/tmp/narrowlink-agent.err")?;
-        let daemonize = Daemonize::new()
-            .pid_file("/tmp/narrowlink-agent.pid")
-            .working_directory("/tmp/")
-            .stdout(stdout)
-            .stderr(stderr);
-        if let Err(e) = daemonize.start() {
-            error!("Unable to daemonize: {}", e.to_string());
-            return Ok(());
-        }
-    }
-    start(args)
-}
-
-#[tokio::main]
-async fn start(args: Args) -> Result<(), AgentError> {
+    // #[cfg(unix)]
+    // if args.daemon {
+    //     use daemonize::Daemonize;
+    //     let stdout = std::fs::File::create("/tmp/narrowlink-agent.out")?;
+    //     let stderr = std::fs::File::create("/tmp/narrowlink-agent.err")?;
+    //     let daemonize = Daemonize::new()
+    //         .pid_file("/tmp/narrowlink-agent.pid")
+    //         .working_directory("/tmp/")
+    //         .stdout(stdout)
+    //         .stderr(stderr);
+    //     if let Err(e) = daemonize.start() {
+    //         error!("Unable to daemonize: {}", e.to_string());
+    //         return Ok(());
+    //     }
+    // }
     let mut conf = match config::Config::load(args.config_path) {
         Ok(c) => c,
         Err(e) => {

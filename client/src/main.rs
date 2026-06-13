@@ -11,7 +11,7 @@ use std::{
     env,
     io::{self, IsTerminal},
 };
-use tracing::{debug, error, warn, Level};
+use tracing::{debug, warn, Level};
 use transport::TransportFactory;
 use tunnel::TunnelFactory;
 
@@ -25,8 +25,9 @@ use tracing_subscriber::{
 
 use crate::manage::ControlStatus;
 // todo: Fix exit if p2p connection not available
-pub fn main() -> Result<(), ClientError> {
-    let args = Args::parse(env::args())?;
+#[tokio::main]
+pub async fn main() -> Result<(), ClientError> {
+    let mut args = Args::parse(env::args())?;
 
     let (stdout, _stdout_guard) = if matches!(args.arg_commands, args::ArgCommands::Connect(_)) {
         tracing_appender::non_blocking(io::stderr())
@@ -72,15 +73,6 @@ pub fn main() -> Result<(), ClientError> {
         // .with(file)
         .init();
 
-    match start(args) {
-        Ok(_) => (),
-        Err(e) => error!("Error: {}", e),
-    }
-    Ok(())
-}
-
-#[tokio::main]
-async fn start(mut args: Args) -> Result<(), ClientError> {
     let conf = config::Config::load(args.take_conf_path())?;
     let instruction = Instruction::from(&args.arg_commands);
     let mut control = ControlFactory::new(conf, instruction.is_direct_only())?;
