@@ -285,7 +285,11 @@ impl CertificateManager {
         let mut acme = Acme::from_account(acme_account.clone())?;
         trace!("place order");
         let new_order = match acme
-            .new_order(vec![domain.clone()], suggested_private_key.as_ref())
+            .new_order(
+                vec![domain.clone()],
+                suggested_private_key.as_ref(),
+                &challenge_type,
+            )
             .in_current_span()
             .await
         {
@@ -323,12 +327,16 @@ impl CertificateManager {
         // let agent_name = agent_name.to_owned();
         let success = 'status: {
             trace!("check challenge status");
-            let Ok(pem) = acme
+            let pem = match acme
                 .check_challenge(challenges, 5, 10 * 1000, suggested_private_key.as_ref())
                 .in_current_span()
                 .await
-            else {
-                break 'status false;
+            {
+                Ok(pem) => pem,
+                Err(e) => {
+                    tracing::error!("check_challenge failed with error: {:?}", e);
+                    break 'status false;
+                }
             };
             if self.storage.put(&uid, &domain, None, pem).await.is_err() {
                 break 'status false;

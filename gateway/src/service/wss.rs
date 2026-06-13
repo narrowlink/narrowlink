@@ -218,13 +218,34 @@ impl Service for Wss {
             let tls_engine = tls_engine.clone();
             tokio::spawn(async move {
                 let mut buf = vec![0; 2048];
-                let n = tcp_stream
-                    .peek(&mut buf)
-                    .instrument(span_connection.clone())
-                    .await
-                    .map_err(|_| {
-                        span_connection.in_scope(|| trace!("failed to peek client hello"));
-                    })?;
+                let mut n = 0;
+                let mut retries = 0;
+                loop {
+                    let read_len = tcp_stream
+                        .peek(&mut buf)
+                        .instrument(span_connection.clone())
+                        .await
+                        .map_err(|_| ())?;
+                    if read_len == 0 {
+                        break;
+                    }
+                    if read_len == n {
+                        if retries > 20 {
+                            break;
+                        }
+                        retries += 1;
+                        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                        continue;
+                    }
+                    n = read_len;
+                    retries = 0;
+                    if n >= 5 {
+                        let record_len = ((buf[3] as usize) << 8) | (buf[4] as usize);
+                        if n >= 5 + record_len || n == buf.len() {
+                            break;
+                        }
+                    }
+                }
 
                 let Some((sni, alpns)) =
                     span_connection.in_scope(|| Self::peek_sni_and_alpns(&buf[..n]))
@@ -276,7 +297,9 @@ impl Service for Wss {
                     .accept(tcp_stream)
                     .instrument(span_connection.clone())
                     .await
-                    .map_err(|_| ())?;
+                    .map_err(|e| {
+                        span_connection.in_scope(|| tracing::error!("TlsAcceptor error: {:?}", e));
+                    })?;
                 span_connection.in_scope(|| trace!("tls acceptor successfully created"));
                 let ws_service = WsService {
                     listen_addr: RequestProtocol::Https(self.listen_addr),
@@ -286,8 +309,11 @@ impl Service for Wss {
                     peer_addr,
                     cm: None,
                 };
-                if let Err(http_err) = hyper::server::conn::http1::Builder::new()
-                    .serve_connection(
+                if let Err(http_err) =
+                    hyper_util::server::conn::auto::Builder::new(
+                        hyper_util::rt::TokioExecutor::new(),
+                    )
+                    .serve_connection_with_upgrades(
                         hyper_util::rt::TokioIo::new(secure_stream),
                         hyper::service::service_fn(move |req| {
                             let mut ws_service = ws_service.clone();
@@ -296,7 +322,6 @@ impl Service for Wss {
                             }
                         }),
                     )
-                    .with_upgrades()
                     .instrument(span_connection.clone())
                     .await
                 {

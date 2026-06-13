@@ -82,8 +82,11 @@ impl Service for Ws {
                     peer_addr,
                     cm: ws.cm.clone(),
                 };
-                if let Err(http_err) = hyper::server::conn::http1::Builder::new()
-                    .serve_connection(
+                if let Err(http_err) =
+                    hyper_util::server::conn::auto::Builder::new(
+                        hyper_util::rt::TokioExecutor::new(),
+                    )
+                    .serve_connection_with_upgrades(
                         hyper_util::rt::TokioIo::new(tcp_stream),
                         hyper::service::service_fn(move |req| {
                             let mut ws_service = ws_service.clone();
@@ -92,7 +95,6 @@ impl Service for Ws {
                             }
                         }),
                     )
-                    .with_upgrades()
                     .instrument(span_connection.clone())
                     .await
                 {
@@ -142,6 +144,7 @@ impl WsService {
                 crate::service::http_templates::HttpErrors::BadRequest,
             );
         };
+        let host = host.split(':').next().unwrap_or(&host).to_owned();
 
         span.record("host", &host);
         span.in_scope(|| trace!("host: {}", host));
