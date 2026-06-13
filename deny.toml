@@ -26,7 +26,8 @@ allow = [
     "BSD-2-Clause",
     "ISC",
     "WTFPL",
-    "Unicode-3.0"
+    "Unicode-3.0",
+    "CDLA-Permissive-2.0"
 ]
 
 exceptions = [
