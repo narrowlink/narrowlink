@@ -15,13 +15,13 @@ include = ["Cargo.toml", "LICENSE", "src/**/*"]
 workspace = true
 
 [dependencies]
-bytes = { version = "1.11.1", default-features = false }
-serde = { version = "1.0.228", features = ["derive"], default-features = false }
-serde_json = { version = "1.0.150", default-features = false, features = [
+bytes = { version = "1.12.1", default-features = false }
+serde = { version = "1.0.229", features = ["derive"], default-features = false }
+serde_json = { version = "1.0.154", default-features = false, features = [
     "alloc",
 ] }
-futures-util = { version = "0.3.32", default-features = false }
-tokio = { version = "1.52.3", features = [
+futures-util = { version = "0.3.34", default-features = false }
+tokio = { version = "1.54.1", features = [
     "macros",
     "rt",
     "net",
@@ -47,9 +47,9 @@ quinn = { version = "0.10.2", default-features = false, features = [
     "runtime-tokio",
     "tls-rustls",
 ] }
-async-recursion = { version = "1.1.1", default-features = false }
+async-recursion = { version = "1.2.0", default-features = false }
 tracing = { version = "0.1.44", default-features = false }
-thiserror = { version = "2.0.18", default-features = false }
+thiserror = { version = "2.0.21", default-features = false }
 chunkio = { version = "0.0.1", default-features = false }
 
 narrowlink-types = { version = "0.2.6", default-features = false }
