@@ -294,6 +294,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cf-daemonize"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b530425788c575f3b0a1027a1680a3d558f7bad8ec0ea9b793f6ca37816925b8"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "cfg-if"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -432,15 +441,6 @@ checksum = "78c8292055d1c1df0cce5d180393dc8cce0abec0a7102adb6c7b1eef6016d60a"
 dependencies = [
  "generic-array",
  "typenum",
-]
-
-[[package]]
-name = "daemonize"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab8bfdaacb3c887a54d41bdf48d3af8873b3f5566469f8ba21b92057509f116e"
-dependencies = [
- "libc",
 ]
 
 [[package]]
@@ -1234,8 +1234,8 @@ dependencies = [
 name = "narrowlink-agent"
 version = "0.2.6"
 dependencies = [
+ "cf-daemonize",
  "clap_lex",
- "daemonize",
  "dirs",
  "futures-channel",
  "futures-util",

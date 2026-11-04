@@ -51,6 +51,24 @@ mod config;
 mod error;
 
 fn main() -> Result<(), AgentError> {
+    let args = Args::parse(env::args())?;
+
+    #[cfg(unix)]
+    if args.daemon {
+        use cf_daemonize::Daemonize;
+        let stdout = std::fs::File::create("/tmp/narrowlink-agent.out")?;
+        let stderr = std::fs::File::create("/tmp/narrowlink-agent.err")?;
+        let daemonize = Daemonize::new()
+            .pid_file("/tmp/narrowlink-agent.pid")
+            .working_directory("/tmp/")
+            .stdout(stdout)
+            .stderr(stderr);
+        if let Err(e) = daemonize.start() {
+            eprintln!("Unable to daemonize: {}", e);
+            return Ok(());
+        }
+    }
+
     let (stdout, _stdout_guard) = tracing_appender::non_blocking(io::stdout());
     let (stderr, _stderr_guard) = tracing_appender::non_blocking(io::stderr());
 
@@ -84,23 +102,6 @@ fn main() -> Result<(), AgentError> {
         // .with(file)
         .init();
 
-    let args = Args::parse(env::args())?;
-
-    #[cfg(unix)]
-    if args.daemon {
-        use daemonize::Daemonize;
-        let stdout = std::fs::File::create("/tmp/narrowlink-agent.out")?;
-        let stderr = std::fs::File::create("/tmp/narrowlink-agent.err")?;
-        let daemonize = Daemonize::new()
-            .pid_file("/tmp/narrowlink-agent.pid")
-            .working_directory("/tmp/")
-            .stdout(stdout)
-            .stderr(stderr);
-        if let Err(e) = daemonize.start() {
-            error!("Unable to daemonize: {}", e.to_string());
-            return Ok(());
-        }
-    }
     start(args)
 }
 
