@@ -61,7 +61,7 @@ pub trait CertificateStorage {
 }
 
 pub struct Certificate {
-    certificate_chain: Vec<rustls::Certificate>,
+    certificate_chain: Vec<rustls::pki_types::CertificateDer<'static>>,
     // private_key: rustls::PrivateKey,
     config: Arc<ServerConfig>,
 }
@@ -73,10 +73,12 @@ impl Certificate {
         for i in v {
             match i.tag() {
                 "CERTIFICATE" => {
-                    certificate_chain.push(rustls::Certificate(i.contents().to_vec()));
+                    certificate_chain.push(rustls::pki_types::CertificateDer::from(
+                        i.contents().to_vec(),
+                    ));
                 }
                 "PRIVATE KEY" => {
-                    private_key.replace(rustls::PrivateKey(i.contents().to_vec()));
+                    private_key.replace(i.contents().to_vec());
                 }
                 _ => continue,
             }
@@ -89,10 +91,11 @@ impl Certificate {
         if certificate_chain.is_empty() {
             return Err(GatewayError::Invalid("Invalid Pem FIle"));
         }
+        let private_key = rustls::pki_types::PrivateKeyDer::try_from(private_key)
+            .map_err(|_| GatewayError::Invalid("Invalid private key"))?;
         let mut config = rustls::ServerConfig::builder()
-            .with_safe_defaults()
             .with_no_client_auth()
-            .with_single_cert(certificate_chain.clone(), private_key.clone())?;
+            .with_single_cert(certificate_chain.clone(), private_key)?;
         config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
 
         Ok(Certificate {

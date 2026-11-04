@@ -5,7 +5,8 @@ use instant_acme::{
     NewAccount, NewOrder, Order, OrderStatus,
 };
 use rcgen::{CertificateParams, DistinguishedName, DnType, KeyPair};
-use rustls::{PrivateKey, ServerConfig};
+use rustls::{pki_types::PrivatePkcs8KeyDer, ServerConfig};
+type PrivateKey = PrivatePkcs8KeyDer<'static>;
 use serde::Deserialize;
 use tokio::time;
 use tracing::{debug, instrument, trace};
@@ -117,7 +118,7 @@ impl Acme {
         {
             let mut params = CertificateParams::new(domains);
             params.key_pair = suggested_private_key
-                .and_then(|private_key| KeyPair::from_der(&private_key.0).ok());
+                .and_then(|private_key| KeyPair::from_der(private_key.secret_pkcs8_der()).ok());
             params.distinguished_name = DistinguishedName::new();
             let cert = rcgen::Certificate::from_params(params)?;
             let csr = cert.serialize_request_der()?;
@@ -134,7 +135,7 @@ impl Acme {
             // for pem in x509_parser::prelude::Pem::iter_from_buffer(&cert_chain_pem.as_bytes()) {
             //     certificates.push(rustls::Certificate(pem?.contents));
             // }
-            // let private_key = rustls::PrivateKey(cert.get_key_pair().serialize_der());
+            // let private_key = rustls::pki_types::PrivatePkcs8KeyDer::from(cert.get_key_pair().serialize_der()).into();
             // return Ok(Some((private_key, certificates)));
             return Ok(Some(pem::parse_many(cert_chain_pem).and_then(
                 |mut c| {
@@ -201,11 +202,15 @@ impl Acme {
             let cert = rcgen::Certificate::from_params(params)?;
 
             let mut server_config = rustls::ServerConfig::builder()
-                .with_safe_defaults()
                 .with_no_client_auth()
                 .with_single_cert(
-                    vec![rustls::Certificate(cert.serialize_der()?)],
-                    rustls::PrivateKey(cert.get_key_pair().serialize_der()),
+                    vec![rustls::pki_types::CertificateDer::from(
+                        cert.serialize_der()?,
+                    )],
+                    rustls::pki_types::PrivatePkcs8KeyDer::from(
+                        cert.get_key_pair().serialize_der(),
+                    )
+                    .into(),
                 )?;
             server_config
                 .alpn_protocols
@@ -304,8 +309,8 @@ impl Acme {
         }
         trace!("acme verification successful");
         let mut params = CertificateParams::new(domain);
-        params.key_pair =
-            suggested_private_key.and_then(|private_key| KeyPair::from_der(&private_key.0).ok());
+        params.key_pair = suggested_private_key
+            .and_then(|private_key| KeyPair::from_der(private_key.secret_pkcs8_der()).ok());
         params.distinguished_name = DistinguishedName::new();
         let cert = rcgen::Certificate::from_params(params)?;
         let csr = cert.serialize_request_der()?;
@@ -328,7 +333,7 @@ impl Acme {
         // for pem in x509_parser::prelude::Pem::iter_from_buffer(&cert_chain_pem.as_bytes()) {
         //     certificates.push(rustls::Certificate(pem?.contents));
         // }
-        // let private_key = rustls::PrivateKey(cert.get_key_pair().serialize_der());
+        // let private_key = rustls::pki_types::PrivatePkcs8KeyDer::from(cert.get_key_pair().serialize_der()).into();
         // Ok((private_key, certificates))
     }
 }

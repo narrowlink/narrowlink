@@ -5,6 +5,10 @@ use uuid::Uuid;
 mod agent;
 mod client;
 mod connection;
+#[cfg(test)]
+pub(crate) use connection::{
+    AgentConnection as TestAgentConnection, ClientConnection, ConnectionData,
+};
 mod users;
 use crate::{
     service::{RequestProtocol, ServiceDataRequest, ServiceEventRequest},
@@ -68,11 +72,11 @@ pub enum InBound {
         oneshot::Sender<Result<ResponseHeaders, ResponseErrors>>,
     ),
     HttpTransparent(
-        String,                                                                //domain_name
-        hyper::Request<hyper::Body>,                                           //request
-        SocketAddr,                                                            //peer_addr
-        oneshot::Sender<Result<hyper::Response<hyper::Body>, ResponseErrors>>, //response
-        RequestProtocol,                                                       //service_protocol
+        String,                                                                    //domain_name
+        hyper::Request<hyper::body::Incoming>,                                     //request
+        SocketAddr,                                                                //peer_addr
+        oneshot::Sender<Result<hyper::Response<crate::HttpBody>, ResponseErrors>>, //response
+        RequestProtocol, //service_protocol
     ),
     TlsTransparent(
         String,    //sni

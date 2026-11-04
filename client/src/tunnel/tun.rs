@@ -2,18 +2,17 @@ use std::{
     io,
     net::{IpAddr, Ipv4Addr},
     pin::Pin,
-    sync::Arc,
     time::Duration,
 };
 
 use futures_util::{Future, FutureExt, StreamExt};
 use ipstack::stream::IpStackStream;
-use net_route::{Handle, Route};
+use route_manager::{AsyncRouteManager, Route};
 use tokio::{
     signal,
     sync::{
         mpsc::{self, UnboundedSender},
-        Notify,
+        oneshot,
     },
 };
 use tracing::warn;
@@ -38,21 +37,259 @@ pub enum RouteCommand {
 pub struct TunRoute {
     _task: tokio::task::JoinHandle<Result<(), io::Error>>,
     route_sender: UnboundedSender<RouteCommand>,
-    my_routes_sender: UnboundedSender<(bool, Arc<Notify>)>,
+    my_routes_sender: UnboundedSender<(bool, oneshot::Sender<io::Result<()>>)>,
+}
+
+trait RouteManager {
+    async fn add(&mut self, route: &Route) -> io::Result<()>;
+    async fn delete(&mut self, route: &Route) -> io::Result<()>;
+}
+
+impl RouteManager for AsyncRouteManager {
+    async fn add(&mut self, route: &Route) -> io::Result<()> {
+        AsyncRouteManager::add(self, route).await
+    }
+    async fn delete(&mut self, route: &Route) -> io::Result<()> {
+        AsyncRouteManager::delete(self, route).await
+    }
+}
+
+struct RouteState {
+    original: Route,
+    original_removed: bool,
+    installed: Vec<Route>,
+}
+
+impl RouteState {
+    async fn restore(&mut self, manager: &mut impl RouteManager) -> io::Result<()> {
+        let mut errors = Vec::new();
+        let mut remaining = Vec::new();
+        for route in self.installed.drain(..).rev() {
+            if let Err(error) = manager.delete(&route).await {
+                errors.push(format!("remove {route}: {error}"));
+                remaining.push(route);
+            }
+        }
+        self.installed = remaining;
+        if self.original_removed {
+            match manager.add(&self.original).await {
+                Ok(()) => self.original_removed = false,
+                Err(error) => errors.push(format!("restore default route: {error}")),
+            }
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(io::Error::other(errors.join("; ")))
+        }
+    }
+
+    async fn activate(
+        &mut self,
+        manager: &mut impl RouteManager,
+        routes: &[Route],
+    ) -> io::Result<()> {
+        // Finish any previous incomplete rollback before trying another activation.
+        if self.original_removed || !self.installed.is_empty() {
+            self.restore(manager).await?;
+        }
+        manager.delete(&self.original).await?;
+        self.original_removed = true;
+        for route in routes {
+            if let Err(error) = manager.add(route).await {
+                return match self.restore(manager).await {
+                    Ok(()) => Err(error),
+                    Err(rollback) => Err(io::Error::other(format!(
+                        "{error}; rollback failed: {rollback}"
+                    ))),
+                };
+            }
+            self.installed.push(route.clone());
+        }
+        Ok(())
+    }
 }
 
 trait SignalTrait: Future<Output = Option<()>> + Send {}
 impl<T> SignalTrait for T where T: Future<Output = Option<()>> + Send {}
 
+fn default_route(routes: Vec<Route>) -> Option<Route> {
+    let candidates: Vec<_> = routes
+        .into_iter()
+        .filter(|route| route.prefix() == 0 && route.destination().is_unspecified())
+        .filter(|route| {
+            cfg!(target_os = "linux") || !route.gateway().is_some_and(|ip| ip.is_unspecified())
+        })
+        .collect();
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    let candidates = {
+        let mut candidates = candidates;
+        #[cfg(target_os = "windows")]
+        candidates.sort_by_key(|route| route.metric());
+        #[cfg(target_os = "linux")]
+        candidates.sort_by_key(|route| route.destination().is_ipv6());
+        candidates
+    };
+    candidates.into_iter().next()
+}
+
+#[cfg(test)]
+mod route_tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[derive(Default)]
+    struct FakeManager {
+        routes: HashSet<IpAddr>,
+        fail_add: Option<IpAddr>,
+        fail_delete: Option<IpAddr>,
+    }
+
+    impl RouteManager for FakeManager {
+        async fn add(&mut self, route: &Route) -> io::Result<()> {
+            if self.fail_add == Some(route.destination()) {
+                return Err(io::Error::other("add failed"));
+            }
+            self.routes.insert(route.destination());
+            Ok(())
+        }
+        async fn delete(&mut self, route: &Route) -> io::Result<()> {
+            if self.fail_delete == Some(route.destination()) {
+                return Err(io::Error::other("delete failed"));
+            }
+            self.routes.remove(&route.destination());
+            Ok(())
+        }
+    }
+
+    fn route(ip: &str) -> Route {
+        Route::new(ip.parse().unwrap(), 0)
+    }
+
+    #[tokio::test]
+    async fn failed_activation_restores_original_and_removes_added_routes() {
+        let original = route("0.0.0.0");
+        let first = route("192.0.2.1");
+        let failed = route("192.0.2.2");
+        let mut manager = FakeManager {
+            routes: HashSet::from([original.destination()]),
+            fail_add: Some(failed.destination()),
+            ..Default::default()
+        };
+        let mut state = RouteState {
+            original: original.clone(),
+            original_removed: false,
+            installed: vec![],
+        };
+        assert!(state
+            .activate(&mut manager, &[first, failed])
+            .await
+            .is_err());
+        assert_eq!(manager.routes, HashSet::from([original.destination()]));
+        assert!(!state.original_removed && state.installed.is_empty());
+    }
+
+    #[tokio::test]
+    async fn failed_restore_can_be_retried() {
+        let original = route("0.0.0.0");
+        let tunnel = route("192.0.2.1");
+        let mut manager = FakeManager {
+            routes: HashSet::from([original.destination()]),
+            ..Default::default()
+        };
+        let mut state = RouteState {
+            original: original.clone(),
+            original_removed: false,
+            installed: vec![],
+        };
+        state.activate(&mut manager, &[tunnel]).await.unwrap();
+        manager.fail_add = Some(original.destination());
+        assert!(state.restore(&mut manager).await.is_err());
+        assert!(state.original_removed);
+        manager.fail_add = None;
+        state.restore(&mut manager).await.unwrap();
+        assert_eq!(manager.routes, HashSet::from([original.destination()]));
+    }
+
+    #[tokio::test]
+    async fn failed_route_removal_is_retained_for_retry() {
+        let original = route("0.0.0.0");
+        let tunnel = route("192.0.2.1");
+        let mut manager = FakeManager {
+            routes: HashSet::from([original.destination()]),
+            ..Default::default()
+        };
+        let mut state = RouteState {
+            original: original.clone(),
+            original_removed: false,
+            installed: vec![],
+        };
+        state
+            .activate(&mut manager, &[tunnel.clone()])
+            .await
+            .unwrap();
+        manager.fail_delete = Some(tunnel.destination());
+        assert!(state.restore(&mut manager).await.is_err());
+        assert_eq!(state.installed.len(), 1);
+        manager.fail_delete = None;
+        state.restore(&mut manager).await.unwrap();
+        assert_eq!(manager.routes, HashSet::from([original.destination()]));
+    }
+
+    #[tokio::test]
+    async fn deletion_failure_keeps_original_route() {
+        let original = route("0.0.0.0");
+        let mut manager = FakeManager {
+            routes: HashSet::from([original.destination()]),
+            fail_delete: Some(original.destination()),
+            ..Default::default()
+        };
+        let mut state = RouteState {
+            original: original.clone(),
+            original_removed: false,
+            installed: vec![],
+        };
+        assert!(state
+            .activate(&mut manager, &[route("192.0.2.1")])
+            .await
+            .is_err());
+        assert_eq!(manager.routes, HashSet::from([original.destination()]));
+        assert!(!state.original_removed && state.installed.is_empty());
+    }
+
+    #[tokio::test]
+    async fn stopped_route_task_returns_error() {
+        let (sender, receiver) = mpsc::unbounded_channel();
+        drop(receiver);
+        let (route_sender, _) = mpsc::unbounded_channel();
+        let route = TunRoute {
+            _task: tokio::spawn(async { Ok(()) }),
+            route_sender,
+            my_routes_sender: sender,
+        };
+        assert!(route.my_routes(true).await.is_err());
+    }
+
+    #[test]
+    fn selects_default_instead_of_specific_route() {
+        let specific = Route::new("192.0.2.0".parse().unwrap(), 24);
+        let default =
+            Route::new("0.0.0.0".parse().unwrap(), 0).with_gateway("192.0.2.1".parse().unwrap());
+        let selected = default_route(vec![specific, default]).unwrap();
+        assert_eq!(selected.gateway(), Some("192.0.2.1".parse().unwrap()));
+        assert!(default_route(vec![Route::new("192.0.2.0".parse().unwrap(), 24)]).is_none());
+    }
+}
+
 impl TunRoute {
     pub async fn new(local_addr: Ipv4Addr, _ifaceid: u32) -> Result<Self, io::Error> {
-        let handle: Handle = Handle::new()?;
-        let Some(default_gw) = handle.default_route().await? else {
+        let mut handle = AsyncRouteManager::new()?;
+        let Some(default_gw) = default_route(handle.list().await?) else {
             return Err(io::Error::other("No default gateway found"));
         };
 
         let (my_routes_sender, mut my_routes_receiver) =
-            mpsc::unbounded_channel::<(bool, Arc<Notify>)>();
+            mpsc::unbounded_channel::<(bool, oneshot::Sender<io::Result<()>>)>();
         let (route_tx, mut route_rx) = mpsc::unbounded_channel::<RouteCommand>();
         let mut signals: Vec<Pin<Box<dyn SignalTrait>>> = Vec::new();
 
@@ -89,77 +326,76 @@ impl TunRoute {
 
         let mut signal_stream = futures_util::future::select_all(signals).into_stream();
         let task = tokio::spawn(async move {
+            let mut state = RouteState {
+                original: default_gw.clone(),
+                original_removed: false,
+                installed: Vec::new(),
+            };
             let mut init = false;
             let mut my_routes = false;
             let mut routes = Vec::new();
             loop {
                 tokio::select! {
                     _ = signal_stream.next() => {
-                        if my_routes {
-                            for route in &routes {
-                                let _ = handle.delete(route).await;
-                            }
-                            if let Err(e) = handle.add(&default_gw).await{
-                                warn!("Unable to recover default route: {}", e);
-                            }
+                        if let Err(e) = state.restore(&mut handle).await {
+                            warn!("Unable to recover routes: {}", e);
                         }
                         std::process::exit(0x0)
                     },
-                    Some((route_action, notify)) = my_routes_receiver.recv() => {
-                        if route_action && !my_routes{
+                    Some((route_action, response)) = my_routes_receiver.recv() => {
+                        let result = if route_action && !my_routes{
                             if !init {
                                 #[cfg(target_family = "windows")]
-                                routes.push(Route::new(default_gw.destination, 0).with_gateway(IpAddr::V4(local_addr)).with_ifindex(_ifaceid));
+                                routes.push(Route::new(default_gw.destination(), 0).with_gateway(IpAddr::V4(local_addr)).with_if_index(_ifaceid));
                                 #[cfg(target_family = "unix")]
-                                routes.push(Route::new(default_gw.destination, 0).with_gateway(IpAddr::V4(local_addr)));
+                                routes.push(Route::new(default_gw.destination(), 0).with_gateway(IpAddr::V4(local_addr)));
                                 init = true;
                             }
-                            handle.delete(&default_gw).await?;
-                            for route in &routes {
-                                if let Err(e) = handle.add(route).await{
-                                    warn!("Unable to add route: {}", e);
-                                }
-                            }
-                            my_routes = true;
+                            let result = state.activate(&mut handle, &routes).await;
+                            my_routes = result.is_ok();
+                            result
                         }else if !route_action && my_routes{
-                            for route in &routes {
-                                let _ = handle.delete(route).await;
-                            }
-                            if let Err(e) = handle.add(&default_gw).await{
-                                warn!("Unable to recover default route: {}", e);
-                            }
-                            my_routes = false;
-                        }
-                        notify.notify_waiters();
+                            let result = state.restore(&mut handle).await;
+                            if result.is_ok() { my_routes = false; }
+                            result
+                        } else if !route_action {
+                            state.restore(&mut handle).await
+                        } else { Ok(()) };
+                        let _ = response.send(result);
                     },
                     Some(cmd) = route_rx.recv() =>{
                         match cmd {
                             RouteCommand::Add(ip) => {
-                                let Some(gateway_address) = default_gw.gateway else{
+                                let Some(gateway_address) = default_gw.gateway() else{
                                     warn!("No default gateway found");
                                     continue;
                                 };
                                 #[cfg(target_family = "windows")]
-                                let Some(gateway_ifindex) = default_gw.ifindex else{
+                                let Some(gateway_ifindex) = default_gw.if_index() else{
                                     warn!("Unable to get default gateway interface index");
                                     continue;
                                 };
                                 #[cfg(target_family = "windows")]
-                                let r = Route::new(ip, 32).with_gateway(gateway_address).with_ifindex(gateway_ifindex);
+                                let r = Route::new(ip, 32).with_gateway(gateway_address).with_if_index(gateway_ifindex);
                                 #[cfg(target_family = "unix")]
                                 let r = Route::new(ip, 32).with_gateway(gateway_address);
                                 if my_routes {
-                                    let _ = handle.add(&r).await;
+                                    match handle.add(&r).await {
+                                        Ok(()) => state.installed.push(r.clone()),
+                                        Err(e) => { warn!("Unable to add route: {}", e); continue; }
+                                    }
                                 }
                                 routes.push(r);
 
                             },
                             RouteCommand::Del(ip) => {
-                                if let Some(index) = routes.iter().position(|x| x.destination == ip){
+                                if let Some(index) = routes.iter().position(|x| x.destination() == ip){
                                     if my_routes {
                                         if let Err(e) = handle.delete(&routes[index]).await{
                                             warn!("Unable to delete route: {}", e);
+                                            continue;
                                         }
+                                        if let Some(i) = state.installed.iter().position(|r| r.destination() == ip) { state.installed.remove(i); }
                                     }
                                     routes.remove(index);
                                 }
@@ -179,10 +415,14 @@ impl TunRoute {
     pub fn get_sender(&self) -> UnboundedSender<RouteCommand> {
         self.route_sender.clone()
     }
-    pub async fn my_routes(&self, my_routes: bool) {
-        let notify = Arc::new(Notify::new());
-        let _ = self.my_routes_sender.send((my_routes, notify.clone()));
-        notify.notified().await;
+    pub async fn my_routes(&self, my_routes: bool) -> io::Result<()> {
+        let (sender, receiver) = oneshot::channel();
+        self.my_routes_sender
+            .send((my_routes, sender))
+            .map_err(|_| io::Error::other("route task stopped"))?;
+        receiver
+            .await
+            .map_err(|_| io::Error::other("route task stopped"))?
     }
 }
 
@@ -241,9 +481,13 @@ impl TunListener {
     pub fn route_sender(&self) -> Option<UnboundedSender<RouteCommand>> {
         self.route.as_ref().map(|f| f.get_sender())
     }
-    pub async fn my_routes(&self, my_routes: bool) {
+    pub async fn my_routes(&self, my_routes: bool) -> io::Result<()> {
         if let Some(route) = self.route.as_ref() {
-            route.my_routes(my_routes).await;
+            route.my_routes(my_routes).await
+        } else if my_routes {
+            Err(io::Error::other("route management is unavailable"))
+        } else {
+            Ok(())
         }
     }
 }

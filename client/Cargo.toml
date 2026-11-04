@@ -45,7 +45,7 @@ tokio-tungstenite = { version = "0.20.1", default-features = false }
 tungstenite = { version = "0.20.1", default-features = false }
 serde = { version = "1.0.229", features = ["derive"], default-features = false }
 serde_json = { version = "1.0.154", default-features = false }
-serde_yaml = { version = "0.9.34", default-features = false }
+serde_yaml = { package = "yaml_serde", version = "0.10.7" }
 udp-stream = { version = "0.0.12", default-features = false }
 regex = { version = "1.13.1", features = ["std"], default-features = false }
 either = { version = "1.19.0", default-features = false }
@@ -71,7 +71,7 @@ narrowlink-network = { version = "0.2.6", default-features = false }
 
 [target.'cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))'.dependencies]
 ipstack = { version = "0.0.10", default-features = false }
-net-route = { version = "0.4.6", default-features = false }
+route_manager = { version = "0.2.17", features = ["async"] }
 
 
 [target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]

@@ -1,3 +1,12 @@
+type HttpBody = http_body_util::combinators::BoxBody<bytes::Bytes, hyper::Error>;
+
+fn full_body(data: impl Into<bytes::Bytes>) -> HttpBody {
+    use http_body_util::BodyExt;
+    http_body_util::Full::new(data.into())
+        .map_err(|never| match never {})
+        .boxed()
+}
+
 use std::{
     env,
     io::{self, IsTerminal},
@@ -128,4 +137,52 @@ async fn main() -> Result<(), GatewayError> {
         })
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod quic_tests {
+    use narrowlink_network::p2p::QuicStream;
+    use tokio::{
+        io::{AsyncReadExt, AsyncWriteExt},
+        net::UdpSocket,
+        time::{timeout, Duration},
+    };
+
+    #[tokio::test]
+    async fn quic_transfers_data_with_pinned_certificate() {
+        timeout(Duration::from_secs(5), async {
+            let cert = rcgen::generate_simple_self_signed(vec!["127.0.0.1".into()]).unwrap();
+            let cert_der = cert.serialize_der().unwrap();
+            let key_der = cert.serialize_private_key_der();
+            let server_socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+            let server_addr = server_socket.local_addr().unwrap();
+            let client_socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+            let server_cert = cert_der.clone();
+            let (done_tx, done_rx) = tokio::sync::oneshot::channel();
+            let server = tokio::spawn(async move {
+                let connection = QuicStream::new_server(server_socket, server_cert, key_der)
+                    .await
+                    .unwrap();
+                let mut stream = connection.accept_bi().await.unwrap();
+                let mut message = [0; 4];
+                stream.read_exact(&mut message).await.unwrap();
+                assert_eq!(&message, b"ping");
+                stream.write_all(b"pong").await.unwrap();
+                stream.shutdown().await.unwrap();
+                let _ = done_rx.await;
+            });
+            let client = QuicStream::new_client(server_addr, client_socket, cert_der)
+                .await
+                .unwrap();
+            let mut stream = client.open_bi().await.unwrap();
+            stream.write_all(b"ping").await.unwrap();
+            let mut message = [0; 4];
+            stream.read_exact(&mut message).await.unwrap();
+            assert_eq!(&message, b"pong");
+            let _ = done_tx.send(());
+            server.await.unwrap();
+        })
+        .await
+        .expect("QUIC exchange timed out");
+    }
 }

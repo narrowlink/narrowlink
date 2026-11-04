@@ -1,14 +1,18 @@
-use std::{collections::HashMap, net::SocketAddr, pin::Pin, sync::Arc, task::Poll};
+use std::{collections::HashMap, net::SocketAddr, pin::Pin, sync::Arc};
 
+use crate::HttpBody;
 use async_trait::async_trait;
 use either::Either::{Left, Right};
 use futures_util::Future;
 use hyper::{
     header::{self, HOST},
     http::{self, HeaderValue},
-    server::conn::Http,
     service::Service as HyperService,
-    upgrade, Body, Request, Response, StatusCode,
+    upgrade, Request, Response, StatusCode,
+};
+use hyper_util::{
+    rt::{TokioExecutor, TokioIo},
+    server::conn::auto::Builder,
 };
 use tokio::{
     net::TcpListener,
@@ -72,9 +76,9 @@ impl Service for Ws {
             let ws = self.clone();
             let span_connection = span_connection.clone();
             tokio::spawn(async move {
-                if let Err(http_err) = Http::new()
-                    .serve_connection(
-                        tcp_stream,
+                if let Err(http_err) = Builder::new(TokioExecutor::new())
+                    .serve_connection_with_upgrades(
+                        TokioIo::new(tcp_stream),
                         WsService {
                             listen_addr: RequestProtocol::Http(listen_addr),
                             domains: ws.domains,
@@ -84,7 +88,6 @@ impl Service for Ws {
                             cm: ws.cm,
                         },
                     )
-                    .with_upgrades()
                     .instrument(span_connection.clone())
                     .await
                 {
@@ -106,19 +109,12 @@ pub struct WsService {
     pub cm: Option<Arc<CertificateManager>>,
 }
 
-impl HyperService<Request<Body>> for WsService {
-    type Response = Response<Body>;
+impl HyperService<Request<hyper::body::Incoming>> for WsService {
+    type Response = Response<HttpBody>;
     type Error = http::Error;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
-    fn poll_ready(
-        &mut self,
-        _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
-    }
-
-    fn call(&mut self, req: Request<Body>) -> Self::Future {
+    fn call(&self, req: Request<hyper::body::Incoming>) -> Self::Future {
         let span = span!(tracing::Level::INFO, "service", peer_addr = %self.peer_addr);
         span.in_scope(|| debug!("request: {:?}", req));
         let Some(host) = req
@@ -158,7 +154,7 @@ impl HyperService<Request<Body>> for WsService {
                             return Response::builder()
                                 .version(req_version)
                                 .status(StatusCode::OK)
-                                .body::<Body>(key_authorization.into());
+                                .body(crate::full_body(key_authorization));
                         }
                     } else {
                         trace!("acme challenge not found for {}", host);
@@ -291,7 +287,7 @@ impl HyperService<Request<Body>> for WsService {
                                         if let Ok(upgraded) = upgrade::on(req).await {
                                             let ws_connection = Box::new(
                                                 narrowlink_network::ws::WsConnectionBinary::from(
-                                                    upgraded,
+                                                    TokioIo::new(upgraded),
                                                 )
                                                 .await,
                                             );
@@ -303,7 +299,7 @@ impl HyperService<Request<Body>> for WsService {
                                         if let Ok(upgraded) = upgrade::on(req).await {
                                             let ws_connection = Box::new(
                                                 narrowlink_network::ws::WsConnection::from(
-                                                    upgraded,
+                                                    TokioIo::new(upgraded),
                                                 )
                                                 .await,
                                             );
@@ -321,7 +317,7 @@ impl HyperService<Request<Body>> for WsService {
                             .header(header::CONNECTION, "Upgrade")
                             .header(header::UPGRADE, "websocket")
                             .header(header::SEC_WEBSOCKET_ACCEPT, derived_key)
-                            .body::<Body>("".into())
+                            .body(crate::full_body(""))
                             .map(|mut r| {
                                 let headers: HashMap<&str, HeaderValue> = response_headers.into();
                                 for (k, v) in headers {
@@ -366,7 +362,7 @@ impl HyperService<Request<Body>> for WsService {
                             return Response::builder()
                                 .version(req_version)
                                 .status(StatusCode::OK)
-                                .body::<Body>(INDEX_HTML.into());
+                                .body(crate::full_body(INDEX_HTML));
                         }
                         debug!("an expected response error received: {:?}", e);
                         Ok(crate::service::http_templates::response_error(
@@ -422,5 +418,309 @@ impl From<crate::state::ResponseErrors> for super::http_templates::HttpErrors {
             }
             crate::state::ResponseErrors::Forbidden => super::http_templates::HttpErrors::Forbidden,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use futures_util::{SinkExt, StreamExt};
+    use narrowlink_types::ServiceType;
+    use tokio::{
+        net::TcpListener,
+        sync::mpsc,
+        time::{timeout, Duration},
+    };
+
+    #[tokio::test]
+    async fn websocket_upgrade_exchanges_messages() {
+        timeout(Duration::from_secs(5), async {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap();
+            let (sender, mut receiver) = mpsc::unbounded_channel();
+            let server = tokio::spawn(async move {
+                let (socket, peer_addr) = listener.accept().await.unwrap();
+                let service = WsService {
+                    listen_addr: RequestProtocol::Http(addr),
+                    domains: Vec::new(),
+                    sni: None,
+                    status_sender: sender,
+                    peer_addr,
+                    cm: None,
+                };
+                Builder::new(TokioExecutor::new())
+                    .serve_connection_with_upgrades(TokioIo::new(socket), service)
+                    .await
+                    .unwrap();
+            });
+            let handler = tokio::spawn(async move {
+                if let Some(InBound::EventRequest(_, stream, _, _, response)) =
+                    receiver.recv().await
+                {
+                    assert!(response
+                        .send(Ok(ResponseHeaders {
+                            session: None,
+                            connection: None
+                        }))
+                        .is_ok());
+                    let mut stream = stream.await.unwrap();
+                    assert_eq!(stream.next().await.unwrap().unwrap(), "ping");
+                    stream.send("pong".to_owned()).await.unwrap();
+                } else {
+                    panic!("expected event request");
+                }
+            });
+            let headers = HashMap::from([("NL-TOKEN", "test".to_owned())]);
+            let mut client = narrowlink_network::ws::WsConnection::new(
+                &addr.to_string(),
+                &headers,
+                &ServiceType::Ws,
+            )
+            .await
+            .unwrap();
+            client.send("ping".to_owned()).await.unwrap();
+            assert_eq!(client.next().await.unwrap().unwrap(), "pong");
+            handler.await.unwrap();
+            server.await.unwrap();
+        })
+        .await
+        .expect("websocket exchange timed out");
+    }
+    #[tokio::test]
+    async fn forwards_http_request_and_response_body() {
+        use http_body_util::BodyExt;
+        timeout(Duration::from_secs(5), async {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap();
+            let (sender, mut receiver) = mpsc::unbounded_channel();
+            tokio::spawn(async move {
+                let (socket, peer_addr) = listener.accept().await.unwrap();
+                let service = WsService {
+                    listen_addr: RequestProtocol::Http(addr),
+                    domains: Vec::new(),
+                    sni: None,
+                    status_sender: sender,
+                    peer_addr,
+                    cm: None,
+                };
+                Builder::new(TokioExecutor::new())
+                    .serve_connection_with_upgrades(TokioIo::new(socket), service)
+                    .await
+                    .unwrap();
+            });
+            let handler = tokio::spawn(async move {
+                if let Some(InBound::HttpTransparent(host, request, _, response, _)) =
+                    receiver.recv().await
+                {
+                    assert_eq!(host, "example.com");
+                    assert_eq!(request.uri().path(), "/resource");
+                    assert_eq!(
+                        request.into_body().collect().await.unwrap().to_bytes(),
+                        "request body"
+                    );
+                    assert!(response
+                        .send(Ok(Response::new(crate::full_body("response body"))))
+                        .is_ok());
+                } else {
+                    panic!("expected HTTP request");
+                }
+            });
+            let socket = tokio::net::TcpStream::connect(addr).await.unwrap();
+            let (mut client, connection) =
+                hyper::client::conn::http1::handshake(TokioIo::new(socket))
+                    .await
+                    .unwrap();
+            tokio::spawn(async move {
+                connection.await.unwrap();
+            });
+            let request = Request::builder()
+                .method("POST")
+                .uri("/resource")
+                .header("Host", "example.com")
+                .body(http_body_util::Full::new(bytes::Bytes::from_static(
+                    b"request body",
+                )))
+                .unwrap();
+            let response = client.send_request(request).await.unwrap();
+            assert_eq!(
+                response.into_body().collect().await.unwrap().to_bytes(),
+                "response body"
+            );
+            handler.await.unwrap();
+        })
+        .await
+        .expect("HTTP exchange timed out");
+    }
+    #[tokio::test]
+    async fn http2_forwards_request_and_response() {
+        use http_body_util::BodyExt;
+        timeout(Duration::from_secs(5), async {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap();
+            let (sender, mut receiver) = mpsc::unbounded_channel();
+            let server = tokio::spawn(async move {
+                let (socket, peer_addr) = listener.accept().await.unwrap();
+                let service = WsService {
+                    listen_addr: RequestProtocol::Http(addr),
+                    domains: Vec::new(),
+                    sni: None,
+                    status_sender: sender,
+                    peer_addr,
+                    cm: None,
+                };
+                Builder::new(TokioExecutor::new())
+                    .serve_connection_with_upgrades(TokioIo::new(socket), service)
+                    .await
+                    .unwrap();
+            });
+            let handler = tokio::spawn(async move {
+                if let Some(InBound::HttpTransparent(host, request, _, response, _)) =
+                    receiver.recv().await
+                {
+                    assert_eq!(host, "example.com");
+                    assert_eq!(request.version(), hyper::Version::HTTP_2);
+                    assert_eq!(request.uri().path(), "/resource");
+                    assert_eq!(
+                        request.into_body().collect().await.unwrap().to_bytes(),
+                        "request body"
+                    );
+                    assert!(response
+                        .send(Ok(Response::new(crate::full_body("response body"))))
+                        .is_ok());
+                } else {
+                    panic!("expected HTTP request");
+                }
+            });
+            let socket = tokio::net::TcpStream::connect(addr).await.unwrap();
+            let (mut client, connection) =
+                hyper::client::conn::http2::handshake(TokioExecutor::new(), TokioIo::new(socket))
+                    .await
+                    .unwrap();
+            let driver = tokio::spawn(async move { connection.await });
+            let request = Request::builder()
+                .method("POST")
+                .uri("http://example.com/resource")
+                .body(http_body_util::Full::new(bytes::Bytes::from_static(
+                    b"request body",
+                )))
+                .unwrap();
+            let response = client.send_request(request).await.unwrap();
+            assert_eq!(response.version(), hyper::Version::HTTP_2);
+            assert_eq!(
+                response.into_body().collect().await.unwrap().to_bytes(),
+                "response body"
+            );
+            handler.await.unwrap();
+            drop(client);
+            driver.await.unwrap().unwrap();
+            server.await.unwrap();
+        })
+        .await
+        .expect("HTTP/2 exchange timed out");
+    }
+    #[tokio::test]
+    async fn transparent_http_proxy_forwards_to_agent() {
+        use crate::state::{
+            ClientConnection, ConnectionData, TestAgentConnection as AgentConnection,
+        };
+        use http_body_util::BodyExt;
+        timeout(Duration::from_secs(5), async {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let addr = listener.local_addr().unwrap();
+            let (sender, mut receiver) = mpsc::unbounded_channel();
+            tokio::spawn(async move {
+                let (socket, peer_addr) = listener.accept().await.unwrap();
+                let service = WsService {
+                    listen_addr: RequestProtocol::Http(addr),
+                    domains: Vec::new(),
+                    sni: None,
+                    status_sender: sender,
+                    peer_addr,
+                    cm: None,
+                };
+                Builder::new(TokioExecutor::new())
+                    .serve_connection_with_upgrades(TokioIo::new(socket), service)
+                    .await
+                    .unwrap();
+            });
+            let router = tokio::spawn(async move {
+                let Some(InBound::HttpTransparent(_, request, peer, response, protocol)) =
+                    receiver.recv().await
+                else {
+                    panic!("expected HTTP request");
+                };
+                let (agent_side, origin_side) = tokio::io::duplex(65536);
+                let origin = tokio::spawn(async move {
+                    let service = hyper::service::service_fn(
+                        |request: Request<hyper::body::Incoming>| async move {
+                            assert_eq!(
+                                request.uri().path_and_query().unwrap().as_str(),
+                                "/resource?a=1"
+                            );
+                            assert_eq!(request.headers().get("host").unwrap(), "example.com");
+                            assert_eq!(request.headers().get("x-forwarded-proto").unwrap(), "http");
+                            assert_eq!(
+                                request.into_body().collect().await.unwrap().to_bytes(),
+                                "request body"
+                            );
+                            Ok::<_, std::convert::Infallible>(Response::new(crate::full_body(
+                                "origin body",
+                            )))
+                        },
+                    );
+                    hyper::server::conn::http1::Builder::new()
+                        .serve_connection(TokioIo::new(origin_side), service)
+                        .await
+                        .unwrap();
+                });
+                let (agent_tx, agent_rx) = oneshot::channel();
+                assert!(agent_tx
+                    .send(Box::new(narrowlink_network::AsyncToStream::new(agent_side))
+                        as Box<
+                            dyn narrowlink_network::UniversalStream<
+                                Vec<u8>,
+                                narrowlink_network::error::NetworkError,
+                            >,
+                        >)
+                    .is_ok());
+                let mut connection = ConnectionData::new(
+                    uuid::Uuid::new_v4(),
+                    None,
+                    Some(ClientConnection::HttpTransparent(
+                        Box::new(request),
+                        peer,
+                        response,
+                        protocol,
+                    )),
+                    Some(AgentConnection::Agent(None, agent_rx)),
+                );
+                connection.serve().await.unwrap();
+                origin.await.unwrap();
+            });
+            let socket = tokio::net::TcpStream::connect(addr).await.unwrap();
+            let (mut client, connection) =
+                hyper::client::conn::http1::handshake(TokioIo::new(socket))
+                    .await
+                    .unwrap();
+            tokio::spawn(async move {
+                let _ = connection.await;
+            });
+            let request = Request::builder()
+                .method("POST")
+                .uri("/resource?a=1")
+                .header("Host", "example.com")
+                .body(http_body_util::Full::new(bytes::Bytes::from_static(
+                    b"request body",
+                )))
+                .unwrap();
+            let response = client.send_request(request).await.unwrap();
+            assert_eq!(
+                response.into_body().collect().await.unwrap().to_bytes(),
+                "origin body"
+            );
+            router.await.unwrap();
+        })
+        .await
+        .expect("proxy exchange timed out");
     }
 }
