@@ -90,6 +90,7 @@ pub enum ClientError {
     WinTunDLLNotFound,
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 impl From<ipstack::IpStackError> for ClientError {
     fn from(err: ipstack::IpStackError) -> Self {
         Self::IpStackError(Box::new(err))
