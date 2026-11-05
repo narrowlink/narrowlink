@@ -124,3 +124,13 @@ impl Config {
 //             .map(|t| t.name)
 //     }
 // }
+
+#[cfg(test)]
+mod tests {
+    use super::Config;
+
+    #[test]
+    fn parses_sample_config() {
+        assert!(serde_yaml::from_str::<Config>(include_str!("../sample_agent.yaml")).is_ok());
+    }
+}

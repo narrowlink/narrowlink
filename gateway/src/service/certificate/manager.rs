@@ -5,7 +5,8 @@ use std::{
 };
 
 use instant_acme::Account;
-use rustls::{PrivateKey, ServerConfig};
+use rustls::{pki_types::PrivatePkcs8KeyDer, ServerConfig};
+type PrivateKey = PrivatePkcs8KeyDer<'static>;
 use tracing::{debug, error, instrument, span, trace, warn, Instrument, Span};
 
 use tokio::{

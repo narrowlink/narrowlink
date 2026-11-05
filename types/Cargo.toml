@@ -15,23 +15,23 @@ include = ["Cargo.toml", "LICENSE", "src/**/*"]
 workspace = true
 
 [dependencies]
-uuid = { version = "1.23.3", default-features = false, features = ["serde"] }
-serde = { version = "1.0.228", default-features = false, features = ["derive"] }
-serde_json = { version = "1.0.150", default-features = false }
-jsonwebtoken = { version = "10.4.0", default-features = false }
-ipnet = { version = "2.12.0", default-features = false, features = [
+uuid = { version = "1.29.0", default-features = false, features = ["serde"] }
+serde = { version = "1.0.229", default-features = false, features = ["derive"] }
+serde_json = { version = "1.0.154", default-features = false }
+jsonwebtoken = { version = "11.1.0", default-features = false }
+ipnet = { version = "2.12.2", default-features = false, features = [
   "std",
   "serde",
 ] }
-wildmatch = { version = "2.6.1" }
-validator = { version = "0.20.0", default-features = false, features = [
+wildmatch = { version = "2.7.0" }
+validator = { version = "0.21.0", default-features = false, features = [
   "derive",
 ] }
 # regex = { version = "1.9.4", default-features = false }
 regex-lite = { version = "0.1.9", default-features = false, features = [
   "std","string"
 ] }
-hmac = { version = "0.12.1", default-features = false }
-sha3 = { version = "0.10.9", default-features = false }
+hmac = { version = "0.13.0", default-features = false }
+sha3 = { version = "0.12.0", default-features = false }
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
-thiserror = { version = "2.0.18", default-features = false }
+thiserror = { version = "2.0.21", default-features = false }

@@ -74,3 +74,15 @@ impl Config {
         serde_yaml::from_str(&configuration_data).or(Err(TokenGeneratorError::InvalidConfig))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Config;
+
+    #[test]
+    fn parses_sample_config() {
+        assert!(
+            serde_yaml::from_str::<Config>(include_str!("../sample_token-generator.yaml")).is_ok()
+        );
+    }
+}

@@ -14,7 +14,7 @@ pub enum GatewayError {
     #[error("Rustls Error: {0}")]
     RustlsError(#[from] rustls::Error),
     #[error("Rcgen Error: {0}")]
-    RcgenError(#[from] rcgen::RcgenError),
+    RcgenError(#[from] rcgen::Error),
     #[error("PEM Error: {0}")]
     PEMError(#[from] pem::PemError),
     #[error("Hyper Error: {0}")]

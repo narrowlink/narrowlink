@@ -8,7 +8,7 @@ use futures_util::{
     StreamExt,
 };
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-use ipstack::stream::IpStackStream;
+use ipstack::IpStackStream;
 use narrowlink_network::AsyncSocket;
 use narrowlink_types::generic::{self};
 use proxy_stream::ProxyStream;
@@ -107,7 +107,7 @@ impl TunnelFactory {
                         _ = s.send(RouteCommand::Add(*ip));
                     }
                 }
-                tun.my_routes(*default_gateway).await;
+                tun.my_routes(*default_gateway).await?;
                 self.listener = Some(TunnelListener::Tun(tun, *map));
             }
             TunnelInstruction::None => {}
@@ -117,12 +117,14 @@ impl TunnelFactory {
         }
         Ok(())
     }
-    pub async fn stop(&mut self) {
+    pub async fn stop(&mut self) -> Result<(), ClientError> {
         self.wait = Some(Arc::new(Notify::new()));
         #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-        if let Some(TunnelListener::Tun(t, _)) = self.listener.take() {
-            t.my_routes(false).await;
-        };
+        if let Some(TunnelListener::Tun(t, _)) = self.listener.as_ref() {
+            t.my_routes(false).await?;
+        }
+        self.listener.take();
+        Ok(())
     }
     pub async fn accept(
         &mut self,

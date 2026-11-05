@@ -15,41 +15,39 @@ include = ["Cargo.toml", "LICENSE", "src/**/*"]
 workspace = true
 
 [dependencies]
-bytes = { version = "1.11.1", default-features = false }
-serde = { version = "1.0.228", features = ["derive"], default-features = false }
-serde_json = { version = "1.0.150", default-features = false, features = [
+bytes = { version = "1.12.1", default-features = false }
+serde = { version = "1.0.229", features = ["derive"], default-features = false }
+serde_json = { version = "1.0.154", default-features = false, features = [
     "alloc",
 ] }
-futures-util = { version = "0.3.32", default-features = false }
-tokio = { version = "1.52.3", features = [
+futures-util = { version = "0.3.34", default-features = false }
+tokio = { version = "1.54.1", features = [
     "macros",
     "rt",
     "net",
     "rt-multi-thread",
 ], default-features = false }
 tokio-util = { version = "0.7", features = ["codec"], default-features = false }
-tokio-rustls = { version = "0.24.1", default-features = false }
-rustls = { version = "0.21.12", default-features = false }
-rustls-platform-verifier = { version = "0.1", default-features = false }
-hyper = { version = "0.14.32", features = [
-    "client",
-    "http1",
-    "tcp",
-], default-features = false }
-tokio-tungstenite = { version = "0.20.1", default-features = false }
-tungstenite = { version = "0.20.1", features = [
+tokio-rustls = { version = "0.26", default-features = false }
+rustls = { version = "0.23.46", features = ["ring", "std", "tls12"], default-features = false }
+rustls-platform-verifier = { version = "0.7", default-features = false }
+hyper = { version = "1.12", features = ["full"] }
+hyper-util = { version = "0.1", features = ["full"] }
+http-body-util = "0.1"
+tokio-tungstenite = { version = "0.30.0", default-features = false }
+tungstenite = { version = "0.30.0", features = [
     "handshake",
 ], default-features = false }
-chacha20poly1305 = { version = "0.10.1", features = [
+chacha20poly1305 = { version = "0.11.0", features = [
     "alloc",
 ], default-features = false }
-quinn = { version = "0.10.2", default-features = false, features = [
+quinn = { version = "0.11.12", default-features = false, features = [
     "runtime-tokio",
-    "tls-rustls",
+    "rustls-ring",
 ] }
-async-recursion = { version = "1.1.1", default-features = false }
+async-recursion = { version = "1.2.0", default-features = false }
 tracing = { version = "0.1.44", default-features = false }
-thiserror = { version = "2.0.18", default-features = false }
+thiserror = { version = "2.0.21", default-features = false }
 chunkio = { version = "0.0.1", default-features = false }
 
 narrowlink-types = { version = "0.2.6", default-features = false }

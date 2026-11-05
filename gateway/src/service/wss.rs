@@ -3,8 +3,11 @@ use std::{net::SocketAddr, sync::Arc};
 use crate::{config::TlsConfig, error::GatewayError, state::InBound};
 
 use async_trait::async_trait;
-use hyper::server::conn::Http;
-use rustls::{internal::msgs::codec::Codec, ServerConfig};
+use hyper_util::{
+    rt::{TokioExecutor, TokioIo},
+    server::conn::auto::Builder,
+};
+use rustls::ServerConfig;
 use tokio::{net::TcpListener, sync::mpsc::UnboundedSender};
 use tokio_rustls::TlsAcceptor;
 use tracing::{debug, instrument, span, trace, warn, Instrument};
@@ -75,33 +78,48 @@ impl Wss {
     #[instrument(name = "peek_sni_and_alpns", skip(buf))]
     pub fn peek_sni_and_alpns(buf: &[u8]) -> Option<(String, Vec<Vec<u8>>)> {
         trace!("peeking sni and alpns from client hello");
-        let message = rustls::internal::msgs::message::OpaqueMessage::read(
-            &mut rustls::internal::msgs::codec::Reader::init(buf),
-        )
-        .ok()?;
-        trace!("buffer successfully parsed into a TLS opaque message");
-        let mut r = rustls::internal::msgs::codec::Reader::init(&message.payload.0);
-        let _typ = rustls::HandshakeType::read(&mut r).ok()?;
-        let len = rustls::internal::msgs::codec::u24::read(&mut r).ok()?.0 as usize;
-        let mut sub = r.sub(len).ok()?;
-        trace!("reading client hello payload");
-        let ch = rustls::internal::msgs::handshake::ClientHelloPayload::read(&mut sub).ok()?;
-        trace!("extracting sni from client hello");
-        let rustls::internal::msgs::handshake::ServerNamePayload::HostName(ref sni) =
-            ch.get_sni_extension()?.first()?.payload
-        else {
-            return None;
+        use tls_parser::{
+            parse_tls_extensions, parse_tls_plaintext, SNIType, TlsExtension, TlsMessage,
+            TlsMessageHandshake,
         };
-        debug!("sni: {:?}", sni);
-        let mut available_alpns = Vec::new();
-        trace!("extracting alpns from client hello");
-        if let Some(alpns) = ch.get_alpn_extension() {
-            for alpn in alpns {
-                available_alpns.push(alpn.as_ref().to_vec())
+        let (_, record) = parse_tls_plaintext(buf).ok()?;
+        let hello = record.msg.iter().find_map(|message| match message {
+            TlsMessage::Handshake(TlsMessageHandshake::ClientHello(hello)) => Some(hello),
+            _ => None,
+        })?;
+        let (_, extensions) = parse_tls_extensions(hello.ext?).ok()?;
+        let names = extensions.iter().find_map(|extension| match extension {
+            TlsExtension::SNI(names) => Some(names),
+            _ => None,
+        })?;
+        // Match rustls 0.21: reject IP addresses and malformed hostnames in SNI,
+        // and use only the first entry in the first server-name extension.
+        for (kind, name) in names {
+            if *kind == SNIType::HostName {
+                let name = std::str::from_utf8(name).ok()?;
+                if !matches!(
+                    rustls::pki_types::ServerName::try_from(name),
+                    Ok(rustls::pki_types::ServerName::DnsName(_))
+                ) {
+                    return None;
+                }
             }
         }
-        debug!("alpns: {:?}", available_alpns);
-        Some((sni.as_ref().to_string(), available_alpns))
+        let (kind, name) = names.first()?;
+        if *kind != SNIType::HostName {
+            return None;
+        }
+        let sni = std::str::from_utf8(name).ok()?.to_owned();
+        let available_alpns = extensions
+            .iter()
+            .find_map(|extension| match extension {
+                TlsExtension::ALPN(protocols) => {
+                    Some(protocols.iter().map(|protocol| protocol.to_vec()).collect())
+                }
+                _ => None,
+            })
+            .unwrap_or_default();
+        Some((sni, available_alpns))
     }
 }
 
@@ -196,9 +214,9 @@ impl Service for Wss {
                     .await
                     .map_err(|_| ())?;
                 span_connection.in_scope(|| trace!("tls acceptor successfully created"));
-                if let Err(http_err) = Http::new()
-                    .serve_connection(
-                        secure_stream,
+                if let Err(http_err) = Builder::new(TokioExecutor::new())
+                    .serve_connection_with_upgrades(
+                        TokioIo::new(secure_stream),
                         WsService {
                             listen_addr: RequestProtocol::Https(self.listen_addr),
                             domains: wss.domains,
@@ -208,7 +226,6 @@ impl Service for Wss {
                             cm: None,
                         },
                     )
-                    .with_upgrades()
                     .instrument(span_connection.clone())
                     .await
                 {
@@ -217,5 +234,92 @@ impl Service for Wss {
                 Ok::<(), ()>(())
             });
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::Wss;
+    use std::sync::Arc;
+
+    #[test]
+    fn extracts_server_name_and_alpn_from_client_hello() {
+        let mut config = rustls::ClientConfig::builder()
+            .with_root_certificates(rustls::RootCertStore::empty())
+            .with_no_client_auth();
+        config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+        let name = rustls::pki_types::ServerName::try_from("example.com").unwrap();
+        let mut client = rustls::ClientConnection::new(Arc::new(config), name).unwrap();
+        let mut hello = Vec::new();
+        client.write_tls(&mut hello).unwrap();
+        assert_eq!(
+            Wss::peek_sni_and_alpns(&hello),
+            Some((
+                "example.com".to_owned(),
+                vec![b"h2".to_vec(), b"http/1.1".to_vec()]
+            ))
+        );
+        assert!(Wss::peek_sni_and_alpns(&hello[..10]).is_none());
+        let hostname = hello
+            .windows(b"example.com".len())
+            .position(|window| window == b"example.com")
+            .unwrap();
+        let mut invalid = hello.clone();
+        invalid[hostname..hostname + 11].copy_from_slice(b"bad host!xx");
+        assert!(Wss::peek_sni_and_alpns(&invalid).is_none());
+        let mut ip_address = hello;
+        ip_address[hostname..hostname + 11].copy_from_slice(b"192.168.1.1");
+        assert!(Wss::peek_sni_and_alpns(&ip_address).is_none());
+    }
+    #[tokio::test]
+    async fn file_certificate_supports_tls_handshake() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::{TcpListener, TcpStream};
+        use tokio::time::{timeout, Duration};
+        timeout(Duration::from_secs(5), async {
+            let generated =
+                rcgen::generate_simple_self_signed(vec!["localhost".to_owned()]).unwrap();
+            let pem = format!(
+                "{}{}",
+                generated.cert.pem(),
+                generated.signing_key.serialize_pem()
+            );
+            let certificate =
+                super::super::certificate::Certificate::from_pem_vec(pem::parse_many(pem).unwrap())
+                    .unwrap();
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let address = listener.local_addr().unwrap();
+            let acceptor = tokio_rustls::TlsAcceptor::from(certificate.get_config());
+            let server = tokio::spawn(async move {
+                let (stream, _) = listener.accept().await.unwrap();
+                let mut stream = acceptor.accept(stream).await.unwrap();
+                stream.write_all(b"ok").await.unwrap();
+            });
+            let mut roots = rustls::RootCertStore::empty();
+            roots
+                .add(rustls::pki_types::CertificateDer::from(
+                    generated.cert.der().to_vec(),
+                ))
+                .unwrap();
+            let config = rustls::ClientConfig::builder()
+                .with_root_certificates(roots)
+                .with_no_client_auth();
+            let connector = tokio_rustls::TlsConnector::from(Arc::new(config));
+            let stream = TcpStream::connect(address).await.unwrap();
+            let mut stream = connector
+                .connect(
+                    rustls::pki_types::ServerName::try_from("localhost").unwrap(),
+                    stream,
+                )
+                .await
+                .unwrap();
+            let mut message = [0; 2];
+            stream.read_exact(&mut message).await.unwrap();
+            assert_eq!(&message, b"ok");
+            server.await.unwrap();
+        })
+        .await
+        .expect("TLS handshake timed out");
     }
 }

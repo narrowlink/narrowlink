@@ -220,3 +220,13 @@ pub struct File {
 pub fn _default_acme_directory_url() -> String {
     "https://acme-v02.api.letsencrypt.org/directory".to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Config;
+
+    #[test]
+    fn parses_sample_config() {
+        assert!(serde_yaml::from_str::<Config>(include_str!("../sample_gateway.yaml")).is_ok());
+    }
+}

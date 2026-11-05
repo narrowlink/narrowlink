@@ -1,3 +1,5 @@
+use hmac::KeyInit;
+
 use std::{
     collections::HashMap,
     env,
@@ -51,6 +53,24 @@ mod config;
 mod error;
 
 fn main() -> Result<(), AgentError> {
+    let args = Args::parse(env::args())?;
+
+    #[cfg(unix)]
+    if args.daemon {
+        use cf_daemonize::Daemonize;
+        let stdout = std::fs::File::create("/tmp/narrowlink-agent.out")?;
+        let stderr = std::fs::File::create("/tmp/narrowlink-agent.err")?;
+        let daemonize = Daemonize::new()
+            .pid_file("/tmp/narrowlink-agent.pid")
+            .working_directory("/tmp/")
+            .stdout(stdout)
+            .stderr(stderr);
+        if let Err(e) = daemonize.start() {
+            eprintln!("Unable to daemonize: {}", e);
+            return Ok(());
+        }
+    }
+
     let (stdout, _stdout_guard) = tracing_appender::non_blocking(io::stdout());
     let (stderr, _stderr_guard) = tracing_appender::non_blocking(io::stderr());
 
@@ -84,23 +104,6 @@ fn main() -> Result<(), AgentError> {
         // .with(file)
         .init();
 
-    let args = Args::parse(env::args())?;
-
-    #[cfg(unix)]
-    if args.daemon {
-        use daemonize::Daemonize;
-        let stdout = std::fs::File::create("/tmp/narrowlink-agent.out")?;
-        let stderr = std::fs::File::create("/tmp/narrowlink-agent.err")?;
-        let daemonize = Daemonize::new()
-            .pid_file("/tmp/narrowlink-agent.pid")
-            .working_directory("/tmp/")
-            .stdout(stdout)
-            .stderr(stderr);
-        if let Err(e) = daemonize.start() {
-            error!("Unable to daemonize: {}", e.to_string());
-            return Ok(());
-        }
-    }
     start(args)
 }
 
@@ -143,7 +146,10 @@ async fn start(args: Args) -> Result<(), AgentError> {
                     event_connection = Some(event);
                     info!("Connection successful");
                     tokio::spawn(async move {
-                        let mut s = sysinfo::System::new_all();
+                        let Ok(mut s) = sysinfo::System::new_all() else {
+                            error!("Unable to initialize system information");
+                            return;
+                        };
                         let _ = req
                             .request(AgentEventOutBound::Request(
                                 0,
@@ -159,7 +165,9 @@ async fn start(args: Args) -> Result<(), AgentError> {
                                 .request(AgentEventOutBound::Request(
                                     0,
                                     AgentEventRequest::UpdateDynamicSysInfo(DynSystemInfo {
-                                        loadavg: sysinfo::System::load_average().one,
+                                        loadavg: sysinfo::System::load_average()
+                                            .map(|load| load.one)
+                                            .unwrap_or_default(),
                                     }),
                                 ))
                                 .await;
@@ -348,8 +356,8 @@ async fn start(args: Args) -> Result<(), AgentError> {
                                             &[
                                                 format!(
                                                     "{}:{}:{}",
-                                                    &con.host,
-                                                    &con.port,
+                                                    con.host,
+                                                    con.port,
                                                     con.protocol.clone() as u32
                                                 )
                                                 .as_bytes(),
@@ -544,13 +552,7 @@ async fn data_connect(
         };
         mac.update(
             &[
-                format!(
-                    "{}:{}:{}",
-                    &req.host,
-                    &req.port,
-                    req.protocol.clone() as u32
-                )
-                .as_bytes(),
+                format!("{}:{}:{}", req.host, req.port, req.protocol.clone() as u32).as_bytes(),
                 &n,
             ]
             .concat(),
