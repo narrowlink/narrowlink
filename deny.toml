@@ -31,7 +31,8 @@ allow = [
 
 exceptions = [
     { allow = ["AGPL-3.0"], crate = "narrowlink-gateway" },
-    { allow = ["ISC", "MIT", "OpenSSL"], name = "ring" }
+    { allow = ["ISC", "MIT", "OpenSSL"], name = "ring" },
+    { allow = ["CDLA-Permissive-2.0"], name = "webpki-root-certs" }
 ]
 
 
