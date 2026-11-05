@@ -1,6 +1,6 @@
 [package]
 name = "narrowlink-gateway"
-version = "0.2.7"
+version = "0.2.8"
 edition = "2024"
 description = "Narrowlink Gateway"
 readme = "README.md"
@@ -69,5 +69,5 @@ clap_lex = { version = "1.1.1", default-features = false }
 sha3 = { version = "0.12.0", default-features = false }
 thiserror = { version = "2.0.21", default-features = false }
 
-narrowlink-types = { version = "0.2.7" }
-narrowlink-network = { version = "0.2.7" }
+narrowlink-types = { version = "0.2.6" }
+narrowlink-network = { version = "0.2.6" }
