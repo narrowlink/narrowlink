@@ -59,9 +59,9 @@ jobs:
           mv target\${{ matrix.platform }}\release\${{ matrix.package.bin }}.exe
           target\${{ matrix.platform }}\release\${{ matrix.package.bin }}-${{
           matrix.platform }}.exe
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
-          name: binaries
+          name: binaries-${{ matrix.package.bin }}-${{ matrix.platform }}
           path: >-
             target/${{ matrix.platform }}/release/${{ matrix.package.bin }}-${{
             matrix.platform }}.exe
@@ -100,9 +100,9 @@ jobs:
           mv target/${{ matrix.platform }}/release/${{ matrix.package.bin }}
           target/${{ matrix.platform }}/release/${{ matrix.package.bin }}-${{
           matrix.platform }}
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
-          name: binaries
+          name: binaries-${{ matrix.package.bin }}-${{ matrix.platform }}
           path: >-
             target/${{ matrix.platform }}/release/${{ matrix.package.bin }}-${{
             matrix.platform }}
@@ -143,9 +143,9 @@ jobs:
           mv target/${{ matrix.platform }}/release/${{ matrix.package.bin }}
           target/${{ matrix.platform }}/release/${{ matrix.package.bin }}-${{
           matrix.platform }}
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
-          name: binaries
+          name: binaries-${{ matrix.package.bin }}-${{ matrix.platform }}
           path: >-
             target/${{ matrix.platform }}/release/${{ matrix.package.bin }}-${{
             matrix.platform }}
@@ -183,9 +183,9 @@ jobs:
           mv target/${{ matrix.platform }}/release/${{ matrix.package.bin }}
           target/${{ matrix.platform }}/release/${{ matrix.package.bin }}-${{
           matrix.platform }}
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
-          name: binaries
+          name: binaries-${{ matrix.package.bin }}-${{ matrix.platform }}
           path: >-
             target/${{ matrix.platform }}/release/${{ matrix.package.bin }}-${{
             matrix.platform }}
@@ -200,7 +200,8 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/download-artifact@v4.1.7
         with:
-          name: binaries
+          pattern: binaries-*
+          merge-multiple: true
       - uses: marvinpinto/action-automatic-releases@latest
         with:
           repo_token: '${{ secrets.GITHUB_TOKEN }}'
