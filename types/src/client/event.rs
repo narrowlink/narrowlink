@@ -3,7 +3,7 @@ use std::{net::IpAddr, str::FromStr};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{error::MessageError, generic::AgentInfo, GetResponse, NatType};
+use crate::{GetResponse, NatType, error::MessageError, generic::AgentInfo};
 
 use super::ConstSystemInfo;
 
@@ -51,8 +51,7 @@ impl GetResponse for InBound {
 
     fn response(&self) -> Option<Self::Item> {
         #[allow(irrefutable_let_patterns)]
-        let InBound::Response(_, response) = self
-        else {
+        let InBound::Response(_, response) = self else {
             return None;
         };
         Some(response.to_owned())

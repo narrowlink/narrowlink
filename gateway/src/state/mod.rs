@@ -11,11 +11,15 @@ pub(crate) use connection::{
 };
 mod users;
 use crate::{
+    CONNECTION_ORIANTED,
     service::{RequestProtocol, ServiceDataRequest, ServiceEventRequest},
     state::connection::AgentConnection,
-    CONNECTION_ORIANTED,
 };
-use narrowlink_network::{error::NetworkError, event::NarrowEvent, UniversalStream};
+use narrowlink_network::{UniversalStream, error::NetworkError, event::NarrowEvent};
+use narrowlink_types::{
+    NatType,
+    token::{AgentPublishToken, AgentToken, ClientToken},
+};
 use narrowlink_types::{
     agent::{
         EventInBound as AgentEventInBound, EventOutBound as AgentEventOutBound,
@@ -29,10 +33,6 @@ use narrowlink_types::{
     },
     token::PolicyToken,
 };
-use narrowlink_types::{
-    token::{AgentPublishToken, AgentToken, ClientToken},
-    NatType,
-};
 use tokio::{
     io::AsyncWriteExt,
     net::TcpStream,
@@ -42,7 +42,7 @@ use tokio::{
         oneshot,
     },
 };
-use tracing::{debug, info, instrument, trace, warn, Instrument};
+use tracing::{Instrument, debug, info, instrument, trace, warn};
 
 pub struct State {
     #[allow(dead_code)]
@@ -254,12 +254,11 @@ impl State {
                             }
                         },
                         Err(e)=>{
-                            if let Some(agent) = users.del_agent(uid,&name){
-                                if agent.socket_addr != peer_socket_addr{
+                            if let Some(agent) = users.del_agent(uid,&name)
+                                && agent.socket_addr != peer_socket_addr{
                                     users.add_agent(uid, agent);
                                     continue
                                 }
-                            }
                             info!("Agent {}:{} disconnected",uid, name);
                             debug!("Agent disconnected due to {}",(e as NetworkError).to_string());
                             if let Some(cm_sender) = certificate_manager.as_ref() {
@@ -371,8 +370,8 @@ impl State {
                                 //         publish_hosts.extend(publish_token.publish_hosts);
                                 //     }
                                 // };
-                                if !publish_hosts.is_empty() {
-                                    if let Some(cm_sender) = certificate_manager.as_ref() {
+                                if !publish_hosts.is_empty()
+                                    && let Some(cm_sender) = certificate_manager.as_ref() {
                                         let cert_required_connect = publish_hosts.iter().filter(|ph|matches!(ph.connect.protocol, narrowlink_types::generic::Protocol::HTTP | narrowlink_types::generic::Protocol::HTTPS | narrowlink_types::generic::Protocol::QUIC));
                                         // cert_required_connect.map(|ph|ph.host);
                                         let hosts = cert_required_connect.map(|ph|ph.host.clone());
@@ -383,7 +382,6 @@ impl State {
                                             Vec::from_iter(hosts),
                                         ));
                                     }
-                                }
                                 let agent_name = agent_token.name.clone();
                                 agent_types.push(receiver.map(move |f| (agent_token.uid, agent_name.to_owned(), f,peer_socket_addr)));
                                 if let Some(mut privous_agent) = users.add_agent(agent_token.uid,agent::Agent::new(agent_token.name.to_owned(),publish_hosts,peer_socket_addr,peer_forward_addr,sender)) {

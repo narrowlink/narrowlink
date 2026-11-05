@@ -13,15 +13,15 @@ use std::{
 };
 
 use error::GatewayError;
-use futures_util::{stream::FuturesUnordered, StreamExt};
+use futures_util::{StreamExt, stream::FuturesUnordered};
 use state::State;
-use tracing::{debug, error, info, span, trace, Instrument, Level};
+use tracing::{Instrument, Level, debug, error, info, span, trace};
 use tracing_subscriber::{
+    Layer,
     filter::{LevelFilter, Targets},
     fmt::writer::MakeWriterExt,
     prelude::__tracing_subscriber_SubscriberExt,
     util::SubscriberInitExt,
-    Layer,
 };
 use validator::Validate;
 
@@ -146,7 +146,7 @@ mod quic_tests {
     use tokio::{
         io::{AsyncReadExt, AsyncWriteExt},
         net::UdpSocket,
-        time::{timeout, Duration},
+        time::{Duration, timeout},
     };
 
     #[tokio::test]

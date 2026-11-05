@@ -4,10 +4,10 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
+    GetResponse, NatType,
     error::MessageError,
     generic::Connect,
     policy::{self, Policy},
-    GetResponse, NatType,
 };
 
 use super::{ConstSystemInfo, DynSystemInfo};

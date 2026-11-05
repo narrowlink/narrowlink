@@ -11,16 +11,16 @@ use std::{
     env,
     io::{self, IsTerminal},
 };
-use tracing::{debug, error, warn, Level};
+use tracing::{Level, debug, error, warn};
 use transport::TransportFactory;
 use tunnel::TunnelFactory;
 
 use tracing_subscriber::{
+    Layer,
     filter::{LevelFilter, Targets},
     fmt::writer::MakeWriterExt,
     prelude::__tracing_subscriber_SubscriberExt,
     util::SubscriberInitExt,
-    Layer,
 };
 
 use crate::manage::ControlStatus;

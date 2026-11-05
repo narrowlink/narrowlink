@@ -1,12 +1,12 @@
 use std::net::SocketAddr;
 
 use http_body_util::BodyExt;
-use hyper::{client::conn::http1, http::HeaderValue, Request, Response};
+use hyper::{Request, Response, client::conn::http1, http::HeaderValue};
 use hyper_util::rt::TokioIo;
-use narrowlink_network::{error::NetworkError, UniversalStream};
+use narrowlink_network::{UniversalStream, error::NetworkError};
 // use narrowlink_types::policy::Policy;
 use tokio::{net::TcpStream, sync::oneshot};
-use tracing::{debug, Instrument};
+use tracing::{Instrument, debug};
 use uuid::Uuid;
 
 use crate::{error::GatewayError, service::RequestProtocol};

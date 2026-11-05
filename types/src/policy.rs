@@ -108,10 +108,10 @@ impl PolicyItem {
 impl Validate for PolicyItem {
     fn validate(&self) -> Result<(), ValidationErrors> {
         if let PolicyItem::Domain(_agent_id, addr, _port, _protocol) = self {
-            if let Ok(re) = Regex::new(r"^[^.][a-z0-9-.*?]{1,256}$") {
-                if re.is_match(addr) {
-                    return Ok(());
-                }
+            if let Ok(re) = Regex::new(r"^[^.][a-z0-9-.*?]{1,256}$")
+                && re.is_match(addr)
+            {
+                return Ok(());
             }
             let mut err = ValidationErrors::new();
             err.add("Domain", ValidationError::new("Invalid Domain Name"));

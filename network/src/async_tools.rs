@@ -4,7 +4,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use crate::{error::NetworkError, AsyncSocket, UniversalStream};
+use crate::{AsyncSocket, UniversalStream, error::NetworkError};
 use futures_util::{Future, Sink, SinkExt, Stream, StreamExt};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
@@ -128,7 +128,7 @@ impl AsyncRead for StreamToAsync {
                     continue;
                 }
                 Poll::Ready(Some(Err(e))) => {
-                    return Poll::Ready(Err(std::io::Error::other(e.to_string())))
+                    return Poll::Ready(Err(std::io::Error::other(e.to_string())));
                 }
                 Poll::Ready(None) => return Poll::Ready(Ok(())),
                 Poll::Pending => return Poll::Pending,

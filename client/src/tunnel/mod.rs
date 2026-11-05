@@ -3,9 +3,9 @@ mod input_stream;
 mod tun;
 use either::Either;
 use futures_util::{
-    future::{pending, Ready},
-    stream::{self, Once},
     StreamExt,
+    future::{Ready, pending},
+    stream::{self, Once},
 };
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 use ipstack::IpStackStream;
@@ -168,10 +168,10 @@ impl TunnelFactory {
                     } else {
                         generic::Protocol::TCP
                     };
-                if let Some(m) = map {
-                    if addr.0 == m.0 {
-                        addr.0 = m.1.to_string();
-                    }
+                if let Some(m) = map
+                    && addr.0 == m.0
+                {
+                    addr.0 = m.1.to_string();
                 }
                 Ok((
                     Box::new(
@@ -222,10 +222,10 @@ impl TunnelFactory {
                     IpStackStream::Udp(udp) => (Box::new(udp), true),
                     _ => return Err(ClientError::UnsupportedTunProtocol),
                 };
-                if let Some(m) = map {
-                    if peer_addr.ip() == m.0 {
-                        peer_addr.set_ip(m.1);
-                    }
+                if let Some(m) = map
+                    && peer_addr.ip() == m.0
+                {
+                    peer_addr.set_ip(m.1);
                 }
                 Ok((
                     stream,
@@ -248,20 +248,20 @@ impl TunnelFactory {
     pub fn add_host(&mut self, ip: IpAddr) {
         self.hosts.insert(ip);
         #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-        if let Some(TunnelListener::Tun(tun, _)) = self.listener.as_ref() {
-            if let Some(s) = tun.route_sender() {
-                let _ = s.send(RouteCommand::Add(ip));
-            };
-        }
+        if let Some(TunnelListener::Tun(tun, _)) = self.listener.as_ref()
+            && let Some(s) = tun.route_sender()
+        {
+            let _ = s.send(RouteCommand::Add(ip));
+        };
     }
     #[allow(dead_code)]
     pub fn del_host(&mut self, ip: IpAddr) {
         self.hosts.remove(&ip);
         #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-        if let Some(TunnelListener::Tun(tun, _)) = self.listener.as_ref() {
-            if let Some(s) = tun.route_sender() {
-                let _ = s.send(RouteCommand::Del(ip));
-            };
-        }
+        if let Some(TunnelListener::Tun(tun, _)) = self.listener.as_ref()
+            && let Some(s) = tun.route_sender()
+        {
+            let _ = s.send(RouteCommand::Del(ip));
+        };
     }
 }

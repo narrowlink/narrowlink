@@ -1,7 +1,7 @@
 use bytes::{BufMut, BytesMut};
 use futures_util::{Future, FutureExt, SinkExt, StreamExt};
 use http_body_util::{BodyExt, Full};
-use hyper::{client::conn::http1, http::HeaderValue, HeaderMap, Request, StatusCode};
+use hyper::{HeaderMap, Request, StatusCode, client::conn::http1, http::HeaderValue};
 use hyper_util::rt::TokioIo;
 type Body = Full<bytes::Bytes>;
 use narrowlink_types::ServiceType;
@@ -21,9 +21,9 @@ use tracing::{debug, trace, warn};
 use tungstenite::Message;
 
 use crate::{
+    AsyncSocket,
     error::NetworkError,
     transport::{StreamType, TlsConfiguration, UnifiedSocket},
-    AsyncSocket,
 };
 
 const KEEP_ALIVE_TIME: u64 = 20;
@@ -209,7 +209,7 @@ impl AsyncRead for WsConnection {
                                 {
                                     Poll::Ready(Ok(_)) => continue,
                                     Poll::Ready(Err(_e)) => {
-                                        return Poll::Ready(Err(Error::other("Ping Error!")))
+                                        return Poll::Ready(Err(Error::other("Ping Error!")));
                                     }
                                     Poll::Pending => return Poll::Pending,
                                 }
@@ -549,7 +549,7 @@ impl AsyncRead for WsConnectionBinary {
                     }
                 }
                 Poll::Ready(Some(Err(e))) => {
-                    return Poll::Ready(Err(io::Error::other(e.to_string())))
+                    return Poll::Ready(Err(io::Error::other(e.to_string())));
                 }
                 Poll::Ready(None) => return Poll::Ready(Ok(())),
                 Poll::Pending => {
@@ -563,7 +563,7 @@ impl AsyncRead for WsConnectionBinary {
                                 {
                                     Poll::Ready(Ok(_)) => continue,
                                     Poll::Ready(Err(e)) => {
-                                        return Poll::Ready(Err(io::Error::other(e.to_string())))
+                                        return Poll::Ready(Err(io::Error::other(e.to_string())));
                                     }
                                     Poll::Pending => return Poll::Pending,
                                 }

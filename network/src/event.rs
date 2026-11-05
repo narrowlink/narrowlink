@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    sync::{atomic::AtomicUsize, Arc},
+    sync::{Arc, atomic::AtomicUsize},
     task::{Context, Poll},
 };
 
@@ -11,7 +11,7 @@ use narrowlink_types::{
 };
 use tokio::sync::{mpsc, oneshot};
 
-use crate::{error::NetworkError, UniversalStream};
+use crate::{UniversalStream, error::NetworkError};
 
 pub struct NarrowEvent<T, U> {
     req_sender: mpsc::UnboundedSender<Option<(usize, T, oneshot::Sender<U>)>>,

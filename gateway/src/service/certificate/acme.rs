@@ -5,7 +5,7 @@ use instant_acme::{
     NewOrder, Order, OrderStatus,
 };
 use rcgen::{CertificateParams, DistinguishedName, DnType, KeyPair};
-use rustls::{pki_types::PrivatePkcs8KeyDer, ServerConfig};
+use rustls::{ServerConfig, pki_types::PrivatePkcs8KeyDer};
 type PrivateKey = PrivatePkcs8KeyDer<'static>;
 use serde::Deserialize;
 use tokio::time;
@@ -214,13 +214,12 @@ impl Acme {
                 let mut authorizations = order.authorizations();
                 while let Some(authorization) = authorizations.next().await {
                     let mut authorization = authorization?;
-                    if let Some(mut handle) = authorization.challenge(kind.clone()) {
-                        if let Some(challenge) =
+                    if let Some(mut handle) = authorization.challenge(kind.clone())
+                        && let Some(challenge) =
                             challenges.iter().find(|c| c.verification_url == handle.url)
-                        {
-                            handle.set_ready().await?;
-                            let _ = challenge;
-                        }
+                    {
+                        handle.set_ready().await?;
+                        let _ = challenge;
                     }
                 }
             }

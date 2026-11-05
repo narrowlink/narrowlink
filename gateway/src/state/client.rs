@@ -3,11 +3,11 @@ use std::{
     str::FromStr,
 };
 
-use futures_util::{stream::SplitSink, SinkExt};
+use futures_util::{SinkExt, stream::SplitSink};
 use narrowlink_types::{
+    NatType,
     client::{ConstSystemInfo, EventInBound, EventOutBound, SystemInfo},
     policy::Policy,
-    NatType,
 };
 
 use narrowlink_network::{error::NetworkError, event::NarrowEvent};

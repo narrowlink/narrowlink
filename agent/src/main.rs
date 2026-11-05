@@ -15,36 +15,35 @@ use error::AgentError;
 use futures_util::{SinkExt, StreamExt};
 use hmac::Mac;
 use narrowlink_network::{
-    async_forward,
+    AsyncSocket, AsyncSocketCrypt, async_forward,
     error::NetworkError,
     event::NarrowEvent,
     p2p::QuicStream,
     transport::{StreamType, TlsConfiguration, UnifiedSocket},
     ws::{WsConnection, WsConnectionBinary},
-    AsyncSocket, AsyncSocketCrypt,
 };
 use narrowlink_types::{
+    ServiceType,
     agent::{
         ConstSystemInfo, DynSystemInfo, EventInBound as AgentEventInBound,
         EventOutBound as AgentEventOutBound, EventRequest as AgentEventRequest,
     },
     generic::{self, Connect},
     policy::Policy,
-    ServiceType,
 };
 use sha3::{Digest, Sha3_256};
 use tokio::{
-    net::{lookup_host, TcpStream},
+    net::{TcpStream, lookup_host},
     time,
 };
+use tracing::{Level, warn};
 use tracing::{debug, error, info, trace};
-use tracing::{warn, Level};
 use tracing_subscriber::{
+    Layer,
     filter::{LevelFilter, Targets},
     fmt::writer::MakeWriterExt,
     prelude::__tracing_subscriber_SubscriberExt,
     util::SubscriberInitExt,
-    Layer,
 };
 use udp_stream::UdpStream;
 use uuid::Uuid;
@@ -314,9 +313,9 @@ async fn start(args: Args) -> Result<(), AgentError> {
                                             .is_some()
                                 {
                                     warn!(
-                                            "Access denied to {}:{}, peer: {} - Encryption is enforced, but request is not encrypted or key not found",
-                                            con.host, con.port, p2p.peer_ip
-                                        );
+                                        "Access denied to {}:{}, peer: {} - Encryption is enforced, but request is not encrypted or key not found",
+                                        con.host, con.port, p2p.peer_ip
+                                    );
                                     if narrowlink_network::p2p::Response::write(
                                         &narrowlink_network::p2p::Response::AccessDenied,
                                         &mut s,

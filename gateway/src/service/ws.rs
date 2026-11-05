@@ -5,10 +5,11 @@ use async_trait::async_trait;
 use either::Either::{Left, Right};
 use futures_util::Future;
 use hyper::{
+    Request, Response, StatusCode,
     header::{self, HOST},
     http::{self, HeaderValue},
     service::Service as HyperService,
-    upgrade, Request, Response, StatusCode,
+    upgrade,
 };
 use hyper_util::{
     rt::{TokioExecutor, TokioIo},
@@ -18,7 +19,7 @@ use tokio::{
     net::TcpListener,
     sync::{mpsc::UnboundedSender, oneshot},
 };
-use tracing::{debug, span, trace, warn, Instrument};
+use tracing::{Instrument, debug, span, trace, warn};
 
 use crate::{
     error::GatewayError,
@@ -26,7 +27,7 @@ use crate::{
     state::{InBound, ResponseHeaders},
 };
 
-use super::{certificate::manager::CertificateManager, wss::TlsEngine, RequestProtocol, Service};
+use super::{RequestProtocol, Service, certificate::manager::CertificateManager, wss::TlsEngine};
 
 const INDEX_HTML: &str = include_str!("../../templates/index.html");
 
@@ -144,31 +145,31 @@ impl HyperService<Request<hyper::body::Incoming>> for WsService {
 
         let handler = async move {
             let req_version = req.version();
-            if let Some(acme) = cm.as_ref() {
-                if req.uri().path().starts_with("/.well-known/acme-challenge/") {
-                    trace!("acme challenge");
-                    if let Ok((token, key_authorization)) =
-                        acme.get_acme_http_challenge(&host).in_current_span().await
-                    {
-                        if req.uri().path() == format!("/.well-known/acme-challenge/{}", token) {
-                            return Response::builder()
-                                .version(req_version)
-                                .status(StatusCode::OK)
-                                .body(crate::full_body(key_authorization));
-                        }
-                    } else {
-                        trace!("acme challenge not found for {}", host);
+            if let Some(acme) = cm.as_ref()
+                && req.uri().path().starts_with("/.well-known/acme-challenge/")
+            {
+                trace!("acme challenge");
+                if let Ok((token, key_authorization)) =
+                    acme.get_acme_http_challenge(&host).in_current_span().await
+                {
+                    if req.uri().path() == format!("/.well-known/acme-challenge/{}", token) {
+                        return Response::builder()
+                            .version(req_version)
+                            .status(StatusCode::OK)
+                            .body(crate::full_body(key_authorization));
                     }
+                } else {
+                    trace!("acme challenge not found for {}", host);
                 }
-                // return Response::builder()
-                //     .version(req_version)
-                //     .status(StatusCode::TEMPORARY_REDIRECT)
-                //     .header(
-                //         header::LOCATION,
-                //         format!("https://{}{}", host, req.uri().path()),
-                //     )
-                //     .body("".into());
             }
+            // return Response::builder()
+            //     .version(req_version)
+            //     .status(StatusCode::TEMPORARY_REDIRECT)
+            //     .header(
+            //         header::LOCATION,
+            //         format!("https://{}{}", host, req.uri().path()),
+            //     )
+            //     .body("".into());
 
             if let Some(token) = req
                 .headers()
@@ -190,7 +191,7 @@ impl HyperService<Request<hyper::body::Incoming>> for WsService {
                     .map(|t| narrowlink_network::ws::WsConnection::drive_key(t.as_bytes()))
                 else {
                     trace!("invalid websocket key or key header not found");
-                    use crate::service::http_templates::{response_error, ErrorFormat, HttpErrors};
+                    use crate::service::http_templates::{ErrorFormat, HttpErrors, response_error};
                     return Ok(response_error(ErrorFormat::Html, HttpErrors::BadRequest));
                 };
                 let publish = req
@@ -430,7 +431,7 @@ mod tests {
     use tokio::{
         net::TcpListener,
         sync::mpsc,
-        time::{timeout, Duration},
+        time::{Duration, timeout},
     };
 
     #[tokio::test]
@@ -458,12 +459,14 @@ mod tests {
                 if let Some(InBound::EventRequest(_, stream, _, _, response)) =
                     receiver.recv().await
                 {
-                    assert!(response
-                        .send(Ok(ResponseHeaders {
-                            session: None,
-                            connection: None
-                        }))
-                        .is_ok());
+                    assert!(
+                        response
+                            .send(Ok(ResponseHeaders {
+                                session: None,
+                                connection: None
+                            }))
+                            .is_ok()
+                    );
                     let mut stream = stream.await.unwrap();
                     assert_eq!(stream.next().await.unwrap().unwrap(), "ping");
                     stream.send("pong".to_owned()).await.unwrap();
@@ -519,9 +522,11 @@ mod tests {
                         request.into_body().collect().await.unwrap().to_bytes(),
                         "request body"
                     );
-                    assert!(response
-                        .send(Ok(Response::new(crate::full_body("response body"))))
-                        .is_ok());
+                    assert!(
+                        response
+                            .send(Ok(Response::new(crate::full_body("response body"))))
+                            .is_ok()
+                    );
                 } else {
                     panic!("expected HTTP request");
                 }
@@ -585,9 +590,11 @@ mod tests {
                         request.into_body().collect().await.unwrap().to_bytes(),
                         "request body"
                     );
-                    assert!(response
-                        .send(Ok(Response::new(crate::full_body("response body"))))
-                        .is_ok());
+                    assert!(
+                        response
+                            .send(Ok(Response::new(crate::full_body("response body"))))
+                            .is_ok()
+                    );
                 } else {
                     panic!("expected HTTP request");
                 }
@@ -675,15 +682,17 @@ mod tests {
                         .unwrap();
                 });
                 let (agent_tx, agent_rx) = oneshot::channel();
-                assert!(agent_tx
-                    .send(Box::new(narrowlink_network::AsyncToStream::new(agent_side))
-                        as Box<
-                            dyn narrowlink_network::UniversalStream<
-                                Vec<u8>,
-                                narrowlink_network::error::NetworkError,
-                            >,
-                        >)
-                    .is_ok());
+                assert!(
+                    agent_tx
+                        .send(Box::new(narrowlink_network::AsyncToStream::new(agent_side))
+                            as Box<
+                                dyn narrowlink_network::UniversalStream<
+                                        Vec<u8>,
+                                        narrowlink_network::error::NetworkError,
+                                    >,
+                            >)
+                        .is_ok()
+                );
                 let mut connection = ConnectionData::new(
                     uuid::Uuid::new_v4(),
                     None,

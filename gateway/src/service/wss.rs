@@ -10,9 +10,9 @@ use hyper_util::{
 use rustls::ServerConfig;
 use tokio::{net::TcpListener, sync::mpsc::UnboundedSender};
 use tokio_rustls::TlsAcceptor;
-use tracing::{debug, instrument, span, trace, warn, Instrument};
+use tracing::{Instrument, debug, instrument, span, trace, warn};
 
-use super::{certificate::manager::CertificateManager, ws::WsService, RequestProtocol, Service};
+use super::{RequestProtocol, Service, certificate::manager::CertificateManager, ws::WsService};
 
 #[derive(Clone)]
 pub struct Wss {
@@ -79,8 +79,8 @@ impl Wss {
     pub fn peek_sni_and_alpns(buf: &[u8]) -> Option<(String, Vec<Vec<u8>>)> {
         trace!("peeking sni and alpns from client hello");
         use tls_parser::{
-            parse_tls_extensions, parse_tls_plaintext, SNIType, TlsExtension, TlsMessage,
-            TlsMessageHandshake,
+            SNIType, TlsExtension, TlsMessage, TlsMessageHandshake, parse_tls_extensions,
+            parse_tls_plaintext,
         };
         let (_, record) = parse_tls_plaintext(buf).ok()?;
         let hello = record.msg.iter().find_map(|message| match message {
@@ -276,7 +276,7 @@ mod tests {
     async fn file_certificate_supports_tls_handshake() {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         use tokio::net::{TcpListener, TcpStream};
-        use tokio::time::{timeout, Duration};
+        use tokio::time::{Duration, timeout};
         timeout(Duration::from_secs(5), async {
             let generated =
                 rcgen::generate_simple_self_signed(vec!["localhost".to_owned()]).unwrap();
