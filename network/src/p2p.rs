@@ -8,8 +8,8 @@ use std::{
 
 use async_recursion::async_recursion;
 use narrowlink_types::{
-    generic::{Connect, CryptographicAlgorithm, Protocol, SigningAlgorithm},
     NatType, Peer2PeerInstruction,
+    generic::{Connect, CryptographicAlgorithm, Protocol, SigningAlgorithm},
 };
 use quinn::{ClientConfig, Connection, Endpoint, EndpointConfig, RecvStream, SendStream};
 use tokio::{

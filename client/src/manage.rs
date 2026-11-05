@@ -5,8 +5,8 @@ use std::{
     net::SocketAddr,
     process,
     sync::{
-        atomic::{AtomicU8, Ordering},
         Arc,
+        atomic::{AtomicU8, Ordering},
     },
     time::Duration,
 };
@@ -20,12 +20,12 @@ use narrowlink_network::{
     ws::WsConnection,
 };
 use narrowlink_types::{
+    GetResponse, ServiceType,
     client::EventInBound as ClientEventInBound,
     client::EventOutBound as ClientEventOutBound,
     client::EventRequest as ClientEventRequest,
     client::{Peer2PeerInstruction, Peer2PeerRequest},
     generic::AgentInfo,
-    GetResponse, ServiceType,
 };
 
 use crate::{

@@ -4,13 +4,13 @@ use std::{
     str::FromStr,
 };
 
-use futures_util::{stream::SplitSink, SinkExt};
+use futures_util::{SinkExt, stream::SplitSink};
 use narrowlink_network::{error::NetworkError, event::NarrowEvent};
 use narrowlink_types::{
+    NatType,
     agent::{ConstSystemInfo, DynSystemInfo, EventInBound, EventOutBound, SystemInfo},
     generic::Connect,
     publish::PublishHost,
-    NatType,
 };
 
 pub struct Agent {

@@ -5,7 +5,7 @@ use instant_acme::{
     NewOrder, Order, OrderStatus,
 };
 use rcgen::{CertificateParams, DistinguishedName, DnType, KeyPair};
-use rustls::{pki_types::PrivatePkcs8KeyDer, ServerConfig};
+use rustls::{ServerConfig, pki_types::PrivatePkcs8KeyDer};
 type PrivateKey = PrivatePkcs8KeyDer<'static>;
 use serde::Deserialize;
 use tokio::time;

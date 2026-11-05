@@ -2,8 +2,8 @@ use hmac::KeyInit;
 
 use hmac::Mac;
 use narrowlink_network::{
-    async_forward, error::NetworkError, p2p::QuicStream, ws::WsConnectionBinary, AsyncSocket,
-    AsyncSocketCrypt,
+    AsyncSocket, AsyncSocketCrypt, async_forward, error::NetworkError, p2p::QuicStream,
+    ws::WsConnectionBinary,
 };
 use narrowlink_types::{
     client::DataOutBound as ClientDataOutBound,
@@ -13,8 +13,8 @@ use narrowlink_types::{
 use std::{
     collections::HashMap,
     sync::{
-        atomic::{self, AtomicU8},
         Arc,
+        atomic::{self, AtomicU8},
     },
 };
 use tokio::sync::{Notify, RwLock};
@@ -208,24 +208,23 @@ impl TransportFactory {
             narrowlink_network::p2p::Response::Success => {
                 trace!(
                     "Direct connection established to {}:{}",
-                    connect.host,
-                    connect.port
+                    connect.host, connect.port
                 );
             }
             narrowlink_network::p2p::Response::InvalidRequest => {
-                return Err(ClientError::InvalidDirectRequest)
+                return Err(ClientError::InvalidDirectRequest);
             }
             narrowlink_network::p2p::Response::AccessDenied => {
-                return Err(ClientError::ACLDenied(connect.host, connect.port))
+                return Err(ClientError::ACLDenied(connect.host, connect.port));
             }
             narrowlink_network::p2p::Response::UnableToResolve => {
-                return Err(ClientError::UnableToResolve(connect.host))
+                return Err(ClientError::UnableToResolve(connect.host));
             }
             narrowlink_network::p2p::Response::Failed => {
                 return Err(ClientError::DirectConnectionFailed(
                     connect.host,
                     connect.port,
-                ))
+                ));
             }
         }
 

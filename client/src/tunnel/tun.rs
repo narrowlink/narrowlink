@@ -364,11 +364,13 @@ mod wintun {
             let session = Arc::new(adapter.start_session(wintun::MAX_RING_CAPACITY)?);
             let (receiver_tx, receiver_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
             let session_reader = session.clone();
-            let task = thread::spawn(move || loop {
-                let Ok(packet) = session_reader.receive_blocking() else {
-                    break;
-                };
-                _ = receiver_tx.send(packet.bytes().to_vec());
+            let task = thread::spawn(move || {
+                loop {
+                    let Ok(packet) = session_reader.receive_blocking() else {
+                        break;
+                    };
+                    _ = receiver_tx.send(packet.bytes().to_vec());
+                }
             });
             Ok(WinTunDevice {
                 session,
@@ -475,10 +477,12 @@ mod route_tests {
             original_removed: false,
             installed: vec![],
         };
-        assert!(state
-            .activate(&mut manager, &[first, failed])
-            .await
-            .is_err());
+        assert!(
+            state
+                .activate(&mut manager, &[first, failed])
+                .await
+                .is_err()
+        );
         assert_eq!(manager.routes, HashSet::from([original.destination()]));
         assert!(!state.original_removed && state.installed.is_empty());
     }
@@ -543,10 +547,12 @@ mod route_tests {
             original_removed: false,
             installed: vec![],
         };
-        assert!(state
-            .activate(&mut manager, &[route("192.0.2.1")])
-            .await
-            .is_err());
+        assert!(
+            state
+                .activate(&mut manager, &[route("192.0.2.1")])
+                .await
+                .is_err()
+        );
         assert_eq!(manager.routes, HashSet::from([original.destination()]));
         assert!(!state.original_removed && state.installed.is_empty());
     }

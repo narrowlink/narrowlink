@@ -11,7 +11,7 @@ use tokio::{
 };
 use tracing::debug;
 
-use crate::{error::NetworkError, AsyncSocket};
+use crate::{AsyncSocket, error::NetworkError};
 
 pub struct TlsConfiguration {
     pub sni: String,
@@ -40,7 +40,7 @@ impl UnifiedSocket {
                         debug!("using rustls to connect to {}", peer_addr.to_string());
                         use rustls_platform_verifier::ConfigVerifierExt;
                         use std::sync::Arc;
-                        use tokio_rustls::{rustls::pki_types::ServerName, TlsConnector};
+                        use tokio_rustls::{TlsConnector, rustls::pki_types::ServerName};
 
                         let config = rustls::ClientConfig::with_platform_verifier()
                             .map_err(io::Error::other)?;

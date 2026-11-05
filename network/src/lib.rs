@@ -1,5 +1,5 @@
 pub use async_tools::{AsyncToStream, StreamToAsync};
-use chacha20poly1305::{aead::Aead, KeyInit, XChaCha20Poly1305};
+use chacha20poly1305::{KeyInit, XChaCha20Poly1305, aead::Aead};
 use chunkio::ChunkIO;
 use std::{io, pin::Pin, task::Poll};
 mod async_tools;

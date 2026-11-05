@@ -8,7 +8,7 @@ repository = "https://github.com/narrowlink/narrowlink/"
 license = 'MPL-2.0'
 keywords = ["narrowlink"]
 authors = ['Narrowlink <opensource@narrowlink.com>']
-edition = "2021"
+edition = "2024"
 
 include = [
   "Cargo.toml",

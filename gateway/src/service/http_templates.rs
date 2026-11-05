@@ -18,17 +18,48 @@ pub enum HttpErrors {
 
 impl HttpErrors {
     fn parts(&self) -> (&'static str, &'static str) {
-        match self{
-            HttpErrors::BadRequest => ("400 - Bad Request","The request was malformed or invalid."),
-            HttpErrors::Unauthorized => ("401 - Unauthorized","The request requires authentication, either through a missing or invalid Authorization header."),
-            HttpErrors::Forbidden => ("403 - Forbidden","The server understood the request, but it refuses to authorize it."),
-            HttpErrors::NotFound(e) => ("404 Not Found",e.unwrap_or("The requested resource could not be found.")),
-            HttpErrors::NotAcceptable(e) => ("406 Not Acceptable",e.unwrap_or("The resource you requested is not available in the format you requested.")),
-            HttpErrors::Conflict => ("409 Conflict","A conflict has occurred, please check your inputs and try again."),
-            HttpErrors::InternalServerError => ("500 Internal Server Error","An error occurred on the server while processing the request."),
-            HttpErrors::ServiceUnavailable => ("503 - Service Unavailable", "The server is currently unable to handle the request due to maintenance or overloading."),
-            HttpErrors::WenServerIsDown => ("521 - Web Server Is Down", "The agent is available, but its hosted web server is refusing connections from the agent. Make sure the agent can reach the web server."),
-            HttpErrors::OriginIsUnreachable => ("523 - Agent Is Unreachable", "The agent is not available. Make sure the agent is connected to the service."),
+        match self {
+            HttpErrors::BadRequest => {
+                ("400 - Bad Request", "The request was malformed or invalid.")
+            }
+            HttpErrors::Unauthorized => (
+                "401 - Unauthorized",
+                "The request requires authentication, either through a missing or invalid Authorization header.",
+            ),
+            HttpErrors::Forbidden => (
+                "403 - Forbidden",
+                "The server understood the request, but it refuses to authorize it.",
+            ),
+            HttpErrors::NotFound(e) => (
+                "404 Not Found",
+                e.unwrap_or("The requested resource could not be found."),
+            ),
+            HttpErrors::NotAcceptable(e) => (
+                "406 Not Acceptable",
+                e.unwrap_or(
+                    "The resource you requested is not available in the format you requested.",
+                ),
+            ),
+            HttpErrors::Conflict => (
+                "409 Conflict",
+                "A conflict has occurred, please check your inputs and try again.",
+            ),
+            HttpErrors::InternalServerError => (
+                "500 Internal Server Error",
+                "An error occurred on the server while processing the request.",
+            ),
+            HttpErrors::ServiceUnavailable => (
+                "503 - Service Unavailable",
+                "The server is currently unable to handle the request due to maintenance or overloading.",
+            ),
+            HttpErrors::WenServerIsDown => (
+                "521 - Web Server Is Down",
+                "The agent is available, but its hosted web server is refusing connections from the agent. Make sure the agent can reach the web server.",
+            ),
+            HttpErrors::OriginIsUnreachable => (
+                "523 - Agent Is Unreachable",
+                "The agent is not available. Make sure the agent is connected to the service.",
+            ),
         }
     }
 }

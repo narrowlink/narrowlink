@@ -3,9 +3,9 @@ mod input_stream;
 mod tun;
 use either::Either;
 use futures_util::{
-    future::{pending, Ready},
-    stream::{self, Once},
     StreamExt,
+    future::{Ready, pending},
+    stream::{self, Once},
 };
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 use ipstack::IpStackStream;

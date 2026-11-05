@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use narrowlink_types::{
+    NatType,
     agent::AgentPublishInfo,
     generic::{AgentInfo, Connect},
     policy::Policy,
-    NatType,
 };
 use uuid::Uuid;
 

@@ -11,11 +11,15 @@ pub(crate) use connection::{
 };
 mod users;
 use crate::{
+    CONNECTION_ORIANTED,
     service::{RequestProtocol, ServiceDataRequest, ServiceEventRequest},
     state::connection::AgentConnection,
-    CONNECTION_ORIANTED,
 };
-use narrowlink_network::{error::NetworkError, event::NarrowEvent, UniversalStream};
+use narrowlink_network::{UniversalStream, error::NetworkError, event::NarrowEvent};
+use narrowlink_types::{
+    NatType,
+    token::{AgentPublishToken, AgentToken, ClientToken},
+};
 use narrowlink_types::{
     agent::{
         EventInBound as AgentEventInBound, EventOutBound as AgentEventOutBound,
@@ -29,10 +33,6 @@ use narrowlink_types::{
     },
     token::PolicyToken,
 };
-use narrowlink_types::{
-    token::{AgentPublishToken, AgentToken, ClientToken},
-    NatType,
-};
 use tokio::{
     io::AsyncWriteExt,
     net::TcpStream,
@@ -42,7 +42,7 @@ use tokio::{
         oneshot,
     },
 };
-use tracing::{debug, info, instrument, trace, warn, Instrument};
+use tracing::{Instrument, debug, info, instrument, trace, warn};
 
 pub struct State {
     #[allow(dead_code)]

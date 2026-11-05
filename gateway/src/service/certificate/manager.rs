@@ -5,22 +5,22 @@ use std::{
 };
 
 use instant_acme::Account;
-use rustls::{pki_types::PrivatePkcs8KeyDer, ServerConfig};
+use rustls::{ServerConfig, pki_types::PrivatePkcs8KeyDer};
 type PrivateKey = PrivatePkcs8KeyDer<'static>;
-use tracing::{debug, error, instrument, span, trace, warn, Instrument, Span};
+use tracing::{Instrument, Span, debug, error, instrument, span, trace, warn};
 
 use tokio::{
     sync::{
-        mpsc::{self, UnboundedSender},
         RwLock,
+        mpsc::{self, UnboundedSender},
     },
     time,
 };
 use validator::ValidateEmail;
 
 use super::{
-    acme::{ACMEChallenge, Acme},
     ACMEChallengeType, Certificate, CertificateStorage,
+    acme::{ACMEChallenge, Acme},
 };
 use crate::error::GatewayError;
 
