@@ -1,6 +1,6 @@
 [package]
 name = "narrowlink-types"
-version = "0.2.6"
+version = "0.2.7"
 edition = "2024"
 description = "Narrowlink Types Library"
 homepage = "https://narrowlink.com"
