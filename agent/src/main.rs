@@ -1,3 +1,5 @@
+use hmac::KeyInit;
+
 use std::{
     collections::HashMap,
     env,
@@ -144,7 +146,10 @@ async fn start(args: Args) -> Result<(), AgentError> {
                     event_connection = Some(event);
                     info!("Connection successful");
                     tokio::spawn(async move {
-                        let mut s = sysinfo::System::new_all();
+                        let Ok(mut s) = sysinfo::System::new_all() else {
+                            error!("Unable to initialize system information");
+                            return;
+                        };
                         let _ = req
                             .request(AgentEventOutBound::Request(
                                 0,
@@ -160,7 +165,9 @@ async fn start(args: Args) -> Result<(), AgentError> {
                                 .request(AgentEventOutBound::Request(
                                     0,
                                     AgentEventRequest::UpdateDynamicSysInfo(DynSystemInfo {
-                                        loadavg: sysinfo::System::load_average().one,
+                                        loadavg: sysinfo::System::load_average()
+                                            .map(|load| load.one)
+                                            .unwrap_or_default(),
                                     }),
                                 ))
                                 .await;

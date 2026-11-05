@@ -48,12 +48,16 @@ pub trait CertificateStorage {
     async fn is_pending(&self, account: &str, domain: &str) -> bool;
     async fn get_default_account(&self) -> Result<Account, GatewayError> {
         let account_credentials = self.get_default_account_credentials().await?;
-        Ok(Account::from_credentials(account_credentials).await?)
+        Ok(Account::builder()?
+            .from_credentials(account_credentials)
+            .await?)
     }
     async fn get_acme_account(&self, account: &str, domain: &str) -> Result<Account, GatewayError> {
         let account_credentials = self.get_acme_account_credentials(account, domain).await;
         if let Some(account_credentials) = account_credentials {
-            Ok(Account::from_credentials(account_credentials).await?)
+            Ok(Account::builder()?
+                .from_credentials(account_credentials)
+                .await?)
         } else {
             Err(GatewayError::Invalid("No account credentials found"))
         }

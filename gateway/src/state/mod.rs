@@ -169,10 +169,13 @@ impl State {
                                             seq = req.easy_seq;
                                         }
 
-                                        let mut params = CertificateParams::new(vec![agent_ip.to_string()]);
+                                        let Ok(mut params) = CertificateParams::new(vec![agent_ip.to_string()]) else {
+                                            let _ = client.send(ClientEventInBound::Response(request_id,ClientEventResponse::Failed)).await;
+                                            continue
+                                        };
                                         params.distinguished_name = DistinguishedName::new();
                                         params.distinguished_name.push(rcgen::DnType::OrganizationName, "Narrowlink");
-                                        let Ok((cert,key)) = rcgen::Certificate::from_params(params).and_then(|cert|cert.serialize_der().map(|c|(c,cert.serialize_private_key_der()))) else {
+                                        let Ok((cert,key)) = rcgen::KeyPair::generate().and_then(|key| params.self_signed(&key).map(|cert| (cert.der().to_vec(), key.serialize_der()))) else {
                                             let _ = client.send(ClientEventInBound::Response(request_id,ClientEventResponse::Failed)).await;
                                             continue
                                         };

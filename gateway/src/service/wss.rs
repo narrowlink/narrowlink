@@ -281,8 +281,8 @@ mod tests {
                 rcgen::generate_simple_self_signed(vec!["localhost".to_owned()]).unwrap();
             let pem = format!(
                 "{}{}",
-                generated.serialize_pem().unwrap(),
-                generated.serialize_private_key_pem()
+                generated.cert.pem(),
+                generated.signing_key.serialize_pem()
             );
             let certificate =
                 super::super::certificate::Certificate::from_pem_vec(pem::parse_many(pem).unwrap())
@@ -298,7 +298,7 @@ mod tests {
             let mut roots = rustls::RootCertStore::empty();
             roots
                 .add(rustls::pki_types::CertificateDer::from(
-                    generated.serialize_der().unwrap(),
+                    generated.cert.der().to_vec(),
                 ))
                 .unwrap();
             let config = rustls::ClientConfig::builder()

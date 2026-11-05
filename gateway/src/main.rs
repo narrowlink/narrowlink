@@ -152,8 +152,8 @@ mod quic_tests {
     async fn quic_transfers_data_with_pinned_certificate() {
         timeout(Duration::from_secs(5), async {
             let cert = rcgen::generate_simple_self_signed(vec!["127.0.0.1".into()]).unwrap();
-            let cert_der = cert.serialize_der().unwrap();
-            let key_der = cert.serialize_private_key_der();
+            let cert_der = cert.cert.der().to_vec();
+            let key_der = cert.signing_key.serialize_der();
             let server_socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();
             let server_addr = server_socket.local_addr().unwrap();
             let client_socket = UdpSocket::bind("127.0.0.1:0").await.unwrap();

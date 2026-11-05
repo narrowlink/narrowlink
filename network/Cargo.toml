@@ -31,14 +31,14 @@ tokio-util = { version = "0.7", features = ["codec"], default-features = false }
 tokio-rustls = { version = "0.26", default-features = false }
 rustls = { version = "0.23.46", features = ["ring", "std", "tls12"], default-features = false }
 rustls-platform-verifier = { version = "0.7", default-features = false }
-hyper = { version = "1.8", features = ["full"] }
+hyper = { version = "1.12", features = ["full"] }
 hyper-util = { version = "0.1", features = ["full"] }
 http-body-util = "0.1"
-tokio-tungstenite = { version = "0.20.1", default-features = false }
-tungstenite = { version = "0.20.1", features = [
+tokio-tungstenite = { version = "0.30.0", default-features = false }
+tungstenite = { version = "0.30.0", features = [
     "handshake",
 ], default-features = false }
-chacha20poly1305 = { version = "0.10.1", features = [
+chacha20poly1305 = { version = "0.11.0", features = [
     "alloc",
 ], default-features = false }
 quinn = { version = "0.11.12", default-features = false, features = [

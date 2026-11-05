@@ -1,3 +1,5 @@
+use hmac::KeyInit;
+
 use hmac::Mac;
 use narrowlink_network::{
     async_forward, error::NetworkError, p2p::QuicStream, ws::WsConnectionBinary, AsyncSocket,
