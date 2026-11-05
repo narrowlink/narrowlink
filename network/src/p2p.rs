@@ -518,10 +518,10 @@ pub async fn udp_punched_socket(
                 warn!("Error sending to peer: {}", e);
             };
         }
-        if s == p2p.seq || dyn_my_port {
-            if let Some(socket) = socket.take() {
-                sockets.push(Box::pin(async { socket.readable().await.map(|_| socket) }));
-            }
+        if (s == p2p.seq || dyn_my_port)
+            && let Some(socket) = socket.take()
+        {
+            sockets.push(Box::pin(async { socket.readable().await.map(|_| socket) }));
         }
     }
     loop {

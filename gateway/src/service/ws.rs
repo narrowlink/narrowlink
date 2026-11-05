@@ -145,31 +145,31 @@ impl HyperService<Request<hyper::body::Incoming>> for WsService {
 
         let handler = async move {
             let req_version = req.version();
-            if let Some(acme) = cm.as_ref() {
-                if req.uri().path().starts_with("/.well-known/acme-challenge/") {
-                    trace!("acme challenge");
-                    if let Ok((token, key_authorization)) =
-                        acme.get_acme_http_challenge(&host).in_current_span().await
-                    {
-                        if req.uri().path() == format!("/.well-known/acme-challenge/{}", token) {
-                            return Response::builder()
-                                .version(req_version)
-                                .status(StatusCode::OK)
-                                .body(crate::full_body(key_authorization));
-                        }
-                    } else {
-                        trace!("acme challenge not found for {}", host);
+            if let Some(acme) = cm.as_ref()
+                && req.uri().path().starts_with("/.well-known/acme-challenge/")
+            {
+                trace!("acme challenge");
+                if let Ok((token, key_authorization)) =
+                    acme.get_acme_http_challenge(&host).in_current_span().await
+                {
+                    if req.uri().path() == format!("/.well-known/acme-challenge/{}", token) {
+                        return Response::builder()
+                            .version(req_version)
+                            .status(StatusCode::OK)
+                            .body(crate::full_body(key_authorization));
                     }
+                } else {
+                    trace!("acme challenge not found for {}", host);
                 }
-                // return Response::builder()
-                //     .version(req_version)
-                //     .status(StatusCode::TEMPORARY_REDIRECT)
-                //     .header(
-                //         header::LOCATION,
-                //         format!("https://{}{}", host, req.uri().path()),
-                //     )
-                //     .body("".into());
             }
+            // return Response::builder()
+            //     .version(req_version)
+            //     .status(StatusCode::TEMPORARY_REDIRECT)
+            //     .header(
+            //         header::LOCATION,
+            //         format!("https://{}{}", host, req.uri().path()),
+            //     )
+            //     .body("".into());
 
             if let Some(token) = req
                 .headers()

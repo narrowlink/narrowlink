@@ -214,13 +214,12 @@ impl Acme {
                 let mut authorizations = order.authorizations();
                 while let Some(authorization) = authorizations.next().await {
                     let mut authorization = authorization?;
-                    if let Some(mut handle) = authorization.challenge(kind.clone()) {
-                        if let Some(challenge) =
+                    if let Some(mut handle) = authorization.challenge(kind.clone())
+                        && let Some(challenge) =
                             challenges.iter().find(|c| c.verification_url == handle.url)
-                        {
-                            handle.set_ready().await?;
-                            let _ = challenge;
-                        }
+                    {
+                        handle.set_ready().await?;
+                        let _ = challenge;
                     }
                 }
             }
