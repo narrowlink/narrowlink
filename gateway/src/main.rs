@@ -140,6 +140,7 @@ async fn main() -> Result<(), GatewayError> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod quic_tests {
     use narrowlink_network::p2p::QuicStream;
     use tokio::{

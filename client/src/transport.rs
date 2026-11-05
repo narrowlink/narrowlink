@@ -174,8 +174,8 @@ impl TransportFactory {
                     &[
                         format!(
                             "{}:{}:{}",
-                            &connect.host,
-                            &connect.port,
+                            connect.host,
+                            connect.port,
                             connect.protocol.clone() as u32
                         )
                         .as_bytes(),
@@ -271,8 +271,8 @@ impl TransportFactory {
                     &[
                         format!(
                             "{}:{}:{}",
-                            &connect.host,
-                            &connect.port,
+                            connect.host,
+                            connect.port,
                             connect.protocol.clone() as u32
                         )
                         .as_bytes(),

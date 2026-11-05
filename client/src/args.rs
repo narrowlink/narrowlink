@@ -318,13 +318,8 @@ impl Args {
                                         sub.agent_name = if let Some(v) = shorts.next_value_os() {
                                             v.to_str()
                                         } else if let Some(v) = raw.next_os(&mut cursor) {
-                                            v.to_str().and_then(|v| {
-                                                if v.is_empty() || v.find('-') == Some(0) {
-                                                    None
-                                                } else {
-                                                    Some(v)
-                                                }
-                                            })
+                                            v.to_str()
+                                                .filter(|v| !v.is_empty() && !v.starts_with('-'))
                                         } else {
                                             None
                                         }
@@ -344,13 +339,8 @@ impl Args {
                                         let next_value = if let Some(v) = shorts.next_value_os() {
                                             v.to_str()
                                         } else if let Some(v) = raw.next_os(&mut cursor) {
-                                            v.to_str().and_then(|v| {
-                                                if v.is_empty() || v.find('-') == Some(0) {
-                                                    None
-                                                } else {
-                                                    Some(v)
-                                                }
-                                            })
+                                            v.to_str()
+                                                .filter(|v| !v.is_empty() && !v.starts_with('-'))
                                         } else {
                                             None
                                         };
@@ -365,13 +355,8 @@ impl Args {
                                         let next_value = if let Some(v) = shorts.next_value_os() {
                                             v.to_str()
                                         } else if let Some(v) = raw.next_os(&mut cursor) {
-                                            v.to_str().and_then(|v| {
-                                                if v.is_empty() || v.find('-') == Some(0) {
-                                                    None
-                                                } else {
-                                                    Some(v)
-                                                }
-                                            })
+                                            v.to_str()
+                                                .filter(|v| !v.is_empty() && !v.starts_with('-'))
                                         } else {
                                             None
                                         };
@@ -384,13 +369,8 @@ impl Args {
                                         let next_value = if let Some(v) = shorts.next_value_os() {
                                             v.to_str()
                                         } else if let Some(v) = raw.next_os(&mut cursor) {
-                                            v.to_str().and_then(|v| {
-                                                if v.is_empty() || v.find('-') == Some(0) {
-                                                    None
-                                                } else {
-                                                    Some(v)
-                                                }
-                                            })
+                                            v.to_str()
+                                                .filter(|v| !v.is_empty() && !v.starts_with('-'))
                                         } else {
                                             None
                                         };
@@ -507,13 +487,8 @@ impl Args {
                                         sub.agent_name = if let Some(v) = shorts.next_value_os() {
                                             v.to_str()
                                         } else if let Some(v) = raw.next_os(&mut cursor) {
-                                            v.to_str().and_then(|v| {
-                                                if v.is_empty() || v.find('-') == Some(0) {
-                                                    None
-                                                } else {
-                                                    Some(v)
-                                                }
-                                            })
+                                            v.to_str()
+                                                .filter(|v| !v.is_empty() && !v.starts_with('-'))
                                         } else {
                                             None
                                         }
@@ -524,13 +499,8 @@ impl Args {
                                         let next_value = if let Some(v) = shorts.next_value_os() {
                                             v.to_str()
                                         } else if let Some(v) = raw.next_os(&mut cursor) {
-                                            v.to_str().and_then(|v| {
-                                                if v.is_empty() || v.find('-') == Some(0) {
-                                                    None
-                                                } else {
-                                                    Some(v)
-                                                }
-                                            })
+                                            v.to_str()
+                                                .filter(|v| !v.is_empty() && !v.starts_with('-'))
                                         } else {
                                             None
                                         };
@@ -543,13 +513,8 @@ impl Args {
                                         let next_value = if let Some(v) = shorts.next_value_os() {
                                             v.to_str()
                                         } else if let Some(v) = raw.next_os(&mut cursor) {
-                                            v.to_str().and_then(|v| {
-                                                if v.is_empty() || v.find('-') == Some(0) {
-                                                    None
-                                                } else {
-                                                    Some(v)
-                                                }
-                                            })
+                                            v.to_str()
+                                                .filter(|v| !v.is_empty() && !v.starts_with('-'))
                                         } else {
                                             None
                                         };
@@ -572,13 +537,7 @@ impl Args {
                             sub.remote_addr = extract_addr(
                                 arg.to_value_os()
                                     .to_str()
-                                    .and_then(|v| {
-                                        if v.is_empty() || v.find('-') == Some(0) {
-                                            None
-                                        } else {
-                                            Some(v)
-                                        }
-                                    })
+                                    .filter(|v| !v.is_empty() && !v.starts_with('-'))
                                     .ok_or(ClientError::Encoding)?,
                                 false,
                             )?;
@@ -653,13 +612,8 @@ impl Args {
                                         sub.agent_name = if let Some(v) = shorts.next_value_os() {
                                             v.to_str()
                                         } else if let Some(v) = raw.next_os(&mut cursor) {
-                                            v.to_str().and_then(|v| {
-                                                if v.is_empty() || v.find('-') == Some(0) {
-                                                    None
-                                                } else {
-                                                    Some(v)
-                                                }
-                                            })
+                                            v.to_str()
+                                                .filter(|v| !v.is_empty() && !v.starts_with('-'))
                                         } else {
                                             None
                                         }
@@ -670,13 +624,8 @@ impl Args {
                                         let next_value = if let Some(v) = shorts.next_value_os() {
                                             v.to_str()
                                         } else if let Some(v) = raw.next_os(&mut cursor) {
-                                            v.to_str().and_then(|v| {
-                                                if v.is_empty() || v.find('-') == Some(0) {
-                                                    None
-                                                } else {
-                                                    Some(v)
-                                                }
-                                            })
+                                            v.to_str()
+                                                .filter(|v| !v.is_empty() && !v.starts_with('-'))
                                         } else {
                                             None
                                         };
@@ -699,13 +648,7 @@ impl Args {
                             sub.remote_addr = extract_addr(
                                 arg.to_value_os()
                                     .to_str()
-                                    .and_then(|v| {
-                                        if v.is_empty() || v.find('-') == Some(0) {
-                                            None
-                                        } else {
-                                            Some(v)
-                                        }
-                                    })
+                                    .filter(|v| !v.is_empty() && !v.starts_with('-'))
                                     .ok_or(ClientError::Encoding)?,
                                 false,
                             )?;
@@ -787,13 +730,8 @@ impl Args {
                                         sub.agent_name = if let Some(v) = shorts.next_value_os() {
                                             v.to_str()
                                         } else if let Some(v) = raw.next_os(&mut cursor) {
-                                            v.to_str().and_then(|v| {
-                                                if v.is_empty() || v.find('-') == Some(0) {
-                                                    None
-                                                } else {
-                                                    Some(v)
-                                                }
-                                            })
+                                            v.to_str()
+                                                .filter(|v| !v.is_empty() && !v.starts_with('-'))
                                         } else {
                                             None
                                         }
@@ -804,13 +742,8 @@ impl Args {
                                         let next_value = if let Some(v) = shorts.next_value_os() {
                                             v.to_str()
                                         } else if let Some(v) = raw.next_os(&mut cursor) {
-                                            v.to_str().and_then(|v| {
-                                                if v.is_empty() || v.find('-') == Some(0) {
-                                                    None
-                                                } else {
-                                                    Some(v)
-                                                }
-                                            })
+                                            v.to_str()
+                                                .filter(|v| !v.is_empty() && !v.starts_with('-'))
                                         } else {
                                             None
                                         };
@@ -825,13 +758,8 @@ impl Args {
                                         let next_value = if let Some(v) = shorts.next_value_os() {
                                             v.to_str()
                                         } else if let Some(v) = raw.next_os(&mut cursor) {
-                                            v.to_str().and_then(|v| {
-                                                if v.is_empty() || v.find('-') == Some(0) {
-                                                    None
-                                                } else {
-                                                    Some(v)
-                                                }
-                                            })
+                                            v.to_str()
+                                                .filter(|v| !v.is_empty() && !v.starts_with('-'))
                                         } else {
                                             None
                                         };
@@ -856,13 +784,7 @@ impl Args {
                             sub.local_addr = arg
                                 .to_value_os()
                                 .to_str()
-                                .and_then(|v| {
-                                    if v.is_empty() || v.find('-') == Some(0) {
-                                        None
-                                    } else {
-                                        Some(v)
-                                    }
-                                })
+                                .filter(|v| !v.is_empty() && !v.starts_with('-'))
                                 .and_then(|v| v.parse::<SocketAddr>().ok())
                                 .ok_or(ClientError::Encoding)?;
                         }

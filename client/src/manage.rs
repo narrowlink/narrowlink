@@ -131,11 +131,11 @@ impl ControlFactory {
                         match status {
                             401 => {
                                 error!("Authentication failed");
-                                return Err(e)?;
+                                return Err(e.into());
                             }
                             403 => {
                                 error!("Access denied");
-                                return Err(e)?;
+                                return Err(e.into());
                             }
                             _ => {}
                         }
@@ -146,7 +146,7 @@ impl ControlFactory {
                     } else if sleep_time >= 35 {
                         error!("Unable to connect");
                         info!("Exit");
-                        return Err(e)?;
+                        return Err(e.into());
                     } else {
                         info!("Try again in {} secs", sleep_time);
                     }

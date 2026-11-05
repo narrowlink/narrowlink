@@ -133,154 +133,6 @@ fn default_route(routes: Vec<Route>) -> Option<Route> {
     candidates.into_iter().next()
 }
 
-#[cfg(test)]
-mod route_tests {
-    use super::*;
-    use std::collections::HashSet;
-
-    #[derive(Default)]
-    struct FakeManager {
-        routes: HashSet<IpAddr>,
-        fail_add: Option<IpAddr>,
-        fail_delete: Option<IpAddr>,
-    }
-
-    impl RouteManager for FakeManager {
-        async fn add(&mut self, route: &Route) -> io::Result<()> {
-            if self.fail_add == Some(route.destination()) {
-                return Err(io::Error::other("add failed"));
-            }
-            self.routes.insert(route.destination());
-            Ok(())
-        }
-        async fn delete(&mut self, route: &Route) -> io::Result<()> {
-            if self.fail_delete == Some(route.destination()) {
-                return Err(io::Error::other("delete failed"));
-            }
-            self.routes.remove(&route.destination());
-            Ok(())
-        }
-    }
-
-    fn route(ip: &str) -> Route {
-        Route::new(ip.parse().unwrap(), 0)
-    }
-
-    #[tokio::test]
-    async fn failed_activation_restores_original_and_removes_added_routes() {
-        let original = route("0.0.0.0");
-        let first = route("192.0.2.1");
-        let failed = route("192.0.2.2");
-        let mut manager = FakeManager {
-            routes: HashSet::from([original.destination()]),
-            fail_add: Some(failed.destination()),
-            ..Default::default()
-        };
-        let mut state = RouteState {
-            original: original.clone(),
-            original_removed: false,
-            installed: vec![],
-        };
-        assert!(state
-            .activate(&mut manager, &[first, failed])
-            .await
-            .is_err());
-        assert_eq!(manager.routes, HashSet::from([original.destination()]));
-        assert!(!state.original_removed && state.installed.is_empty());
-    }
-
-    #[tokio::test]
-    async fn failed_restore_can_be_retried() {
-        let original = route("0.0.0.0");
-        let tunnel = route("192.0.2.1");
-        let mut manager = FakeManager {
-            routes: HashSet::from([original.destination()]),
-            ..Default::default()
-        };
-        let mut state = RouteState {
-            original: original.clone(),
-            original_removed: false,
-            installed: vec![],
-        };
-        state.activate(&mut manager, &[tunnel]).await.unwrap();
-        manager.fail_add = Some(original.destination());
-        assert!(state.restore(&mut manager).await.is_err());
-        assert!(state.original_removed);
-        manager.fail_add = None;
-        state.restore(&mut manager).await.unwrap();
-        assert_eq!(manager.routes, HashSet::from([original.destination()]));
-    }
-
-    #[tokio::test]
-    async fn failed_route_removal_is_retained_for_retry() {
-        let original = route("0.0.0.0");
-        let tunnel = route("192.0.2.1");
-        let mut manager = FakeManager {
-            routes: HashSet::from([original.destination()]),
-            ..Default::default()
-        };
-        let mut state = RouteState {
-            original: original.clone(),
-            original_removed: false,
-            installed: vec![],
-        };
-        state
-            .activate(&mut manager, &[tunnel.clone()])
-            .await
-            .unwrap();
-        manager.fail_delete = Some(tunnel.destination());
-        assert!(state.restore(&mut manager).await.is_err());
-        assert_eq!(state.installed.len(), 1);
-        manager.fail_delete = None;
-        state.restore(&mut manager).await.unwrap();
-        assert_eq!(manager.routes, HashSet::from([original.destination()]));
-    }
-
-    #[tokio::test]
-    async fn deletion_failure_keeps_original_route() {
-        let original = route("0.0.0.0");
-        let mut manager = FakeManager {
-            routes: HashSet::from([original.destination()]),
-            fail_delete: Some(original.destination()),
-            ..Default::default()
-        };
-        let mut state = RouteState {
-            original: original.clone(),
-            original_removed: false,
-            installed: vec![],
-        };
-        assert!(state
-            .activate(&mut manager, &[route("192.0.2.1")])
-            .await
-            .is_err());
-        assert_eq!(manager.routes, HashSet::from([original.destination()]));
-        assert!(!state.original_removed && state.installed.is_empty());
-    }
-
-    #[tokio::test]
-    async fn stopped_route_task_returns_error() {
-        let (sender, receiver) = mpsc::unbounded_channel();
-        drop(receiver);
-        let (route_sender, _) = mpsc::unbounded_channel();
-        let route = TunRoute {
-            _task: tokio::spawn(async { Ok(()) }),
-            route_sender,
-            my_routes_sender: sender,
-        };
-        assert!(route.my_routes(true).await.is_err());
-    }
-
-    #[test]
-    fn selects_default_instead_of_specific_route() {
-        let specific = Route::new("192.0.2.0".parse().unwrap(), 24);
-        let default =
-            Route::new("0.0.0.0".parse().unwrap(), 0).with_gateway("192.0.2.1".parse().unwrap());
-        let selected = default_route(vec![specific, default]).unwrap();
-        assert_eq!(selected.gateway(), Some("192.0.2.1".parse().unwrap()));
-        assert!(default_route(vec![Route::new("192.0.2.0".parse().unwrap(), 24)]).is_none());
-    }
-}
-
 impl TunRoute {
     pub async fn new(local_addr: Ipv4Addr, _ifaceid: u32) -> Result<Self, io::Error> {
         let mut handle = AsyncRouteManager::new()?;
@@ -576,5 +428,154 @@ mod wintun {
         ) -> std::task::Poll<Result<(), std::io::Error>> {
             std::task::Poll::Ready(Ok(()))
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod route_tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[derive(Default)]
+    struct FakeManager {
+        routes: HashSet<IpAddr>,
+        fail_add: Option<IpAddr>,
+        fail_delete: Option<IpAddr>,
+    }
+
+    impl RouteManager for FakeManager {
+        async fn add(&mut self, route: &Route) -> io::Result<()> {
+            if self.fail_add == Some(route.destination()) {
+                return Err(io::Error::other("add failed"));
+            }
+            self.routes.insert(route.destination());
+            Ok(())
+        }
+        async fn delete(&mut self, route: &Route) -> io::Result<()> {
+            if self.fail_delete == Some(route.destination()) {
+                return Err(io::Error::other("delete failed"));
+            }
+            self.routes.remove(&route.destination());
+            Ok(())
+        }
+    }
+
+    fn route(ip: &str) -> Route {
+        Route::new(ip.parse().unwrap(), 0)
+    }
+
+    #[tokio::test]
+    async fn failed_activation_restores_original_and_removes_added_routes() {
+        let original = route("0.0.0.0");
+        let first = route("192.0.2.1");
+        let failed = route("192.0.2.2");
+        let mut manager = FakeManager {
+            routes: HashSet::from([original.destination()]),
+            fail_add: Some(failed.destination()),
+            ..Default::default()
+        };
+        let mut state = RouteState {
+            original: original.clone(),
+            original_removed: false,
+            installed: vec![],
+        };
+        assert!(state
+            .activate(&mut manager, &[first, failed])
+            .await
+            .is_err());
+        assert_eq!(manager.routes, HashSet::from([original.destination()]));
+        assert!(!state.original_removed && state.installed.is_empty());
+    }
+
+    #[tokio::test]
+    async fn failed_restore_can_be_retried() {
+        let original = route("0.0.0.0");
+        let tunnel = route("192.0.2.1");
+        let mut manager = FakeManager {
+            routes: HashSet::from([original.destination()]),
+            ..Default::default()
+        };
+        let mut state = RouteState {
+            original: original.clone(),
+            original_removed: false,
+            installed: vec![],
+        };
+        state.activate(&mut manager, &[tunnel]).await.unwrap();
+        manager.fail_add = Some(original.destination());
+        assert!(state.restore(&mut manager).await.is_err());
+        assert!(state.original_removed);
+        manager.fail_add = None;
+        state.restore(&mut manager).await.unwrap();
+        assert_eq!(manager.routes, HashSet::from([original.destination()]));
+    }
+
+    #[tokio::test]
+    async fn failed_route_removal_is_retained_for_retry() {
+        let original = route("0.0.0.0");
+        let tunnel = route("192.0.2.1");
+        let mut manager = FakeManager {
+            routes: HashSet::from([original.destination()]),
+            ..Default::default()
+        };
+        let mut state = RouteState {
+            original: original.clone(),
+            original_removed: false,
+            installed: vec![],
+        };
+        state
+            .activate(&mut manager, std::slice::from_ref(&tunnel))
+            .await
+            .unwrap();
+        manager.fail_delete = Some(tunnel.destination());
+        assert!(state.restore(&mut manager).await.is_err());
+        assert_eq!(state.installed.len(), 1);
+        manager.fail_delete = None;
+        state.restore(&mut manager).await.unwrap();
+        assert_eq!(manager.routes, HashSet::from([original.destination()]));
+    }
+
+    #[tokio::test]
+    async fn deletion_failure_keeps_original_route() {
+        let original = route("0.0.0.0");
+        let mut manager = FakeManager {
+            routes: HashSet::from([original.destination()]),
+            fail_delete: Some(original.destination()),
+            ..Default::default()
+        };
+        let mut state = RouteState {
+            original: original.clone(),
+            original_removed: false,
+            installed: vec![],
+        };
+        assert!(state
+            .activate(&mut manager, &[route("192.0.2.1")])
+            .await
+            .is_err());
+        assert_eq!(manager.routes, HashSet::from([original.destination()]));
+        assert!(!state.original_removed && state.installed.is_empty());
+    }
+
+    #[tokio::test]
+    async fn stopped_route_task_returns_error() {
+        let (sender, receiver) = mpsc::unbounded_channel();
+        drop(receiver);
+        let (route_sender, _) = mpsc::unbounded_channel();
+        let route = TunRoute {
+            _task: tokio::spawn(async { Ok(()) }),
+            route_sender,
+            my_routes_sender: sender,
+        };
+        assert!(route.my_routes(true).await.is_err());
+    }
+
+    #[test]
+    fn selects_default_instead_of_specific_route() {
+        let specific = Route::new("192.0.2.0".parse().unwrap(), 24);
+        let default =
+            Route::new("0.0.0.0".parse().unwrap(), 0).with_gateway("192.0.2.1".parse().unwrap());
+        let selected = default_route(vec![specific, default]).unwrap();
+        assert_eq!(selected.gateway(), Some("192.0.2.1".parse().unwrap()));
+        assert!(default_route(vec![Route::new("192.0.2.0".parse().unwrap(), 24)]).is_none());
     }
 }

@@ -356,8 +356,8 @@ async fn start(args: Args) -> Result<(), AgentError> {
                                             &[
                                                 format!(
                                                     "{}:{}:{}",
-                                                    &con.host,
-                                                    &con.port,
+                                                    con.host,
+                                                    con.port,
                                                     con.protocol.clone() as u32
                                                 )
                                                 .as_bytes(),
@@ -552,13 +552,7 @@ async fn data_connect(
         };
         mac.update(
             &[
-                format!(
-                    "{}:{}:{}",
-                    &req.host,
-                    &req.port,
-                    req.protocol.clone() as u32
-                )
-                .as_bytes(),
+                format!("{}:{}:{}", req.host, req.port, req.protocol.clone() as u32).as_bytes(),
                 &n,
             ]
             .concat(),

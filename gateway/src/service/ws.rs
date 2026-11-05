@@ -422,6 +422,7 @@ impl From<crate::state::ResponseErrors> for super::http_templates::HttpErrors {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use futures_util::{SinkExt, StreamExt};
@@ -596,7 +597,7 @@ mod tests {
                 hyper::client::conn::http2::handshake(TokioExecutor::new(), TokioIo::new(socket))
                     .await
                     .unwrap();
-            let driver = tokio::spawn(async move { connection.await });
+            let driver = tokio::spawn(connection);
             let request = Request::builder()
                 .method("POST")
                 .uri("http://example.com/resource")

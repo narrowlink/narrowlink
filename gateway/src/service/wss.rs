@@ -238,6 +238,7 @@ impl Service for Wss {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::Wss;
     use std::sync::Arc;
