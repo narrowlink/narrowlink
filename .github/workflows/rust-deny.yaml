@@ -4,9 +4,15 @@ on:
   pull_request:
     paths:
       - '**/Cargo.toml'
+      - '**/Cargo.lock'
+      - 'deny.toml'
   push:
     paths:
       - '**/Cargo.toml'
+      - '**/Cargo.lock'
+      - 'deny.toml'
+  schedule:
+    - cron: '0 0 * * 1'
   workflow_dispatch: null
 
 # env:
