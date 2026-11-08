@@ -7,6 +7,7 @@ on:
       - '**/Cargo.lock'
       - 'deny.toml'
   push:
+    branches: [main]
     paths:
       - '**/Cargo.toml'
       - '**/Cargo.lock'
