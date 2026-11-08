@@ -8,41 +8,20 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
       - name: Install latest stable
-        uses: actions-rs/toolchain@v1
-        with:
-            toolchain: stable
-            profile: minimal
-            override: true
-            components: rustfmt, clippy
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
       - name: Run cargo check
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --all-features --all-targets --verbose
+        run: cargo +stable build --all-features --all-targets --verbose
       - name: Run cargo test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --all-features --all-targets --verbose
+        run: cargo +stable test --all-features --all-targets --verbose
 
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-          components: rustfmt, clippy
-      - uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
-      - uses: actions-rs/cargo@v1
+      - uses: actions/checkout@v7
+      - name: Install latest stable
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - run: cargo +stable fmt --all -- --check
+      - run: cargo +stable clippy --workspace --all-targets --all-features -- -D warnings
         if: always()
-        with:
-          command: clippy
-          args: --workspace --all-targets --all-features -- -D warnings

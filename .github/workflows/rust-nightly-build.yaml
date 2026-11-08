@@ -12,7 +12,7 @@ jobs:
     outputs:
       should_run: '${{ steps.should_run.outputs.should_run }}'
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v7
       - name: print latest_commit
         run: 'echo ${{ github.sha }}'
       - id: should_run
@@ -47,7 +47,7 @@ jobs:
       deployments: write
       contents: read
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
       - name: install target
         run: 'rustup target add ${{ matrix.platform }}'
       - name: Build
@@ -59,7 +59,7 @@ jobs:
           mv target\${{ matrix.platform }}\release\${{ matrix.package.bin }}.exe
           target\${{ matrix.platform }}\release\${{ matrix.package.bin }}-${{
           matrix.platform }}.exe
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: binaries-${{ matrix.package.bin }}-${{ matrix.platform }}
           path: >-
@@ -88,7 +88,7 @@ jobs:
       deployments: write
       contents: read
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
       - name: install target
         run: 'rustup target add ${{ matrix.platform }}'
       - name: Build
@@ -100,7 +100,7 @@ jobs:
           mv target/${{ matrix.platform }}/release/${{ matrix.package.bin }}
           target/${{ matrix.platform }}/release/${{ matrix.package.bin }}-${{
           matrix.platform }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: binaries-${{ matrix.package.bin }}-${{ matrix.platform }}
           path: >-
@@ -131,7 +131,7 @@ jobs:
       deployments: write
       contents: read
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
       - name: Cross installation
         run: 'cargo install cross --git https://github.com/cross-rs/cross'
       - name: 'Build ${{ matrix.platform }}'
@@ -143,7 +143,7 @@ jobs:
           mv target/${{ matrix.platform }}/release/${{ matrix.package.bin }}
           target/${{ matrix.platform }}/release/${{ matrix.package.bin }}-${{
           matrix.platform }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: binaries-${{ matrix.package.bin }}-${{ matrix.platform }}
           path: >-
@@ -171,7 +171,7 @@ jobs:
       deployments: write
       contents: read
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
       - name: Cross installation
         run: 'cargo install cross --git https://github.com/cross-rs/cross'
       - name: 'Build ${{ matrix.platform }}'
@@ -183,7 +183,7 @@ jobs:
           mv target/${{ matrix.platform }}/release/${{ matrix.package.bin }}
           target/${{ matrix.platform }}/release/${{ matrix.package.bin }}-${{
           matrix.platform }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: binaries-${{ matrix.package.bin }}-${{ matrix.platform }}
           path: >-
@@ -197,8 +197,8 @@ jobs:
     if: '${{ needs.check_date.outputs.should_run != ''false'' }}'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/download-artifact@v4.1.7
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: binaries-*
           merge-multiple: true
